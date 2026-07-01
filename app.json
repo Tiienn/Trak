@@ -32,6 +32,18 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Trak uses your camera to scan meals and estimate calories."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Trak needs access to your photos so you can pick a meal to scan."
+        }
       ]
     ],
     "experiments": {
