@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { analyzeFood } from '@/lib/analyzeFood';
+import { useMeals } from '@/lib/store';
 import { FoodAnalysis } from '@/lib/types';
 
 const Brand = { green: '#22C55E', greenDark: '#16A34A' } as const;
@@ -23,6 +24,7 @@ type Phase = 'camera' | 'analyzing' | 'result' | 'error';
 
 export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const { addMeal } = useMeals();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -156,13 +158,10 @@ export default function ScanScreen() {
         <ResultSheet
           analysis={analysis}
           onRetake={reset}
-          onDone={() =>
-            Alert.alert(
-              'Nice!',
-              'Saving to your daily log arrives in Phase 3 — for now, here is your estimate.',
-              [{ text: 'OK', onPress: () => router.back() }]
-            )
-          }
+          onDone={() => {
+            addMeal(analysis, photoUri ?? undefined);
+            router.back();
+          }}
         />
       )}
     </View>

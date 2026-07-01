@@ -26,3 +26,18 @@ export type FoodAnalysis = {
   /** One short sentence about assumptions the AI made. */
   notes?: string;
 };
+
+/** A meal saved to the daily log. */
+export type LoggedMeal = {
+  id: string;
+  /** Local calendar day, formatted YYYY-MM-DD. */
+  date: string;
+  /** When it was logged (epoch milliseconds). */
+  createdAt: number;
+  title: string;
+  total: FoodTotals;
+  items: FoodItem[];
+  confidence: number;
+  /** Local URI of the scanned photo, if available. */
+  photoUri?: string;
+};
