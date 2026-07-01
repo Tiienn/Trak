@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { useMeals } from '@/lib/store';
 import { LoggedMeal } from '@/lib/types';
 
@@ -93,9 +94,12 @@ function MealRow({
 export default function HomeScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = Colors[scheme];
+  const { user, authLoading } = useAuth();
   const { todayMeals, todayTotals, targets, removeMeal, loaded, hasProfile, streak } = useMeals();
 
-  // First run: send the user through onboarding before showing the dashboard.
+  // Route based on auth + onboarding state.
+  if (authLoading) return null;
+  if (!user) return <Redirect href="/auth" />;
   if (!loaded) return null;
   if (!hasProfile) return <Redirect href="/onboarding" />;
 

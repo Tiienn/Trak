@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useCallback,
@@ -9,11 +8,10 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useAuth } from './auth';
 import { computeTargets } from './nutrition';
+import { supabase } from './supabase';
 import { FoodAnalysis, FoodTotals, LoggedMeal, UserProfile } from './types';
-
-const MEALS_KEY = 'trak.meals.v1';
-const PROFILE_KEY = 'trak.profile.v1';
 
 /** Fallback goals used until the user completes onboarding. */
 export const DEFAULT_TARGETS: FoodTotals = {
@@ -53,7 +51,6 @@ function computeStreak(meals: LoggedMeal[]): number {
   if (days.size === 0) return 0;
   const cursor = new Date();
   if (!days.has(dayKey(cursor))) {
-    // No meal today — a streak can still run through yesterday.
     cursor.setDate(cursor.getDate() - 1);
     if (!days.has(dayKey(cursor))) return 0;
   }
@@ -65,10 +62,35 @@ function computeStreak(meals: LoggedMeal[]): number {
   return streak;
 }
 
-let idCounter = 0;
-function makeId(): string {
-  idCounter += 1;
-  return `${Date.now()}-${idCounter}`;
+/** Map a Supabase row to our client types. */
+function rowToProfile(r: any): UserProfile {
+  return {
+    sex: r.sex,
+    age: r.age,
+    heightCm: Number(r.height_cm),
+    weightKg: Number(r.weight_kg),
+    goal: r.goal,
+    activity: r.activity,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+  };
+}
+
+function rowToMeal(r: any): LoggedMeal {
+  return {
+    id: r.id,
+    date: r.day,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    title: r.title,
+    total: {
+      calories: r.calories,
+      protein_g: r.protein_g,
+      carbs_g: r.carbs_g,
+      fat_g: r.fat_g,
+    },
+    items: Array.isArray(r.items) ? r.items : [],
+    confidence: Number(r.confidence),
+    photoUri: r.photo_uri ?? undefined,
+  };
 }
 
 type MealsContextValue = {
@@ -80,73 +102,95 @@ type MealsContextValue = {
   todayMeals: LoggedMeal[];
   todayTotals: FoodTotals;
   streak: number;
-  addMeal: (analysis: FoodAnalysis, photoUri?: string) => void;
-  removeMeal: (id: string) => void;
-  saveProfile: (profile: UserProfile) => void;
+  addMeal: (analysis: FoodAnalysis, photoUri?: string) => Promise<void>;
+  removeMeal: (id: string) => Promise<void>;
+  saveProfile: (profile: UserProfile) => Promise<void>;
 };
 
 const MealsContext = createContext<MealsContextValue | null>(null);
 
 export function MealsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [meals, setMeals] = useState<LoggedMeal[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Load saved data once on startup.
+  // Load the signed-in user's data from Supabase whenever the user changes.
   useEffect(() => {
     let active = true;
+    if (!user) {
+      setMeals([]);
+      setProfile(null);
+      setLoaded(true);
+      return;
+    }
+    setLoaded(false);
     (async () => {
-      try {
-        const [mealsRaw, profileRaw] = await Promise.all([
-          AsyncStorage.getItem(MEALS_KEY),
-          AsyncStorage.getItem(PROFILE_KEY),
-        ]);
-        if (active && mealsRaw) {
-          const parsed = JSON.parse(mealsRaw);
-          if (Array.isArray(parsed)) setMeals(parsed);
-        }
-        if (active && profileRaw) {
-          setProfile(JSON.parse(profileRaw));
-        }
-      } catch {
-        // corrupt/missing storage — start empty
-      } finally {
-        if (active) setLoaded(true);
-      }
+      const [profileRes, mealRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase
+          .from('meals')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+      ]);
+      if (!active) return;
+      setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
+      setMeals((mealRes.data ?? []).map(rowToMeal));
+      setLoaded(true);
     })();
     return () => {
       active = false;
     };
+  }, [user]);
+
+  const addMeal = useCallback(
+    async (analysis: FoodAnalysis, photoUri?: string) => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('meals')
+        .insert({
+          user_id: user.id,
+          day: dayKey(),
+          title: analysis.title,
+          calories: analysis.total.calories,
+          protein_g: analysis.total.protein_g,
+          carbs_g: analysis.total.carbs_g,
+          fat_g: analysis.total.fat_g,
+          items: analysis.items,
+          confidence: analysis.confidence,
+          photo_uri: photoUri ?? null,
+        })
+        .select()
+        .single();
+      if (!error && data) {
+        setMeals((prev) => [rowToMeal(data), ...prev]);
+      }
+    },
+    [user]
+  );
+
+  const removeMeal = useCallback(async (id: string) => {
+    setMeals((prev) => prev.filter((m) => m.id !== id)); // optimistic
+    await supabase.from('meals').delete().eq('id', id);
   }, []);
 
-  // Persist meals whenever they change (after the initial load).
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(MEALS_KEY, JSON.stringify(meals)).catch(() => {});
-  }, [meals, loaded]);
-
-  const addMeal = useCallback((analysis: FoodAnalysis, photoUri?: string) => {
-    const meal: LoggedMeal = {
-      id: makeId(),
-      date: dayKey(),
-      createdAt: Date.now(),
-      title: analysis.title,
-      total: analysis.total,
-      items: analysis.items,
-      confidence: analysis.confidence,
-      photoUri,
-    };
-    setMeals((prev) => [meal, ...prev]);
-  }, []);
-
-  const removeMeal = useCallback((id: string) => {
-    setMeals((prev) => prev.filter((m) => m.id !== id));
-  }, []);
-
-  const saveProfile = useCallback((next: UserProfile) => {
-    setProfile(next);
-    AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(next)).catch(() => {});
-  }, []);
+  const saveProfile = useCallback(
+    async (next: UserProfile) => {
+      if (!user) return;
+      setProfile(next); // optimistic
+      await supabase.from('profiles').upsert({
+        user_id: user.id,
+        sex: next.sex,
+        age: next.age,
+        height_cm: next.heightCm,
+        weight_kg: next.weightKg,
+        goal: next.goal,
+        activity: next.activity,
+      });
+    },
+    [user]
+  );
 
   const value = useMemo<MealsContextValue>(() => {
     const today = dayKey();

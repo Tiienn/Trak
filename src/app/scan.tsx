@@ -80,8 +80,9 @@ export default function ScanScreen() {
     return <View style={styles.black} />;
   }
 
-  // Permission not yet granted
-  if (!permission.granted) {
+  // Only require camera permission while the live camera is showing. The
+  // gallery/analyzing/result phases must render even if the camera is denied.
+  if (phase === 'camera' && !permission.granted) {
     return (
       <SafeAreaView style={styles.permissionWrap}>
         <Text style={styles.permTitle}>Camera access</Text>

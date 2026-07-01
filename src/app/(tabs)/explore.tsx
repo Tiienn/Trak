@@ -1,7 +1,8 @@
-import { ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { dayKey, sumTotals, useMeals } from '@/lib/store';
 import { LoggedMeal } from '@/lib/types';
 
@@ -41,12 +42,18 @@ export default function HistoryScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = Colors[scheme];
   const { meals } = useMeals();
+  const { signOut } = useAuth();
   const days = groupByDay(meals);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <Text style={[styles.title, { color: colors.text }]}>History</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.title, { color: colors.text }]}>History</Text>
+          <Pressable onPress={signOut} hitSlop={8}>
+            <Text style={styles.signOut}>Sign out</Text>
+          </Pressable>
+        </View>
         {days.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
             <Text style={styles.emptyEmoji}>📖</Text>
@@ -107,7 +114,15 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
-  title: { fontSize: 30, fontWeight: '800', paddingTop: Spacing.two, marginBottom: Spacing.three },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  title: { fontSize: 30, fontWeight: '800' },
+  signOut: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
   scroll: { paddingBottom: 100, gap: Spacing.four },
   dayGroup: { gap: Spacing.two },
   dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
