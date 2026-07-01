@@ -1,27 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
+import { supabase } from './supabase';
 import { FoodAnalysis } from './types';
-
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const MODEL = 'gpt-4o';
-
-const SYSTEM_PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app called Trak.
-Look at the photo and estimate the food's nutrition. Use common sense and typical portion sizes when unsure.
-Respond with ONLY a raw JSON object (no markdown code fences) with exactly this shape:
-{
-  "isFood": boolean,
-  "title": string,
-  "items": [ { "name": string, "quantity": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
-  "total": { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number },
-  "confidence": number,
-  "notes": string
-}
-Rules:
-- If the image does NOT contain food, set "isFood" to false, "title" to "No food detected", "items" to [], all totals to 0, and "confidence" to 0.
-- "quantity" is a short human portion, e.g. "1 cup", "2 slices", "approx 150 g".
-- All nutrient values are plain numbers with no units. Round to whole numbers.
-- "confidence" is a number between 0 and 1.
-- "notes" is ONE short sentence about assumptions you made (max ~15 words).`;
 
 /** Resize + compress the photo, then return it as a base64 JPEG string. */
 async function toBase64Jpeg(uri: string): Promise<string> {
@@ -45,72 +25,40 @@ function toNumber(v: unknown): number {
   return typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+/** Pull a readable message out of a Supabase Functions error. */
+async function extractError(error: any): Promise<string> {
+  try {
+    if (error?.context && typeof error.context.json === 'function') {
+      const body = await error.context.json();
+      if (body?.error) return String(body.error);
+    }
+  } catch {
+    // ignore
+  }
+  return error?.message ?? 'Could not reach the food analyzer. Check your connection and try again.';
+}
+
 /**
- * Sends a food photo to GPT-4o and returns a structured nutrition estimate.
- * Throws an Error with a friendly, user-facing message on any failure.
+ * Sends a food photo to the Trak edge function (which calls GPT-4o server-side)
+ * and returns a structured nutrition estimate. Throws a friendly Error on failure.
  */
 export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      'No OpenAI key found. Open the .env file, paste your key after EXPO_PUBLIC_OPENAI_API_KEY=, then fully restart the app.'
-    );
-  }
-
   const base64 = await toBase64Jpeg(uri);
 
-  const body = {
-    model: MODEL,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Estimate the nutrition of this meal.' },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-        ],
-      },
-    ],
-  };
+  const { data, error } = await supabase.functions.invoke('analyze-food', {
+    body: { imageBase64: base64 },
+  });
 
-  let res: Response;
-  try {
-    res = await fetch(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error('Could not reach OpenAI. Check your internet connection and try again.');
+  if (error) {
+    throw new Error(await extractError(error));
+  }
+  if (data?.error) {
+    throw new Error(String(data.error));
   }
 
-  if (!res.ok) {
-    let detail = '';
-    try {
-      detail = (await res.json())?.error?.message ?? '';
-    } catch {
-      // ignore parse errors
-    }
-    if (res.status === 401) {
-      throw new Error('Your OpenAI key was rejected. Double-check it in the .env file.');
-    }
-    if (res.status === 429) {
-      throw new Error(
-        'OpenAI: rate limited or out of credit. Add a little credit to your OpenAI account and try again.'
-      );
-    }
-    throw new Error(`OpenAI error ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-
-  const json = await res.json();
-  const content: string | undefined = json?.choices?.[0]?.message?.content;
+  const content: string | undefined = data?.content;
   if (!content) {
-    throw new Error('OpenAI returned an empty answer. Please try again.');
+    throw new Error('The server returned an empty answer. Please try again.');
   }
 
   let parsed: any;
@@ -142,7 +90,6 @@ export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
   };
 
   const t = parsed.total ?? {};
-  // Trust the model's explicit boolean; only guess from item count when it's absent.
   const isFood = typeof parsed.isFood === 'boolean' ? parsed.isFood : items.length > 0;
 
   return {
