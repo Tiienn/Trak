@@ -15,6 +15,7 @@ export default function RootLayout() {
         <AnimatedSplashOverlay />
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
           <Stack.Screen
             name="scan"
             options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}

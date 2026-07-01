@@ -27,6 +27,21 @@ export type FoodAnalysis = {
   notes?: string;
 };
 
+export type Sex = 'male' | 'female';
+export type Goal = 'lose' | 'maintain' | 'gain';
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+
+/** The user's profile, collected during onboarding, used to compute daily targets. */
+export type UserProfile = {
+  sex: Sex;
+  age: number; // years
+  heightCm: number;
+  weightKg: number;
+  goal: Goal;
+  activity: ActivityLevel;
+  createdAt: number;
+};
+
 /** A meal saved to the daily log. */
 export type LoggedMeal = {
   id: string;

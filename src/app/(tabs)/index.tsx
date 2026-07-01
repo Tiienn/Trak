@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import {
   Alert,
   Pressable,
@@ -93,7 +93,11 @@ function MealRow({
 export default function HomeScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = Colors[scheme];
-  const { todayMeals, todayTotals, targets, removeMeal } = useMeals();
+  const { todayMeals, todayTotals, targets, removeMeal, loaded, hasProfile, streak } = useMeals();
+
+  // First run: send the user through onboarding before showing the dashboard.
+  if (!loaded) return null;
+  if (!hasProfile) return <Redirect href="/onboarding" />;
 
   const remaining = targets.calories - todayTotals.calories;
   const over = remaining < 0;
@@ -116,7 +120,15 @@ export default function HomeScreen() {
               <View style={[styles.logoDot, { backgroundColor: Brand.green }]} />
               <Text style={[styles.wordmark, { color: colors.text }]}>Trak</Text>
             </View>
-            <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today</Text>
+            {streak > 0 ? (
+              <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
+                <Text style={[styles.streakText, { color: colors.text }]}>
+                  🔥 {streak} day{streak > 1 ? 's' : ''}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today</Text>
+            )}
           </View>
 
           {/* Calories card */}
@@ -197,6 +209,8 @@ const styles = StyleSheet.create({
   logoDot: { width: 16, height: 16, borderRadius: 8 },
   wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   todayLabel: { fontSize: 15, fontWeight: '600' },
+  streakPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  streakText: { fontSize: 14, fontWeight: '700' },
 
   card: { borderRadius: 24, padding: Spacing.four, gap: Spacing.two },
   cardLabel: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
