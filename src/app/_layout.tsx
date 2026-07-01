@@ -23,6 +23,10 @@ export default function RootLayout() {
               name="scan"
               options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
             />
+            <Stack.Screen
+              name="barcode"
+              options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+            />
           </Stack>
         </ThemeProvider>
       </MealsProvider>

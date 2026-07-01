@@ -185,15 +185,22 @@ export default function HomeScreen() {
           )}
         </ScrollView>
 
-        {/* Scan button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.scanButton,
-            { backgroundColor: pressed ? Brand.greenDark : Brand.green },
-          ]}
-          onPress={() => router.push('/scan')}>
-          <Text style={styles.scanButtonText}>＋   Scan a meal</Text>
-        </Pressable>
+        {/* Scan actions */}
+        <View style={styles.bottomBar}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.scanButton,
+              { backgroundColor: pressed ? Brand.greenDark : Brand.green },
+            ]}
+            onPress={() => router.push('/scan')}>
+            <Text style={styles.scanButtonText}>＋   Scan a meal</Text>
+          </Pressable>
+          <Pressable style={styles.barcodeLink} onPress={() => router.push('/barcode')}>
+            <Text style={[styles.barcodeLinkText, { color: colors.textSecondary }]}>
+              ▊▊▊  Scan a barcode
+            </Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -202,7 +209,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
-  scroll: { paddingBottom: 100, gap: Spacing.four },
+  scroll: { paddingBottom: 140, gap: Spacing.four },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -251,14 +258,19 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
-  scanButton: {
+  bottomBar: {
     position: 'absolute',
     left: Spacing.four,
     right: Spacing.four,
     bottom: Spacing.four,
+    gap: Spacing.one,
+  },
+  scanButton: {
     borderRadius: 18,
     paddingVertical: Spacing.three,
     alignItems: 'center',
   },
+  barcodeLink: { alignItems: 'center', paddingVertical: Spacing.two },
+  barcodeLinkText: { fontSize: 14, fontWeight: '600' },
   scanButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
 });
