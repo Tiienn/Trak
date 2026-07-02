@@ -95,12 +95,47 @@ export default function HomeScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = Colors[scheme];
   const { user, authLoading } = useAuth();
-  const { todayMeals, todayTotals, targets, removeMeal, loaded, hasProfile, streak } = useMeals();
+  const {
+    todayMeals,
+    todayTotals,
+    targets,
+    removeMeal,
+    loaded,
+    loadError,
+    retryLoad,
+    hasProfile,
+    streak,
+  } = useMeals();
 
   // Route based on auth + onboarding state.
   if (authLoading) return null;
   if (!user) return <Redirect href="/auth" />;
   if (!loaded) return null;
+  if (loadError) {
+    // The cloud load failed (e.g. offline). Never fall through to the
+    // onboarding redirect here — the user may well have a profile.
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.safe, styles.loadErrorWrap]}>
+          <Text style={styles.loadErrorEmoji}>📡</Text>
+          <Text style={[styles.loadErrorTitle, { color: colors.text }]}>
+            Couldn&apos;t load your data
+          </Text>
+          <Text style={[styles.loadErrorBody, { color: colors.textSecondary }]}>
+            Check your internet connection and try again.
+          </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.retryBtn,
+              { backgroundColor: pressed ? Brand.greenDark : Brand.green },
+            ]}
+            onPress={retryLoad}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </SafeAreaView>
+      </View>
+    );
+  }
   if (!hasProfile) return <Redirect href="/onboarding" />;
 
   const remaining = targets.calories - todayTotals.calories;
@@ -253,6 +288,19 @@ const styles = StyleSheet.create({
   mealCals: { fontSize: 16, fontWeight: '800' },
   deleteBtn: { paddingHorizontal: 4, paddingVertical: 2 },
   deleteBtnText: { fontSize: 16, fontWeight: '600' },
+
+  loadErrorWrap: { alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
+  loadErrorEmoji: { fontSize: 40 },
+  loadErrorTitle: { fontSize: 20, fontWeight: '800' },
+  loadErrorBody: { fontSize: 14, textAlign: 'center' },
+  retryBtn: {
+    marginTop: Spacing.two,
+    borderRadius: 14,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.six,
+    alignItems: 'center',
+  },
+  retryBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
   emptyEmoji: { fontSize: 34 },

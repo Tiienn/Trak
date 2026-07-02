@@ -95,6 +95,9 @@ function rowToMeal(r: any): LoggedMeal {
 
 type MealsContextValue = {
   loaded: boolean;
+  /** True when the cloud load failed (e.g. offline) — show a retry, never onboarding. */
+  loadError: boolean;
+  retryLoad: () => void;
   meals: LoggedMeal[];
   profile: UserProfile | null;
   hasProfile: boolean;
@@ -114,35 +117,55 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<LoggedMeal[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  // Load the signed-in user's data from Supabase whenever the user changes.
+  // Load the signed-in user's data from Supabase whenever the user changes
+  // (or a retry is requested).
   useEffect(() => {
     let active = true;
     if (!user) {
       setMeals([]);
       setProfile(null);
+      setLoadError(false);
       setLoaded(true);
       return;
     }
     setLoaded(false);
+    setLoadError(false);
     (async () => {
-      const [profileRes, mealRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-        supabase
-          .from('meals')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false }),
-      ]);
-      if (!active) return;
-      setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
-      setMeals((mealRes.data ?? []).map(rowToMeal));
-      setLoaded(true);
+      try {
+        const [profileRes, mealRes] = await Promise.all([
+          supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+          supabase
+            .from('meals')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false }),
+        ]);
+        if (!active) return;
+        if (profileRes.error || mealRes.error) {
+          // A failed load must NOT look like "new user" — that would bounce
+          // the user into onboarding and overwrite their real profile.
+          setLoadError(true);
+          setLoaded(true);
+          return;
+        }
+        setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
+        setMeals((mealRes.data ?? []).map(rowToMeal));
+        setLoaded(true);
+      } catch {
+        if (!active) return;
+        setLoadError(true);
+        setLoaded(true);
+      }
     })();
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, reloadKey]);
+
+  const retryLoad = useCallback(() => setReloadKey((k) => k + 1), []);
 
   const addMeal = useCallback(
     async (analysis: FoodAnalysis, photoUri?: string) => {
@@ -163,9 +186,12 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         })
         .select()
         .single();
-      if (!error && data) {
-        setMeals((prev) => [rowToMeal(data), ...prev]);
+      if (error || !data) {
+        // Surface the failure — callers show it and keep the user on the
+        // result screen instead of silently losing the meal.
+        throw new Error('Could not save your meal. Check your connection and try again.');
       }
+      setMeals((prev) => [rowToMeal(data), ...prev]);
     },
     [user]
   );
@@ -197,6 +223,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     const todayMeals = meals.filter((m) => m.date === today);
     return {
       loaded,
+      loadError,
+      retryLoad,
       meals,
       profile,
       hasProfile: profile !== null,
@@ -208,7 +236,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       removeMeal,
       saveProfile,
     };
-  }, [meals, profile, loaded, addMeal, removeMeal, saveProfile]);
+  }, [meals, profile, loaded, loadError, retryLoad, addMeal, removeMeal, saveProfile]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

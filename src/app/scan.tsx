@@ -30,6 +30,19 @@ export default function ScanScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function onAddToToday() {
+    if (!analysis || saving) return; // guard against double taps
+    setSaving(true);
+    try {
+      await addMeal(analysis, photoUri ?? undefined);
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Not saved', e?.message ?? 'Could not save your meal. Please try again.');
+      setSaving(false);
+    }
+  }
 
   async function runAnalysis(uri: string) {
     setPhotoUri(uri);
@@ -156,14 +169,7 @@ export default function ScanScreen() {
 
       {/* Result */}
       {phase === 'result' && analysis && (
-        <ResultSheet
-          analysis={analysis}
-          onRetake={reset}
-          onDone={() => {
-            addMeal(analysis, photoUri ?? undefined);
-            router.back();
-          }}
-        />
+        <ResultSheet analysis={analysis} saving={saving} onRetake={reset} onDone={onAddToToday} />
       )}
     </View>
   );
@@ -180,10 +186,12 @@ function MacroPill({ label, value }: { label: string; value: number }) {
 
 function ResultSheet({
   analysis,
+  saving,
   onRetake,
   onDone,
 }: {
   analysis: FoodAnalysis;
+  saving: boolean;
   onRetake: () => void;
   onDone: () => void;
 }) {
@@ -238,11 +246,18 @@ function ResultSheet({
       </ScrollView>
 
       <View style={styles.resultButtons}>
-        <Pressable style={styles.secondaryBtn} onPress={onRetake}>
+        <Pressable style={styles.secondaryBtn} onPress={onRetake} disabled={saving}>
           <Text style={styles.secondaryBtnText}>Retake</Text>
         </Pressable>
-        <Pressable style={styles.primaryBtnFlex} onPress={onDone}>
-          <Text style={styles.primaryBtnText}>Add to today</Text>
+        <Pressable
+          style={[styles.primaryBtnFlex, saving && styles.btnBusy]}
+          onPress={onDone}
+          disabled={saving}>
+          {saving ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.primaryBtnText}>Add to today</Text>
+          )}
         </Pressable>
       </View>
     </View>
@@ -399,6 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  btnBusy: { opacity: 0.7 },
   secondaryBtn: {
     borderRadius: 16,
     paddingVertical: 16,

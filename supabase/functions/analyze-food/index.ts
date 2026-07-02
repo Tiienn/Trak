@@ -44,6 +44,19 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Supabase's verify_jwt has already checked the token SIGNATURE, but the
+    // public anon key is itself a valid JWT (role "anon"). Require a real
+    // signed-in user so strangers can't spend the OpenAI credit.
+    try {
+      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+      const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+      if (payload?.role !== 'authenticated') {
+        return json({ error: 'Please sign in to scan meals.' }, 401);
+      }
+    } catch {
+      return json({ error: 'Please sign in to scan meals.' }, 401);
+    }
+
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
       return json({ error: 'Server is missing its OpenAI key.' }, 500);
@@ -53,10 +66,15 @@ Deno.serve(async (req: Request) => {
     if (!imageBase64 || typeof imageBase64 !== 'string') {
       return json({ error: 'No image provided.' }, 400);
     }
+    // The app sends ~100–300 KB images; anything huge is abuse or a bug.
+    if (imageBase64.length > 3_000_000) {
+      return json({ error: 'Image too large. Please try again.' }, 413);
+    }
 
     const body = {
       model: MODEL,
       temperature: 0.2,
+      max_tokens: 600, // bounds the cost of each call; plenty for the JSON answer
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

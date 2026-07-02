@@ -29,6 +29,7 @@ export default function BarcodeScreen() {
   const [product, setProduct] = useState<BarcodeProduct | null>(null);
   const [servings, setServings] = useState(1);
   const [errorMsg, setErrorMsg] = useState('');
+  const [saving, setSaving] = useState(false);
   const busyRef = useRef(false); // guard against the camera firing repeatedly
 
   async function handleCode(code: string) {
@@ -73,10 +74,16 @@ export default function BarcodeScreen() {
     setPhase('scanning');
   }
 
-  function addAndClose() {
-    if (!product) return;
-    addMeal(barcodeToAnalysis(product, servings));
-    router.back();
+  async function addAndClose() {
+    if (!product || saving) return; // guard against double taps
+    setSaving(true);
+    try {
+      await addMeal(barcodeToAnalysis(product, servings));
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Not saved', e?.message ?? 'Could not save your meal. Please try again.');
+      setSaving(false);
+    }
   }
 
   if (!permission) return <View style={styles.black} />;
@@ -199,11 +206,18 @@ export default function BarcodeScreen() {
           </View>
 
           <View style={styles.resultButtons}>
-            <Pressable style={styles.secondaryBtn} onPress={reset}>
+            <Pressable style={styles.secondaryBtn} onPress={reset} disabled={saving}>
               <Text style={styles.secondaryBtnText}>Rescan</Text>
             </Pressable>
-            <Pressable style={styles.primaryBtnFlex} onPress={addAndClose}>
-              <Text style={styles.primaryBtnText}>Add to today</Text>
+            <Pressable
+              style={[styles.primaryBtnFlex, saving && styles.btnBusy]}
+              onPress={addAndClose}
+              disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Add to today</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -338,6 +352,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  btnBusy: { opacity: 0.7 },
   secondaryBtn: {
     borderRadius: 16,
     paddingVertical: 16,
