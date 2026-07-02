@@ -10,21 +10,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useMeals } from '@/lib/store';
 import { LoggedMeal } from '@/lib/types';
-
-export const Brand = { green: '#22C55E', greenDark: '#16A34A', over: '#F97316' } as const;
-
-/** Structural shape shared by the light and dark color palettes. */
-type ThemeColors = {
-  text: string;
-  background: string;
-  backgroundElement: string;
-  backgroundSelected: string;
-  textSecondary: string;
-};
 
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -145,7 +134,14 @@ export default function HomeScreen() {
   function confirmDelete(meal: LoggedMeal) {
     Alert.alert('Remove meal?', `Remove "${meal.title}" from today?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => removeMeal(meal.id) },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () =>
+          removeMeal(meal.id).catch((e: any) =>
+            Alert.alert('Not removed', e?.message ?? 'Please try again.')
+          ),
+      },
     ]);
   }
 

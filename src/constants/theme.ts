@@ -26,6 +26,22 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/** Trak brand colors — one place to change the whole app's identity. */
+export const Brand = {
+  green: '#22C55E',
+  greenDark: '#16A34A',
+  over: '#F97316',
+} as const;
+
+/** Structural shape shared by the light and dark palettes (safe to pass either). */
+export type ThemeColors = {
+  text: string;
+  background: string;
+  backgroundElement: string;
+  backgroundSelected: string;
+  textSecondary: string;
+};
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

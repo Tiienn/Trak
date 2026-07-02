@@ -11,18 +11,20 @@ import {
   StyleSheet,
   Text,
   View,
+  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { useMeals } from '@/lib/store';
 import { FoodAnalysis } from '@/lib/types';
 
-const Brand = { green: '#22C55E', greenDark: '#16A34A' } as const;
-
 type Phase = 'camera' | 'analyzing' | 'result' | 'error';
 
 export default function ScanScreen() {
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
   const { addMeal } = useMeals();
   const cameraRef = useRef<CameraView>(null);
@@ -158,9 +160,11 @@ export default function ScanScreen() {
 
       {/* Error */}
       {phase === 'error' && (
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Hmm, that didn&apos;t work</Text>
-          <Text style={styles.sheetBody}>{errorMsg}</Text>
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>
+            Hmm, that didn&apos;t work
+          </Text>
+          <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>{errorMsg}</Text>
           <Pressable style={styles.primaryBtn} onPress={reset}>
             <Text style={styles.primaryBtnText}>Try again</Text>
           </Pressable>
@@ -169,17 +173,23 @@ export default function ScanScreen() {
 
       {/* Result */}
       {phase === 'result' && analysis && (
-        <ResultSheet analysis={analysis} saving={saving} onRetake={reset} onDone={onAddToToday} />
+        <ResultSheet
+          analysis={analysis}
+          saving={saving}
+          colors={colors}
+          onRetake={reset}
+          onDone={onAddToToday}
+        />
       )}
     </View>
   );
 }
 
-function MacroPill({ label, value }: { label: string; value: number }) {
+function MacroPill({ label, value, colors }: { label: string; value: number; colors: ThemeColors }) {
   return (
-    <View style={styles.macroPill}>
-      <Text style={styles.macroPillValue}>{value}g</Text>
-      <Text style={styles.macroPillLabel}>{label}</Text>
+    <View style={[styles.macroPill, { backgroundColor: colors.backgroundElement }]}>
+      <Text style={[styles.macroPillValue, { color: colors.text }]}>{value}g</Text>
+      <Text style={[styles.macroPillLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -187,19 +197,21 @@ function MacroPill({ label, value }: { label: string; value: number }) {
 function ResultSheet({
   analysis,
   saving,
+  colors,
   onRetake,
   onDone,
 }: {
   analysis: FoodAnalysis;
   saving: boolean;
+  colors: ThemeColors;
   onRetake: () => void;
   onDone: () => void;
 }) {
   if (!analysis.isFood) {
     return (
-      <View style={styles.sheet}>
-        <Text style={styles.sheetTitle}>No food detected</Text>
-        <Text style={styles.sheetBody}>
+      <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+        <Text style={[styles.sheetTitle, { color: colors.text }]}>No food detected</Text>
+        <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>
           {analysis.notes ?? "I couldn't find food in that photo."}
         </Text>
         <Pressable style={styles.primaryBtn} onPress={onRetake}>
@@ -210,44 +222,59 @@ function ResultSheet({
   }
 
   return (
-    <View style={styles.resultSheet}>
+    <View style={[styles.resultSheet, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.resultTitle}>{analysis.title}</Text>
-        <Text style={styles.confidenceText}>
+        <Text style={[styles.resultTitle, { color: colors.text }]}>{analysis.title}</Text>
+        <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>
           AI estimate · {Math.round(analysis.confidence * 100)}% confident
         </Text>
 
-        <Text style={styles.bigCalories}>{analysis.total.calories.toLocaleString()}</Text>
-        <Text style={styles.calLabel}>calories</Text>
+        <Text style={[styles.bigCalories, { color: colors.text }]}>
+          {analysis.total.calories.toLocaleString()}
+        </Text>
+        <Text style={[styles.calLabel, { color: colors.textSecondary }]}>calories</Text>
 
         <View style={styles.macroRow}>
-          <MacroPill label="Protein" value={analysis.total.protein_g} />
-          <MacroPill label="Carbs" value={analysis.total.carbs_g} />
-          <MacroPill label="Fat" value={analysis.total.fat_g} />
+          <MacroPill label="Protein" value={analysis.total.protein_g} colors={colors} />
+          <MacroPill label="Carbs" value={analysis.total.carbs_g} colors={colors} />
+          <MacroPill label="Fat" value={analysis.total.fat_g} colors={colors} />
         </View>
 
         {analysis.items.length > 0 && (
-          <View style={styles.itemsBox}>
+          <View style={[styles.itemsBox, { backgroundColor: colors.backgroundElement }]}>
             {analysis.items.map((it, i) => (
               <View
                 key={i}
-                style={[styles.itemRow, i === analysis.items.length - 1 && styles.itemRowLast]}>
+                style={[
+                  styles.itemRow,
+                  { borderBottomColor: colors.backgroundSelected },
+                  i === analysis.items.length - 1 && styles.itemRowLast,
+                ]}>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{it.name}</Text>
-                  {!!it.quantity && <Text style={styles.itemQty}>{it.quantity}</Text>}
+                  <Text style={[styles.itemName, { color: colors.text }]}>{it.name}</Text>
+                  {!!it.quantity && (
+                    <Text style={[styles.itemQty, { color: colors.textSecondary }]}>
+                      {it.quantity}
+                    </Text>
+                  )}
                 </View>
-                <Text style={styles.itemCals}>{it.calories} cal</Text>
+                <Text style={[styles.itemCals, { color: colors.text }]}>{it.calories} cal</Text>
               </View>
             ))}
           </View>
         )}
 
-        {!!analysis.notes && <Text style={styles.notes}>{analysis.notes}</Text>}
+        {!!analysis.notes && (
+          <Text style={[styles.notes, { color: colors.textSecondary }]}>{analysis.notes}</Text>
+        )}
       </ScrollView>
 
-      <View style={styles.resultButtons}>
-        <Pressable style={styles.secondaryBtn} onPress={onRetake} disabled={saving}>
-          <Text style={styles.secondaryBtnText}>Retake</Text>
+      <View style={[styles.resultButtons, { borderTopColor: colors.backgroundSelected }]}>
+        <Pressable
+          style={[styles.secondaryBtn, { backgroundColor: colors.backgroundElement }]}
+          onPress={onRetake}
+          disabled={saving}>
+          <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Retake</Text>
         </Pressable>
         <Pressable
           style={[styles.primaryBtnFlex, saving && styles.btnBusy]}

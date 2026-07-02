@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,20 +15,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { computeTargets } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { ActivityLevel, Goal, Sex, UserProfile } from '@/lib/types';
-
-const Brand = { green: '#22C55E', greenDark: '#16A34A' } as const;
-
-type ThemeColors = {
-  text: string;
-  background: string;
-  backgroundElement: string;
-  backgroundSelected: string;
-  textSecondary: string;
-};
 
 const GOALS: { key: Goal; label: string; emoji: string }[] = [
   { key: 'lose', label: 'Lose weight', emoji: '📉' },
@@ -140,11 +132,19 @@ export default function OnboardingScreen() {
     if (step > 0) setStep(step - 1);
   }
 
-  function finish() {
+  const [saving, setSaving] = useState(false);
+
+  async function finish() {
     const profile = buildProfile();
-    if (!profile) return;
-    saveProfile(profile);
-    router.replace('/');
+    if (!profile || saving) return;
+    setSaving(true);
+    try {
+      await saveProfile(profile);
+      router.replace('/');
+    } catch (e: any) {
+      Alert.alert('Not saved', e?.message ?? 'Could not save your profile. Please try again.');
+      setSaving(false);
+    }
   }
 
   const completeProfile = buildProfile();
@@ -358,8 +358,15 @@ export default function OnboardingScreen() {
               <Text style={styles.primaryBtnText}>Continue</Text>
             </Pressable>
           ) : (
-            <Pressable style={styles.primaryBtn} onPress={finish}>
-              <Text style={styles.primaryBtnText}>Start tracking</Text>
+            <Pressable
+              style={[styles.primaryBtn, saving && { opacity: 0.7 }]}
+              onPress={finish}
+              disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Start tracking</Text>
+              )}
             </Pressable>
           )}
         </View>

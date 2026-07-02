@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '@/constants/theme';
@@ -50,7 +50,14 @@ export default function HistoryScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: colors.text }]}>History</Text>
-          <Pressable onPress={signOut} hitSlop={8}>
+          <Pressable
+            onPress={() =>
+              Alert.alert('Sign out?', 'You can sign back in anytime.', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+              ])
+            }
+            hitSlop={8}>
             <Text style={styles.signOut}>Sign out</Text>
           </Pressable>
         </View>

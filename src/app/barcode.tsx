@@ -2,27 +2,36 @@ import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera'
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { BarcodeProduct, barcodeToAnalysis, lookupBarcode } from '@/lib/barcode';
 import { useMeals } from '@/lib/store';
-
-const Brand = { green: '#22C55E', greenDark: '#16A34A' } as const;
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
 
 type Phase = 'scanning' | 'looking' | 'result' | 'notfound' | 'error';
 
-function Macro({ label, value }: { label: string; value: number }) {
+function Macro({ label, value, colors }: { label: string; value: number; colors: ThemeColors }) {
   return (
-    <View style={styles.macroPill}>
-      <Text style={styles.macroPillValue}>{value}g</Text>
-      <Text style={styles.macroPillLabel}>{label}</Text>
+    <View style={[styles.macroPill, { backgroundColor: colors.backgroundElement }]}>
+      <Text style={[styles.macroPillValue, { color: colors.text }]}>{value}g</Text>
+      <Text style={[styles.macroPillLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
 
 export default function BarcodeScreen() {
+  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
   const { addMeal } = useMeals();
   const [phase, setPhase] = useState<Phase>('scanning');
@@ -147,9 +156,9 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'notfound' && (
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Product not found</Text>
-          <Text style={styles.sheetBody}>
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>Product not found</Text>
+          <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>
             That barcode isn&apos;t in the Open Food Facts database yet. Try photo‑scanning the meal
             instead.
           </Text>
@@ -160,9 +169,11 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'error' && (
-        <View style={styles.sheet}>
-          <Text style={styles.sheetTitle}>Hmm, that didn&apos;t work</Text>
-          <Text style={styles.sheetBody}>{errorMsg}</Text>
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>
+            Hmm, that didn&apos;t work
+          </Text>
+          <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>{errorMsg}</Text>
           <Pressable style={styles.primaryBtn} onPress={reset}>
             <Text style={styles.primaryBtnText}>Try again</Text>
           </Pressable>
@@ -170,44 +181,51 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'result' && product && (
-        <View style={styles.resultSheet}>
-          <Text style={styles.resultTitle} numberOfLines={2}>
+        <View style={[styles.resultSheet, { backgroundColor: colors.background }]}>
+          <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>
             {product.name}
           </Text>
-          {!!product.brand && <Text style={styles.resultBrand}>{product.brand}</Text>}
-          <Text style={styles.perLabel}>{product.perLabel}</Text>
+          {!!product.brand && (
+            <Text style={[styles.resultBrand, { color: colors.textSecondary }]}>
+              {product.brand}
+            </Text>
+          )}
+          <Text style={[styles.perLabel, { color: colors.textSecondary }]}>{product.perLabel}</Text>
 
           <View style={styles.qtyRow}>
-            <Text style={styles.qtyLabel}>Servings</Text>
+            <Text style={[styles.qtyLabel, { color: colors.text }]}>Servings</Text>
             <View style={styles.stepper}>
               <Pressable
-                style={styles.stepBtn}
+                style={[styles.stepBtn, { backgroundColor: colors.backgroundElement }]}
                 onPress={() => setServings((s) => Math.max(0.5, Math.round((s - 0.5) * 2) / 2))}>
-                <Text style={styles.stepBtnText}>−</Text>
+                <Text style={[styles.stepBtnText, { color: colors.text }]}>−</Text>
               </Pressable>
-              <Text style={styles.qtyValue}>{servings}</Text>
+              <Text style={[styles.qtyValue, { color: colors.text }]}>{servings}</Text>
               <Pressable
-                style={styles.stepBtn}
+                style={[styles.stepBtn, { backgroundColor: colors.backgroundElement }]}
                 onPress={() => setServings((s) => Math.round((s + 0.5) * 2) / 2)}>
-                <Text style={styles.stepBtnText}>+</Text>
+                <Text style={[styles.stepBtnText, { color: colors.text }]}>+</Text>
               </Pressable>
             </View>
           </View>
 
-          <Text style={styles.bigCalories}>
+          <Text style={[styles.bigCalories, { color: colors.text }]}>
             {Math.round(product.calories * servings).toLocaleString()}
           </Text>
-          <Text style={styles.calLabel}>calories</Text>
+          <Text style={[styles.calLabel, { color: colors.textSecondary }]}>calories</Text>
 
           <View style={styles.macroRow}>
-            <Macro label="Protein" value={Math.round(product.protein_g * servings)} />
-            <Macro label="Carbs" value={Math.round(product.carbs_g * servings)} />
-            <Macro label="Fat" value={Math.round(product.fat_g * servings)} />
+            <Macro label="Protein" value={Math.round(product.protein_g * servings)} colors={colors} />
+            <Macro label="Carbs" value={Math.round(product.carbs_g * servings)} colors={colors} />
+            <Macro label="Fat" value={Math.round(product.fat_g * servings)} colors={colors} />
           </View>
 
           <View style={styles.resultButtons}>
-            <Pressable style={styles.secondaryBtn} onPress={reset} disabled={saving}>
-              <Text style={styles.secondaryBtnText}>Rescan</Text>
+            <Pressable
+              style={[styles.secondaryBtn, { backgroundColor: colors.backgroundElement }]}
+              onPress={reset}
+              disabled={saving}>
+              <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Rescan</Text>
             </Pressable>
             <Pressable
               style={[styles.primaryBtnFlex, saving && styles.btnBusy]}

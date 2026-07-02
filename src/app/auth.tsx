@@ -13,11 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { supabaseConfigured } from '@/lib/supabase';
-
-const Brand = { green: '#22C55E', greenDark: '#16A34A' } as const;
 
 export default function AuthScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';

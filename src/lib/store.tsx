@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { AppState } from 'react-native';
 
 import { useAuth } from './auth';
 import { computeTargets } from './nutrition';
@@ -119,6 +120,21 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [today, setToday] = useState(dayKey());
+
+  // Keep "today" honest across midnight: refresh when the app comes to the
+  // foreground and once a minute while it stays open.
+  useEffect(() => {
+    const refresh = () => setToday((prev) => (dayKey() === prev ? prev : dayKey()));
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refresh();
+    });
+    const timer = setInterval(refresh, 60_000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
+  }, []);
 
   // Load the signed-in user's data from Supabase whenever the user changes
   // (or a retry is requested).
@@ -197,15 +213,33 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   );
 
   const removeMeal = useCallback(async (id: string) => {
-    setMeals((prev) => prev.filter((m) => m.id !== id)); // optimistic
-    await supabase.from('meals').delete().eq('id', id);
+    // Optimistic removal, but remember the row so we can restore it on failure.
+    let removed: LoggedMeal | undefined;
+    let at = -1;
+    setMeals((prev) => {
+      at = prev.findIndex((m) => m.id === id);
+      removed = at >= 0 ? prev[at] : undefined;
+      return prev.filter((m) => m.id !== id);
+    });
+    const { error } = await supabase.from('meals').delete().eq('id', id);
+    if (error && removed) {
+      const meal = removed;
+      const index = at;
+      setMeals((prev) => {
+        const next = [...prev];
+        next.splice(Math.min(Math.max(index, 0), next.length), 0, meal);
+        return next;
+      });
+      throw new Error('Could not remove the meal. Check your connection and try again.');
+    }
   }, []);
 
   const saveProfile = useCallback(
     async (next: UserProfile) => {
       if (!user) return;
+      const previous = profile;
       setProfile(next); // optimistic
-      await supabase.from('profiles').upsert({
+      const { error } = await supabase.from('profiles').upsert({
         user_id: user.id,
         sex: next.sex,
         age: next.age,
@@ -214,12 +248,15 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         goal: next.goal,
         activity: next.activity,
       });
+      if (error) {
+        setProfile(previous); // roll back so the UI doesn't lie
+        throw new Error('Could not save your profile. Check your connection and try again.');
+      }
     },
-    [user]
+    [user, profile]
   );
 
   const value = useMemo<MealsContextValue>(() => {
-    const today = dayKey();
     const todayMeals = meals.filter((m) => m.date === today);
     return {
       loaded,
@@ -236,7 +273,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       removeMeal,
       saveProfile,
     };
-  }, [meals, profile, loaded, loadError, retryLoad, addMeal, removeMeal, saveProfile]);
+  }, [meals, profile, loaded, loadError, retryLoad, today, addMeal, removeMeal, saveProfile]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

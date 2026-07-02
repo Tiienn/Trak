@@ -28,7 +28,7 @@ export async function lookupBarcode(code: string): Promise<BarcodeProduct | null
   let res: Response;
   try {
     res = await fetch(
-      `${OFF_URL}/${encodeURIComponent(code)}?fields=product_name,brands,serving_size,nutriments`,
+      `${OFF_URL}/${encodeURIComponent(code)}?fields=product_name,brands,serving_size,serving_quantity,nutriments`,
       { headers: { 'User-Agent': 'Trak/1.0 (personal food tracker)' } }
     );
   } catch {
@@ -46,11 +46,19 @@ export async function lookupBarcode(code: string): Promise<BarcodeProduct | null
   const p = json.product;
   const n = p.nutriments ?? {};
   const hasServing = n['energy-kcal_serving'] != null;
+  const servingGrams = num(p.serving_quantity); // grams (or ml) per serving, when known
 
   const perLabel = hasServing
     ? `per serving${p.serving_size ? ` (${p.serving_size})` : ''}`
     : 'per 100 g';
-  const pick = (base: string) => (hasServing ? num(n[`${base}_serving`]) : num(n[`${base}_100g`]));
+  // Per field: prefer the per-serving value; if a product only lists that field
+  // per 100 g, derive the per-serving amount from the serving weight.
+  const pick = (base: string) => {
+    if (!hasServing) return num(n[`${base}_100g`]);
+    if (n[`${base}_serving`] != null) return num(n[`${base}_serving`]);
+    if (servingGrams > 0) return (num(n[`${base}_100g`]) * servingGrams) / 100;
+    return 0;
+  };
   const calories = hasServing ? num(n['energy-kcal_serving']) : num(n['energy-kcal_100g']);
 
   return {
