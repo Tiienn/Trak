@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
-  title: { fontSize: 30, fontWeight: '800' },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
   emptyEmoji: { fontSize: 40 },
