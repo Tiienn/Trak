@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { enableHealthSync, healthAvailable, healthSyncEnabled } from '@/lib/health';
 import { dayKey, sumTotals, useMeals } from '@/lib/store';
 import { LoggedMeal } from '@/lib/types';
 
@@ -22,6 +24,55 @@ function formatDateLabel(dateStr: string): string {
   if (dateStr === today) return 'Today';
   if (dateStr === yesterday) return 'Yesterday';
   return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+type HealthState = 'hidden' | 'off' | 'on';
+
+/** Small card offering to mirror logged meals into Android Health Connect. */
+function HealthCard({ colors }: { colors: ThemeColors }) {
+  const [state, setState] = useState<HealthState>('hidden');
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!(await healthAvailable())) return; // stays hidden (iOS / Expo Go / no HC)
+      const enabled = await healthSyncEnabled();
+      if (active) setState(enabled ? 'on' : 'off');
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (state === 'hidden') return null;
+
+  return (
+    <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Health Connect</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
+          {state === 'on'
+            ? 'New meals sync automatically.'
+            : 'Mirror your meals into Android Health.'}
+        </Text>
+      </View>
+      {state === 'on' ? (
+        <Text style={styles.healthOn}>✓ On</Text>
+      ) : (
+        <Pressable
+          style={styles.healthBtn}
+          onPress={async () => {
+            const ok = await enableHealthSync().catch(() => false);
+            setState(ok ? 'on' : 'off');
+            if (!ok) {
+              Alert.alert('Health Connect', 'Permission was not granted.');
+            }
+          }}>
+          <Text style={styles.healthBtnText}>Connect</Text>
+        </Pressable>
+      )}
+    </View>
+  );
 }
 
 /** Group meals (already newest-first) into ordered day buckets. */
@@ -61,6 +112,7 @@ export default function HistoryScreen() {
             <Text style={styles.signOut}>Sign out</Text>
           </Pressable>
         </View>
+        <HealthCard colors={colors} />
         {days.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
             <Text style={styles.emptyEmoji}>📖</Text>
@@ -130,6 +182,26 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 30, fontWeight: '800' },
   signOut: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
+
+  healthCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: Spacing.three,
+    marginBottom: Spacing.three,
+    gap: Spacing.two,
+  },
+  healthInfo: { flex: 1 },
+  healthTitle: { fontSize: 15, fontWeight: '700' },
+  healthBody: { fontSize: 13, marginTop: 2 },
+  healthOn: { color: Brand.green, fontSize: 15, fontWeight: '700' },
+  healthBtn: {
+    backgroundColor: Brand.green,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  healthBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   scroll: { paddingBottom: 100, gap: Spacing.four },
   dayGroup: { gap: Spacing.two },
   dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },

@@ -10,6 +10,7 @@ import {
 import { AppState } from 'react-native';
 
 import { useAuth } from './auth';
+import { writeMealToHealth } from './health';
 import { computeTargets } from './nutrition';
 import { supabase } from './supabase';
 import { FoodAnalysis, FoodTotals, LoggedMeal, UserProfile } from './types';
@@ -208,6 +209,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         throw new Error('Could not save your meal. Check your connection and try again.');
       }
       setMeals((prev) => [rowToMeal(data), ...prev]);
+      // Best-effort mirror to Android Health Connect (no-op unless enabled).
+      writeMealToHealth(analysis.title, analysis.total, Date.now());
     },
     [user]
   );

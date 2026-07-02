@@ -12,6 +12,10 @@
     },
     "android": {
       "package": "com.tien.trak",
+      "permissions": [
+        "android.permission.health.READ_NUTRITION",
+        "android.permission.health.WRITE_NUTRITION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0C1210",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -44,6 +48,16 @@
         "expo-image-picker",
         {
           "photosPermission": "Trak needs access to your photos so you can pick a meal to scan."
+        }
+      ],
+      "react-native-health-connect",
+      "./plugins/with-health-connect-delegate.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],
