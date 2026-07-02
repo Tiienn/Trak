@@ -11,13 +11,13 @@ import {
   Text,
   TextInput,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { computeTargets } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 import { ActivityLevel, Goal, Sex, UserProfile } from '@/lib/types';
 
 const GOALS: { key: Goal; label: string; emoji: string }[] = [
@@ -58,7 +58,7 @@ function OptionCard({
       style={[
         styles.optionCard,
         {
-          backgroundColor: selected ? '#22C55E22' : colors.backgroundElement,
+          backgroundColor: selected ? '#10B98122' : colors.backgroundElement,
           borderColor: selected ? Brand.green : 'transparent',
         },
       ]}>
@@ -68,7 +68,7 @@ function OptionCard({
 }
 
 export default function OnboardingScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { saveProfile } = useMeals();
 

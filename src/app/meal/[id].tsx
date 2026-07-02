@@ -1,11 +1,12 @@
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 
 function formatWhen(ms: number): string {
   const d = new Date(ms);
@@ -14,7 +15,7 @@ function formatWhen(ms: number): string {
 
 /** Full breakdown of one logged meal, with the (only) delete action. */
 export default function MealDetailScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { id } = useLocalSearchParams<{ id: string }>();
   const { meals, removeMeal } = useMeals();

@@ -10,13 +10,13 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { BarcodeProduct, barcodeToAnalysis, lookupBarcode } from '@/lib/barcode';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
 
 type Phase = 'scanning' | 'looking' | 'result' | 'notfound' | 'error';
@@ -31,7 +31,7 @@ function Macro({ label, value, colors }: { label: string; value: number; colors:
 }
 
 export default function BarcodeScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
   const { addMeal } = useMeals();

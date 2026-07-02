@@ -12,19 +12,19 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 import { FoodAnalysis } from '@/lib/types';
 
 type Phase = 'camera' | 'analyzing' | 'result' | 'error';
 
 export default function ScanScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
   const { addMeal } = useMeals();

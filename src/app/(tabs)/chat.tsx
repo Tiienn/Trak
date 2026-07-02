@@ -11,13 +11,14 @@ import {
   Text,
   TextInput,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { RingMark } from '@/components/logo';
 import { askTrak, type ChatTurn } from '@/lib/chat';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 import { FoodAnalysis } from '@/lib/types';
 
 type UiMessage = {
@@ -101,7 +102,7 @@ function MealCard({
 }
 
 export default function ChatScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { targets, todayTotals, addMeal } = useMeals();
 
@@ -198,7 +199,7 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.headerRow}>
-          <View style={styles.brandDot} />
+          <RingMark size={30} />
           <Text style={[styles.title, { color: colors.text }]}>Trak</Text>
         </View>
 
@@ -313,7 +314,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
-  brandDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: Brand.green },
   title: { fontSize: 30, fontWeight: '800' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },

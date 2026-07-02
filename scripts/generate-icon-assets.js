@@ -12,7 +12,7 @@ const sharp = require('sharp');
 const OUT = path.join(__dirname, '..', 'assets', 'images');
 
 const BG = '#0C1210'; // near-black brand background
-const GREEN = '#22C55E'; // Trak brand green
+const GREEN = '#10B981'; // Trak brand green
 
 /**
  * The ring glyph, centered on a square canvas.

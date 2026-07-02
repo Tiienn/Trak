@@ -7,14 +7,16 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalorieRing } from '@/components/calorie-ring';
+import { BarcodeIcon, CameraIcon } from '@/components/icons';
+import { RingMark } from '@/components/logo';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useMeals } from '@/lib/store';
+import { useAppScheme } from '@/lib/theme';
 import { LoggedMeal } from '@/lib/types';
 
 function formatTime(ms: number): string {
@@ -78,7 +80,7 @@ function MealRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
 }
 
 export default function HomeScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { user, authLoading } = useAuth();
   const {
@@ -143,7 +145,7 @@ export default function HomeScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
-              <View style={[styles.logoDot, { backgroundColor: Brand.green }]} />
+              <RingMark size={30} />
               <Text style={[styles.wordmark, { color: colors.text }]}>Trak</Text>
             </View>
             {streak > 0 ? (
@@ -197,12 +199,17 @@ export default function HomeScreen() {
               { backgroundColor: pressed ? Brand.greenDark : Brand.green },
             ]}
             onPress={() => router.push('/scan')}>
-            <Text style={styles.scanButtonText}>＋   Scan a meal</Text>
+            <CameraIcon size={22} color="#ffffff" />
+            <Text style={styles.scanButtonText}>Scan a meal</Text>
           </Pressable>
-          <Pressable style={styles.barcodeLink} onPress={() => router.push('/barcode')}>
-            <Text style={[styles.barcodeLinkText, { color: colors.textSecondary }]}>
-              ▊▊▊  Scan a barcode
-            </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.barcodeButton,
+              { backgroundColor: colors.greenTint, opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={() => router.push('/barcode')}>
+            <BarcodeIcon size={22} color={Brand.greenDark} />
+            <Text style={[styles.barcodeButtonText, { color: Brand.greenDark }]}>Barcode</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -221,7 +228,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  logoDot: { width: 16, height: 16, borderRadius: 8 },
   wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   todayLabel: { fontSize: 15, fontWeight: '600' },
   streakPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
@@ -272,16 +278,29 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
   bottomBar: {
+    flexDirection: 'row',
     paddingTop: Spacing.two,
     paddingBottom: Spacing.two,
-    gap: Spacing.one,
+    gap: Spacing.two,
   },
   scanButton: {
+    flex: 1.8,
     borderRadius: 18,
-    paddingVertical: Spacing.three,
+    height: 56,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
-  barcodeLink: { alignItems: 'center', paddingVertical: Spacing.two },
-  barcodeLinkText: { fontSize: 14, fontWeight: '600' },
-  scanButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
+  scanButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  barcodeButton: {
+    flex: 1,
+    borderRadius: 18,
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  barcodeButtonText: { fontSize: 15, fontWeight: '700' },
 });

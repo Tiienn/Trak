@@ -9,16 +9,16 @@ import {
   Text,
   TextInput,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing } from '@/constants/theme';
+import { useAppScheme } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
 import { supabaseConfigured } from '@/lib/supabase';
 
 export default function AuthScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { signIn, signUp } = useAuth();
 

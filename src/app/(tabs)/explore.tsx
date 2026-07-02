@@ -8,11 +8,11 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { useAppScheme, useThemeMode, type ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
 import { enableHealthSync, healthAvailable, healthSyncEnabled } from '@/lib/health';
 import { usePro } from '@/lib/purchases';
@@ -108,6 +108,42 @@ function ProCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+/** Theme switcher — System follows the phone; Light/Dark force a look. */
+function AppearanceCard({ colors }: { colors: ThemeColors }) {
+  const { mode, setMode } = useThemeMode();
+  const options: { value: ThemeMode; label: string }[] = [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ];
+  return (
+    <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Appearance</Text>
+      </View>
+      <View style={[styles.segmentWrap, { backgroundColor: colors.background }]}>
+        {options.map((o) => (
+          <Pressable
+            key={o.value}
+            onPress={() => setMode(o.value)}
+            style={[
+              styles.segment,
+              mode === o.value && { backgroundColor: colors.greenTint },
+            ]}>
+            <Text
+              style={[
+                styles.segmentText,
+                { color: mode === o.value ? Brand.greenDark : colors.textSecondary },
+              ]}>
+              {o.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** Group meals (already newest-first) into ordered day buckets. */
 function groupByDay(meals: LoggedMeal[]): { date: string; meals: LoggedMeal[] }[] {
   const order: string[] = [];
@@ -123,7 +159,7 @@ function groupByDay(meals: LoggedMeal[]): { date: string; meals: LoggedMeal[] }[
 }
 
 export default function HistoryScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { meals, refresh } = useMeals();
   const { signOut } = useAuth();
@@ -154,6 +190,7 @@ export default function HistoryScreen() {
         </View>
         <HealthCard colors={colors} />
         <ProCard colors={colors} />
+        <AppearanceCard colors={colors} />
         {days.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
             <Text style={styles.emptyEmoji}>📖</Text>
@@ -256,6 +293,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   healthBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  segmentWrap: { flexDirection: 'row', borderRadius: 12, padding: 3, gap: 2 },
+  segment: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9 },
+  segmentText: { fontSize: 13, fontWeight: '700' },
   scroll: { paddingBottom: 100, gap: Spacing.four },
   dayGroup: { gap: Spacing.two },
   dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },

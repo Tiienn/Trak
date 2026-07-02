@@ -9,18 +9,22 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
+    text: '#0B1512',
     background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    backgroundElement: '#F1F4F2',
+    backgroundSelected: '#E1E7E4',
+    textSecondary: '#5F6B66',
+    /** Soft emerald tint for tonal buttons / selected chips. */
+    greenTint: '#D8F3E7',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#F2F7F4',
+    // Trak's signature near-black green — same family as the splash + app icon.
+    background: '#0C1210',
+    backgroundElement: '#182420',
+    backgroundSelected: '#24332C',
+    textSecondary: '#9DABA4',
+    greenTint: '#0F2E23',
   },
 } as const;
 
@@ -28,8 +32,9 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 /** Trak brand colors — one place to change the whole app's identity. */
 export const Brand = {
-  green: '#22C55E',
-  greenDark: '#16A34A',
+  /** Primary — emerald. */
+  green: '#10B981',
+  greenDark: '#059669',
   over: '#F97316',
 } as const;
 
@@ -40,6 +45,7 @@ export type ThemeColors = {
   backgroundElement: string;
   backgroundSelected: string;
   textSecondary: string;
+  greenTint: string;
 };
 
 export const Fonts = Platform.select({

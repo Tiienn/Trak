@@ -9,12 +9,12 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PurchasesPackage } from 'react-native-purchases';
 
 import { Brand, Colors, Spacing } from '@/constants/theme';
+import { useAppScheme } from '@/lib/theme';
 import {
   getProPackages,
   purchasePro,
@@ -41,7 +41,7 @@ function labelFor(pkg: PurchasesPackage): { title: string; sub: string; badge?: 
 }
 
 export default function PaywallScreen() {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useAppScheme();
   const colors = Colors[scheme];
   const isPro = usePro();
 
@@ -150,7 +150,7 @@ export default function PaywallScreen() {
                     style={[
                       styles.pkg,
                       { backgroundColor: colors.backgroundElement, borderColor: 'transparent' },
-                      active && { borderColor: Brand.green, backgroundColor: '#22C55E22' },
+                      active && { borderColor: Brand.green, backgroundColor: '#10B98122' },
                     ]}>
                     <View style={styles.pkgInfo}>
                       <Text style={[styles.pkgTitle, { color: colors.text }]}>{title}</Text>
