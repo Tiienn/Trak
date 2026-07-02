@@ -26,7 +26,7 @@ function toNumber(v: unknown): number {
 }
 
 /** Pull a readable message out of a Supabase Functions error. */
-async function extractError(error: any): Promise<string> {
+export async function extractError(error: any): Promise<string> {
   try {
     if (error?.context && typeof error.context.json === 'function') {
       const body = await error.context.json();
@@ -39,35 +39,10 @@ async function extractError(error: any): Promise<string> {
 }
 
 /**
- * Sends a food photo to the Trak edge function (which calls GPT-4o server-side)
- * and returns a structured nutrition estimate. Throws a friendly Error on failure.
+ * Turn the AI's (loosely-typed) JSON into a well-formed FoodAnalysis.
+ * Shared by the photo scanner and the Trak chat.
  */
-export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
-  const base64 = await toBase64Jpeg(uri);
-
-  const { data, error } = await supabase.functions.invoke('analyze-food', {
-    body: { imageBase64: base64 },
-  });
-
-  if (error) {
-    throw new Error(await extractError(error));
-  }
-  if (data?.error) {
-    throw new Error(String(data.error));
-  }
-
-  const content: string | undefined = data?.content;
-  if (!content) {
-    throw new Error('The server returned an empty answer. Please try again.');
-  }
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error('Could not read the AI answer. Please try another photo.');
-  }
-
+export function normalizeFoodJson(parsed: any): FoodAnalysis {
   const items: FoodAnalysis['items'] = Array.isArray(parsed.items)
     ? parsed.items.map((it: any) => ({
         name: String(it?.name ?? 'Item'),
@@ -106,4 +81,37 @@ export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
       typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
     notes: parsed.notes ? String(parsed.notes) : undefined,
   };
+}
+
+/**
+ * Sends a food photo to the Trak edge function (which calls GPT-4o server-side)
+ * and returns a structured nutrition estimate. Throws a friendly Error on failure.
+ */
+export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
+  const base64 = await toBase64Jpeg(uri);
+
+  const { data, error } = await supabase.functions.invoke('analyze-food', {
+    body: { imageBase64: base64 },
+  });
+
+  if (error) {
+    throw new Error(await extractError(error));
+  }
+  if (data?.error) {
+    throw new Error(String(data.error));
+  }
+
+  const content: string | undefined = data?.content;
+  if (!content) {
+    throw new Error('The server returned an empty answer. Please try again.');
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error('Could not read the AI answer. Please try another photo.');
+  }
+
+  return normalizeFoodJson(parsed);
 }
