@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -69,6 +70,7 @@ export default function PaywallScreen() {
     try {
       const ok = await purchasePro(packages[selected]);
       if (ok) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         Alert.alert('Thank you! 💚', 'You are now a Trak Pro supporter.', [
           { text: 'Done', onPress: () => router.back() },
         ]);

@@ -1,4 +1,5 @@
 import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -88,6 +89,7 @@ export default function BarcodeScreen() {
     setSaving(true);
     try {
       await addMeal(barcodeToAnalysis(product, servings));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.back();
     } catch (e: any) {
       Alert.alert('Not saved', e?.message ?? 'Could not save your meal. Please try again.');

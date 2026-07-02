@@ -1,7 +1,8 @@
 import { Redirect, router } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
-  Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CalorieRing } from '@/components/calorie-ring';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { useMeals } from '@/lib/store';
@@ -52,17 +54,14 @@ function MacroBar({
   );
 }
 
-function MealRow({
-  meal,
-  colors,
-  onDelete,
-}: {
-  meal: LoggedMeal;
-  colors: ThemeColors;
-  onDelete: () => void;
-}) {
+function MealRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
   return (
-    <View style={[styles.mealRow, { backgroundColor: colors.backgroundElement }]}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.mealRow,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push(`/meal/${meal.id}`)}>
       <View style={styles.mealInfo}>
         <Text style={[styles.mealTitle, { color: colors.text }]} numberOfLines={1}>
           {meal.title}
@@ -73,10 +72,8 @@ function MealRow({
         </Text>
       </View>
       <Text style={[styles.mealCals, { color: colors.text }]}>{meal.total.calories}</Text>
-      <Pressable style={styles.deleteBtn} onPress={onDelete} hitSlop={8}>
-        <Text style={[styles.deleteBtnText, { color: colors.textSecondary }]}>✕</Text>
-      </Pressable>
-    </View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
   );
 }
 
@@ -88,13 +85,20 @@ export default function HomeScreen() {
     todayMeals,
     todayTotals,
     targets,
-    removeMeal,
     loaded,
     loadError,
     retryLoad,
+    refresh,
     hasProfile,
     streak,
   } = useMeals();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
 
   // Route based on auth + onboarding state.
   if (authLoading) return null;
@@ -127,28 +131,15 @@ export default function HomeScreen() {
   }
   if (!hasProfile) return <Redirect href="/onboarding" />;
 
-  const remaining = targets.calories - todayTotals.calories;
-  const over = remaining < 0;
-  const calPct = targets.calories > 0 ? Math.min(todayTotals.calories / targets.calories, 1) : 0;
-
-  function confirmDelete(meal: LoggedMeal) {
-    Alert.alert('Remove meal?', `Remove "${meal.title}" from today?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () =>
-          removeMeal(meal.id).catch((e: any) =>
-            Alert.alert('Not removed', e?.message ?? 'Please try again.')
-          ),
-      },
-    ]);
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Brand.green} colors={[Brand.green]} />
+          }>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
@@ -168,20 +159,7 @@ export default function HomeScreen() {
 
           {/* Calories card */}
           <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>
-              {over ? 'Calories over today' : 'Calories left today'}
-            </Text>
-            <Text style={[styles.calories, { color: over ? Brand.over : colors.text }]}>
-              {Math.abs(remaining).toLocaleString()}
-            </Text>
-            <View style={[styles.track, styles.calTrack, { backgroundColor: colors.backgroundSelected }]}>
-              <View
-                style={[
-                  styles.fill,
-                  { width: `${calPct * 100}%`, backgroundColor: over ? Brand.over : Brand.green },
-                ]}
-              />
-            </View>
+            <CalorieRing consumed={todayTotals.calories} target={targets.calories} colors={colors} />
             <Text style={[styles.calSub, { color: colors.textSecondary }]}>
               {todayTotals.calories.toLocaleString()} / {targets.calories.toLocaleString()} kcal
             </Text>
@@ -205,19 +183,14 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.mealsList}>
               {todayMeals.map((meal) => (
-                <MealRow
-                  key={meal.id}
-                  meal={meal}
-                  colors={colors}
-                  onDelete={() => confirmDelete(meal)}
-                />
+                <MealRow key={meal.id} meal={meal} colors={colors} />
               ))}
             </View>
           )}
         </ScrollView>
 
-        {/* Scan actions */}
-        <View style={styles.bottomBar}>
+        {/* Scan actions — a solid footer in normal flow, so it can never cover the list. */}
+        <View style={[styles.bottomBar, { backgroundColor: colors.background }]}>
           <Pressable
             style={({ pressed }) => [
               styles.scanButton,
@@ -240,7 +213,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
-  scroll: { paddingBottom: 140, gap: Spacing.four },
+  scroll: { paddingBottom: Spacing.four, gap: Spacing.four },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -255,9 +228,6 @@ const styles = StyleSheet.create({
   streakText: { fontSize: 14, fontWeight: '700' },
 
   card: { borderRadius: 24, padding: Spacing.four, gap: Spacing.two },
-  cardLabel: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
-  calories: { fontSize: 52, fontWeight: '800', letterSpacing: -1, textAlign: 'center' },
-  calTrack: { marginTop: Spacing.two },
   calSub: { fontSize: 13, textAlign: 'center', marginTop: Spacing.one },
   divider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.three },
 
@@ -282,8 +252,7 @@ const styles = StyleSheet.create({
   mealTitle: { fontSize: 15, fontWeight: '700' },
   mealMeta: { fontSize: 12, marginTop: 2 },
   mealCals: { fontSize: 16, fontWeight: '800' },
-  deleteBtn: { paddingHorizontal: 4, paddingVertical: 2 },
-  deleteBtnText: { fontSize: 16, fontWeight: '600' },
+  chevron: { fontSize: 20, fontWeight: '600', marginLeft: 2 },
 
   loadErrorWrap: { alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
   loadErrorEmoji: { fontSize: 40 },
@@ -303,10 +272,8 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
   bottomBar: {
-    position: 'absolute',
-    left: Spacing.four,
-    right: Spacing.four,
-    bottom: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.two,
     gap: Spacing.one,
   },
   scanButton: {

@@ -100,6 +100,8 @@ type MealsContextValue = {
   /** True when the cloud load failed (e.g. offline) — show a retry, never onboarding. */
   loadError: boolean;
   retryLoad: () => void;
+  /** Silent re-fetch for pull-to-refresh (never blanks the screen). */
+  refresh: () => Promise<void>;
   meals: LoggedMeal[];
   profile: UserProfile | null;
   hasProfile: boolean;
@@ -184,6 +186,28 @@ export function MealsProvider({ children }: { children: ReactNode }) {
 
   const retryLoad = useCallback(() => setReloadKey((k) => k + 1), []);
 
+  // Silent re-fetch for pull-to-refresh: updates data in place without
+  // toggling `loaded` (which would blank the screen mid-gesture).
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [profileRes, mealRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase
+          .from('meals')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+      ]);
+      if (profileRes.error || mealRes.error) return; // keep showing current data
+      setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
+      setMeals((mealRes.data ?? []).map(rowToMeal));
+      setLoadError(false);
+    } catch {
+      // Offline pull-to-refresh: keep current data, no error state.
+    }
+  }, [user]);
+
   const addMeal = useCallback(
     async (analysis: FoodAnalysis, photoUri?: string) => {
       if (!user) return;
@@ -265,6 +289,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       loaded,
       loadError,
       retryLoad,
+      refresh,
       meals,
       profile,
       hasProfile: profile !== null,
@@ -276,7 +301,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       removeMeal,
       saveProfile,
     };
-  }, [meals, profile, loaded, loadError, retryLoad, today, addMeal, removeMeal, saveProfile]);
+  }, [meals, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, saveProfile]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

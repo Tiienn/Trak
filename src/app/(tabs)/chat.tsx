@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -35,6 +37,10 @@ const SUGGESTIONS = [
   '2 eggs and a slice of toast',
   'How much protein do I have left today?',
 ];
+
+/** Conversation persists across app launches (latest turns only). */
+const CHAT_STORAGE_KEY = 'trak.chat.v1';
+const CHAT_KEEP = 40;
 
 let nextId = 1;
 function makeId(): string {
@@ -100,10 +106,30 @@ export default function ChatScreen() {
   const { targets, todayTotals, addMeal } = useMeals();
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const listRef = useRef<FlatList<UiMessage>>(null);
+
+  // Restore the conversation once per app launch, then keep it saved.
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(CHAT_STORAGE_KEY);
+        if (raw) setMessages(JSON.parse(raw));
+      } catch {
+        // A broken cache just means a fresh conversation.
+      }
+      setHydrated(true);
+    })();
+  }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-CHAT_KEEP))).catch(
+      () => {}
+    );
+  }, [messages, hydrated]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -148,6 +174,7 @@ export default function ChatScreen() {
     setSavingId(msg.id);
     try {
       await addMeal(msg.meal);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, added: true } : m)));
     } catch (e) {
       setMessages((prev) => [

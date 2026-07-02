@@ -1,6 +1,15 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useColorScheme,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
@@ -116,9 +125,16 @@ function groupByDay(meals: LoggedMeal[]): { date: string; meals: LoggedMeal[] }[
 export default function HistoryScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = Colors[scheme];
-  const { meals } = useMeals();
+  const { meals, refresh } = useMeals();
   const { signOut } = useAuth();
   const days = groupByDay(meals);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -146,7 +162,17 @@ export default function HistoryScreen() {
             </Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={Brand.green}
+                colors={[Brand.green]}
+              />
+            }>
             {days.map((day) => {
               const totals = sumTotals(day.meals);
               return (
@@ -161,10 +187,12 @@ export default function HistoryScreen() {
                   </View>
                   <View style={[styles.dayCard, { backgroundColor: colors.backgroundElement }]}>
                     {day.meals.map((meal, i) => (
-                      <View
+                      <Pressable
                         key={meal.id}
-                        style={[
+                        onPress={() => router.push(`/meal/${meal.id}`)}
+                        style={({ pressed }) => [
                           styles.mealRow,
+                          pressed && { backgroundColor: colors.backgroundSelected },
                           i < day.meals.length - 1 && {
                             borderBottomWidth: StyleSheet.hairlineWidth,
                             borderBottomColor: colors.backgroundSelected,
@@ -182,7 +210,8 @@ export default function HistoryScreen() {
                         <Text style={[styles.mealCals, { color: colors.text }]}>
                           {meal.total.calories}
                         </Text>
-                      </View>
+                        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+                      </Pressable>
                     ))}
                   </View>
                 </View>
@@ -238,6 +267,7 @@ const styles = StyleSheet.create({
   mealTitle: { fontSize: 15, fontWeight: '700' },
   mealMeta: { fontSize: 12, marginTop: 2 },
   mealCals: { fontSize: 16, fontWeight: '800' },
+  chevron: { fontSize: 20, fontWeight: '600', marginLeft: 2 },
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two, marginTop: Spacing.four },
   emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center' },

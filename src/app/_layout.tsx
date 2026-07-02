@@ -31,6 +31,10 @@ export default function RootLayout() {
               name="paywall"
               options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
             />
+            <Stack.Screen
+              name="meal/[id]"
+              options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+            />
           </Stack>
         </ThemeProvider>
       </MealsProvider>
