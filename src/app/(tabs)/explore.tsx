@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { enableHealthSync, healthAvailable, healthSyncEnabled } from '@/lib/health';
+import { usePro } from '@/lib/purchases';
 import { dayKey, sumTotals, useMeals } from '@/lib/store';
 import { LoggedMeal } from '@/lib/types';
 
@@ -75,6 +77,28 @@ function HealthCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+/** Supporter card — Trak stays free; Pro exists to support development. */
+function ProCard({ colors }: { colors: ThemeColors }) {
+  const isPro = usePro();
+  return (
+    <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Trak Pro</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
+          {isPro ? 'You’re a supporter — thank you! 💚' : 'Enjoying Trak? Support its development.'}
+        </Text>
+      </View>
+      {isPro ? (
+        <Text style={styles.healthOn}>💚 Pro</Text>
+      ) : (
+        <Pressable style={styles.healthBtn} onPress={() => router.push('/paywall')}>
+          <Text style={styles.healthBtnText}>Support</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 /** Group meals (already newest-first) into ordered day buckets. */
 function groupByDay(meals: LoggedMeal[]): { date: string; meals: LoggedMeal[] }[] {
   const order: string[] = [];
@@ -113,6 +137,7 @@ export default function HistoryScreen() {
           </Pressable>
         </View>
         <HealthCard colors={colors} />
+        <ProCard colors={colors} />
         {days.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
             <Text style={styles.emptyEmoji}>📖</Text>
