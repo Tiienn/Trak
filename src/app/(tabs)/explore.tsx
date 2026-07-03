@@ -39,6 +39,41 @@ function formatDateLabel(dateStr: string): string {
 
 type HealthState = 'hidden' | 'off' | 'on';
 
+/** Summary of the user's body-stat profile, tap to view/edit. */
+function ProfileCard({ colors }: { colors: ThemeColors }) {
+  const { profile, targets } = useMeals();
+  if (!profile) return null;
+  const activityLabel: Record<string, string> = {
+    sedentary: 'Sedentary',
+    light: 'Lightly active',
+    moderate: 'Moderately active',
+    active: 'Very active',
+    very_active: 'Extra active',
+  };
+  const goalLabel: Record<string, string> = {
+    lose: 'Losing weight',
+    maintain: 'Maintaining',
+    gain: 'Gaining muscle',
+  };
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.healthCard,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push('/profile')}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Your profile</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
+          {goalLabel[profile.goal]} · {Math.round(profile.weightKg)}kg ·{' '}
+          {activityLabel[profile.activity]} · {targets.calories.toLocaleString()} kcal target
+        </Text>
+      </View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
+  );
+}
+
 /** Small card offering to mirror logged meals into Android Health Connect. */
 function HealthCard({ colors }: { colors: ThemeColors }) {
   const [state, setState] = useState<HealthState>('hidden');
@@ -188,6 +223,7 @@ export default function HistoryScreen() {
             <Text style={styles.signOut}>Sign out</Text>
           </Pressable>
         </View>
+        <ProfileCard colors={colors} />
         <HealthCard colors={colors} />
         <ProCard colors={colors} />
         <AppearanceCard colors={colors} />

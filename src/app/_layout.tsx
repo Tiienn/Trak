@@ -33,6 +33,10 @@ function ThemedNavigator() {
           name="meal/[id]"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen
+          name="profile"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
     </ThemeProvider>
   );
