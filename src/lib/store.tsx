@@ -13,6 +13,7 @@ import { useAuth } from './auth';
 import { writeMealToHealth } from './health';
 import { computeTargets } from './nutrition';
 import { supabase } from './supabase';
+import { syncWidget } from './widget-sync';
 import {
   ExerciseEntry,
   FoodAnalysis,
@@ -525,6 +526,20 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       logWeight,
     };
   }, [meals, weights, waterToday, setWater, setWaterGoal, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
+
+  // Keep the Android home-screen widget in sync with today's numbers.
+  const eaten = Math.round(value.todayTotals.calories);
+  const budget = Math.round(value.targets.calories) + value.burnedToday;
+  useEffect(() => {
+    if (!loaded) return;
+    syncWidget({
+      left: budget - eaten,
+      eaten,
+      budget,
+      water: value.waterToday,
+      waterGoal: value.waterGoal,
+    });
+  }, [loaded, eaten, budget, value.waterToday, value.waterGoal]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

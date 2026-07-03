@@ -53,6 +53,26 @@
       "react-native-health-connect",
       "./plugins/with-health-connect-delegate.js",
       [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "Calorie",
+              "label": "Trak calories",
+              "description": "Today's calories left at a glance",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "260dp",
+              "maxResizeHeight": "180dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
