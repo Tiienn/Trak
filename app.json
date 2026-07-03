@@ -53,6 +53,13 @@
       "react-native-health-connect",
       "./plugins/with-health-connect-delegate.js",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#10B981"
+        }
+      ],
+      [
         "react-native-android-widget",
         {
           "widgets": [

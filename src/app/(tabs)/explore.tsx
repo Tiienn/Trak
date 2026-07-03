@@ -115,6 +115,26 @@ function AchievementsCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+/** Tappable card that opens the meal-reminders settings screen. */
+function RemindersCard({ colors }: { colors: ThemeColors }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.healthCard,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push('/reminders')}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Reminders</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
+          Daily nudges to log your meals.
+        </Text>
+      </View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
+  );
+}
+
 /** Small card offering to mirror logged meals into Android Health Connect. */
 function HealthCard({ colors }: { colors: ThemeColors }) {
   const [state, setState] = useState<HealthState>('hidden');
@@ -267,6 +287,7 @@ export default function HistoryScreen() {
         <ProfileCard colors={colors} />
         <InsightsCard colors={colors} />
         <AchievementsCard colors={colors} />
+        <RemindersCard colors={colors} />
         <HealthCard colors={colors} />
         <ProCard colors={colors} />
         <AppearanceCard colors={colors} />

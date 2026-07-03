@@ -1,8 +1,10 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider } from '@/lib/auth';
+import { bootstrapReminders } from '@/lib/reminders';
 import { MealsProvider } from '@/lib/store';
 import { ThemeModeProvider, useAppScheme } from '@/lib/theme';
 
@@ -57,12 +59,21 @@ function ThemedNavigator() {
           name="quick-add"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen
+          name="reminders"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
     </ThemeProvider>
   );
 }
 
 export default function RootLayout() {
+  // Re-apply saved meal reminders on launch (no-op unless enabled + permitted).
+  useEffect(() => {
+    bootstrapReminders();
+  }, []);
+
   return (
     <ThemeModeProvider>
       <AuthProvider>
