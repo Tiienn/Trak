@@ -42,6 +42,13 @@ export type UserProfile = {
   createdAt: number;
 };
 
+/** A single weight measurement, one per day. */
+export type WeightEntry = {
+  /** Local calendar day, formatted YYYY-MM-DD. */
+  date: string;
+  weightKg: number;
+};
+
 /** A meal saved to the daily log. */
 export type LoggedMeal = {
   id: string;

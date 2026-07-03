@@ -13,7 +13,7 @@ import { useAuth } from './auth';
 import { writeMealToHealth } from './health';
 import { computeTargets } from './nutrition';
 import { supabase } from './supabase';
-import { FoodAnalysis, FoodTotals, LoggedMeal, UserProfile } from './types';
+import { FoodAnalysis, FoodTotals, LoggedMeal, UserProfile, WeightEntry } from './types';
 
 /** Fallback goals used until the user completes onboarding. */
 export const DEFAULT_TARGETS: FoodTotals = {
@@ -77,6 +77,10 @@ function rowToProfile(r: any): UserProfile {
   };
 }
 
+function rowToWeight(r: any): WeightEntry {
+  return { date: r.day, weightKg: Number(r.weight_kg) };
+}
+
 function rowToMeal(r: any): LoggedMeal {
   return {
     id: r.id,
@@ -103,6 +107,10 @@ type MealsContextValue = {
   /** Silent re-fetch for pull-to-refresh (never blanks the screen). */
   refresh: () => Promise<void>;
   meals: LoggedMeal[];
+  /** Weight history, oldest first. */
+  weights: WeightEntry[];
+  /** Most recent logged weight in kg, or null if none. */
+  latestWeight: number | null;
   profile: UserProfile | null;
   hasProfile: boolean;
   targets: FoodTotals;
@@ -112,6 +120,8 @@ type MealsContextValue = {
   addMeal: (analysis: FoodAnalysis, photoUri?: string) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
   saveProfile: (profile: UserProfile) => Promise<void>;
+  /** Log (or overwrite) today's weight; also updates the profile weight. */
+  logWeight: (weightKg: number) => Promise<void>;
 };
 
 const MealsContext = createContext<MealsContextValue | null>(null);
@@ -119,6 +129,7 @@ const MealsContext = createContext<MealsContextValue | null>(null);
 export function MealsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [meals, setMeals] = useState<LoggedMeal[]>([]);
+  const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -145,6 +156,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     let active = true;
     if (!user) {
       setMeals([]);
+      setWeights([]);
       setProfile(null);
       setLoadError(false);
       setLoaded(true);
@@ -154,15 +166,23 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     setLoadError(false);
     (async () => {
       try {
-        const [profileRes, mealRes] = await Promise.all([
+        const [profileRes, mealRes, weightRes] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase
             .from('meals')
             .select('*')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false }),
+          supabase
+            .from('weights')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('day', { ascending: true }),
         ]);
         if (!active) return;
+        // Weights are non-critical: a missing table or error just means an
+        // empty history, never a hard load failure.
+        setWeights(weightRes.error ? [] : (weightRes.data ?? []).map(rowToWeight));
         if (profileRes.error || mealRes.error) {
           // A failed load must NOT look like "new user" — that would bounce
           // the user into onboarding and overwrite their real profile.
@@ -283,6 +303,37 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     [user, profile]
   );
 
+  // Log (or overwrite) today's weight. Also updates the profile's current
+  // weight so calorie targets stay accurate as the user's weight changes.
+  const logWeight = useCallback(
+    async (weightKg: number) => {
+      if (!user || !Number.isFinite(weightKg) || weightKg <= 0) return;
+      const day = dayKey();
+      const previousWeights = weights;
+      const previousProfile = profile;
+      // Optimistic: upsert today's entry into the sorted-by-day list.
+      setWeights((prev) => {
+        const rest = prev.filter((w) => w.date !== day);
+        return [...rest, { date: day, weightKg }].sort((a, b) => a.date.localeCompare(b.date));
+      });
+      if (profile) setProfile({ ...profile, weightKg });
+
+      const weightRes = await supabase
+        .from('weights')
+        .upsert({ user_id: user.id, day, weight_kg: weightKg }, { onConflict: 'user_id,day' });
+      const profileRes = profile
+        ? await supabase.from('profiles').update({ weight_kg: weightKg }).eq('user_id', user.id)
+        : { error: null };
+
+      if (weightRes.error || profileRes.error) {
+        setWeights(previousWeights);
+        setProfile(previousProfile);
+        throw new Error('Could not save your weight. Check your connection and try again.');
+      }
+    },
+    [user, weights, profile]
+  );
+
   const value = useMemo<MealsContextValue>(() => {
     const todayMeals = meals.filter((m) => m.date === today);
     return {
@@ -291,6 +342,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       retryLoad,
       refresh,
       meals,
+      weights,
+      latestWeight: weights.length > 0 ? weights[weights.length - 1].weightKg : null,
       profile,
       hasProfile: profile !== null,
       targets: profile ? computeTargets(profile) : DEFAULT_TARGETS,
@@ -300,8 +353,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       addMeal,
       removeMeal,
       saveProfile,
+      logWeight,
     };
-  }, [meals, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, saveProfile]);
+  }, [meals, weights, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, saveProfile, logWeight]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

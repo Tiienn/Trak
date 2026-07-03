@@ -37,6 +37,10 @@ function ThemedNavigator() {
           name="profile"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen
+          name="weight"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
     </ThemeProvider>
   );

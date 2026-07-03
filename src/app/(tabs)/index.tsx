@@ -87,6 +87,8 @@ export default function HomeScreen() {
     todayMeals,
     todayTotals,
     targets,
+    weights,
+    latestWeight,
     loaded,
     loadError,
     retryLoad,
@@ -94,6 +96,8 @@ export default function HomeScreen() {
     hasProfile,
     streak,
   } = useMeals();
+  const weightChange =
+    weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(async () => {
@@ -173,6 +177,32 @@ export default function HomeScreen() {
             <MacroBar label="Fat" consumed={todayTotals.fat_g} target={targets.fat_g} colors={colors} />
           </View>
 
+          {/* Weight — quick glance + tap to log/track */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.weightCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/weight')}>
+            <View style={styles.weightInfo}>
+              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Weight</Text>
+              {latestWeight != null ? (
+                <Text style={[styles.weightValue, { color: colors.text }]}>
+                  {Math.round(latestWeight * 10) / 10} kg
+                </Text>
+              ) : (
+                <Text style={[styles.weightValue, { color: colors.textSecondary }]}>Log it</Text>
+              )}
+            </View>
+            {weightChange != null && weightChange !== 0 ? (
+              <Text style={[styles.weightChange, { color: Brand.greenDark }]}>
+                {weightChange > 0 ? '▲' : '▼'} {Math.abs(Math.round(weightChange * 10) / 10)} kg
+              </Text>
+            ) : (
+              <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+            )}
+          </Pressable>
+
           {/* Today's meals */}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
           {todayMeals.length === 0 ? (
@@ -244,6 +274,18 @@ const styles = StyleSheet.create({
   track: { height: 8, borderRadius: 4, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 4 },
 
+  weightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 16,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.four,
+  },
+  weightInfo: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
+  weightLabel: { fontSize: 14, fontWeight: '600' },
+  weightValue: { fontSize: 20, fontWeight: '800' },
+  weightChange: { fontSize: 14, fontWeight: '700' },
   sectionTitle: { fontSize: 18, fontWeight: '700' },
   mealsList: { gap: Spacing.two },
   mealRow: {

@@ -33,9 +33,23 @@ create table if not exists public.meals (
 
 create index if not exists meals_user_day_idx on public.meals (user_id, day);
 
--- 3) Row Level Security: users can only touch their own data
+-- 3) Weights: the user's weight history (one row per day)
+create table if not exists public.weights (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  day        date not null,
+  weight_kg  numeric not null,
+  created_at timestamptz not null default now(),
+  -- one weight per day: logging again the same day overwrites it
+  unique (user_id, day)
+);
+
+create index if not exists weights_user_day_idx on public.weights (user_id, day);
+
+-- 4) Row Level Security: users can only touch their own data
 alter table public.profiles enable row level security;
 alter table public.meals    enable row level security;
+alter table public.weights  enable row level security;
 
 drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles
@@ -45,6 +59,12 @@ create policy "own profile" on public.profiles
 
 drop policy if exists "own meals" on public.meals;
 create policy "own meals" on public.meals
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "own weights" on public.weights;
+create policy "own weights" on public.weights
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
