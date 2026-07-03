@@ -81,6 +81,8 @@ export type LoggedMeal = {
   total: FoodTotals;
   items: FoodItem[];
   confidence: number;
+  /** The AI's short explanation of how it estimated this meal. */
+  notes?: string;
   /** Local URI of the scanned photo, if available. */
   photoUri?: string;
 };

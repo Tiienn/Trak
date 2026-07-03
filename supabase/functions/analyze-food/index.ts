@@ -23,7 +23,7 @@ Rules:
 - "quantity" is a short human portion, e.g. "1 cup", "2 slices", "approx 150 g".
 - All nutrient values are plain numbers with no units. Round to whole numbers.
 - "confidence" is a number between 0 and 1.
-- "notes" is ONE short sentence about assumptions you made (max ~15 words).`;
+- "notes" explains HOW you estimated this, in 1-2 short sentences (max ~35 words): the portion size you assumed, the cooking method, and any hidden ingredients like oil, butter, or sugar. Write it directly to the user, e.g. "I assumed a grilled 150 g chicken breast with about 1 tbsp of oil, and a cup of cooked rice."`;
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',

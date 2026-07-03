@@ -281,7 +281,31 @@ export default function MealDetailScreen() {
               </View>
             ) : null}
 
-            {meal.confidence > 0 && !editing ? (
+            {!editing && meal.notes ? (
+              <View style={[styles.reasonCard, { backgroundColor: colors.backgroundElement }]}>
+                <Text style={[styles.reasonTitle, { color: colors.text }]}>How I estimated this</Text>
+                <Text style={[styles.reasonBody, { color: colors.textSecondary }]}>{meal.notes}</Text>
+                {meal.confidence > 0 ? (
+                  <View style={styles.confRow}>
+                    <Text style={[styles.confLabel, { color: colors.textSecondary }]}>Confidence</Text>
+                    <View style={[styles.confTrack, { backgroundColor: colors.backgroundSelected }]}>
+                      <View
+                        style={[
+                          styles.confFill,
+                          {
+                            width: `${Math.round(meal.confidence * 100)}%`,
+                            backgroundColor: meal.confidence >= 0.66 ? Brand.green : Brand.over,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.confPct, { color: colors.text }]}>
+                      {Math.round(meal.confidence * 100)}%
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : !editing && meal.confidence > 0 && meal.confidence < 1 ? (
               <Text style={[styles.confidence, { color: colors.textSecondary }]}>
                 AI estimate · {Math.round(meal.confidence * 100)}% confidence
               </Text>
@@ -359,6 +383,14 @@ const styles = StyleSheet.create({
   itemCals: { fontSize: 15, fontWeight: '700' },
 
   confidence: { fontSize: 12, textAlign: 'center' },
+  reasonCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.two },
+  reasonTitle: { fontSize: 15, fontWeight: '800' },
+  reasonBody: { fontSize: 14, lineHeight: 20 },
+  confRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.one },
+  confLabel: { fontSize: 12, fontWeight: '600' },
+  confTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden' },
+  confFill: { height: '100%', borderRadius: 3 },
+  confPct: { fontSize: 12, fontWeight: '800' },
 
   actionRow: { flexDirection: 'row', gap: Spacing.two, paddingVertical: Spacing.two },
   editBtn: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: Spacing.three },

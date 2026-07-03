@@ -28,8 +28,12 @@ create table if not exists public.meals (
   fat_g      int  not null,
   items      jsonb not null default '[]',
   confidence numeric not null default 0.5,
+  notes      text,
   photo_uri  text
 );
+
+-- The AI's "how I estimated this" explanation (added after initial launch).
+alter table public.meals add column if not exists notes text;
 
 create index if not exists meals_user_day_idx on public.meals (user_id, day);
 

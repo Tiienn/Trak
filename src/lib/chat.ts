@@ -48,7 +48,7 @@ export async function askTrak(
   const reply = String(parsed?.reply ?? '').trim();
 
   if (parsed?.kind === 'meal') {
-    const analysis = normalizeFoodJson({ ...parsed, isFood: true, notes: undefined });
+    const analysis = normalizeFoodJson({ ...parsed, isFood: true });
     return {
       kind: 'meal',
       reply: reply || `About ${analysis.total.calories} calories.`,

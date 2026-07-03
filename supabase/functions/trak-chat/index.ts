@@ -18,6 +18,7 @@ Respond with ONLY a raw JSON object (no markdown fences) in ONE of these two sha
   "items": [ { "name": string, "quantity": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
   "total": { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number },
   "confidence": number,          // 0..1
+  "notes": string,               // 1-2 sentences on HOW you estimated it: portions assumed, brand nutrition used, any hidden ingredients. Max ~35 words, written to the user.
   "reply": string                // ONE short friendly sentence summarizing the estimate
 }
 

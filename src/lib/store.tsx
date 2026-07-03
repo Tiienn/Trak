@@ -149,6 +149,7 @@ function rowToMeal(r: any): LoggedMeal {
     },
     items: Array.isArray(r.items) ? r.items : [],
     confidence: Number(r.confidence),
+    notes: r.notes ?? undefined,
     photoUri: r.photo_uri ?? undefined,
   };
 }
@@ -359,6 +360,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           fat_g: analysis.total.fat_g,
           items: analysis.items,
           confidence: analysis.confidence,
+          notes: analysis.notes ?? null,
           photo_uri: photoUri ?? null,
         })
         .select()
