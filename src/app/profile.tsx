@@ -105,7 +105,7 @@ function Field({
 export default function ProfileScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { profile, saveProfile } = useMeals();
+  const { profile, saveProfile, calorieBias, setCalorieBias } = useMeals();
 
   const [goal, setGoal] = useState<Goal | null>(profile?.goal ?? null);
   const [sex, setSex] = useState<Sex | null>(profile?.sex ?? null);
@@ -300,6 +300,44 @@ export default function ProfileScreen() {
                 </Pressable>
               ))}
             </Section>
+
+            {profile ? (
+              <Section title="AI ESTIMATE ADJUSTMENT" colors={colors}>
+                <View style={[styles.biasCard, { backgroundColor: colors.backgroundElement }]}>
+                  <Text style={[styles.biasHint, { color: colors.textSecondary }]}>
+                    If Trak’s scan and chat estimates feel too high or too low, nudge every future
+                    estimate here. Saved automatically.
+                  </Text>
+                  <View style={styles.biasRow}>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setCalorieBias(calorieBias - 5)}
+                      style={[styles.biasBtn, { backgroundColor: colors.background }]}>
+                      <Text style={[styles.biasBtnText, { color: colors.text }]}>−</Text>
+                    </Pressable>
+                    <View style={styles.biasValueWrap}>
+                      <Text style={[styles.biasValue, { color: colors.text }]}>
+                        {calorieBias > 0 ? '+' : calorieBias < 0 ? '−' : ''}
+                        {Math.abs(calorieBias)}%
+                      </Text>
+                      <Text style={[styles.biasSub, { color: colors.textSecondary }]}>
+                        {calorieBias === 0
+                          ? 'Estimates unchanged'
+                          : calorieBias > 0
+                            ? 'Estimates raised'
+                            : 'Estimates lowered'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => setCalorieBias(calorieBias + 5)}
+                      style={[styles.biasBtn, { backgroundColor: colors.background }]}>
+                      <Text style={[styles.biasBtnText, { color: colors.text }]}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </Section>
+            ) : null}
           </ScrollView>
 
           <Pressable
@@ -372,6 +410,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   activityDesc: { fontSize: 12, marginTop: 2 },
+
+  biasCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.three },
+  biasHint: { fontSize: 13, lineHeight: 19 },
+  biasRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  biasBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  biasBtnText: { fontSize: 24, fontWeight: '800' },
+  biasValueWrap: { alignItems: 'center' },
+  biasValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
+  biasSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
   saveBtn: {
     backgroundColor: Brand.green,

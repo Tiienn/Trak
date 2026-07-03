@@ -77,6 +77,9 @@ create index if not exists exercises_user_day_idx on public.exercises (user_id, 
 -- 6) Per-user water goal lives on the profile (nullable → app default of 8)
 alter table public.profiles add column if not exists water_goal int;
 
+-- Per-user AI-estimate bias, percent (e.g. 10 = +10%). Default 0 = unchanged.
+alter table public.profiles add column if not exists calorie_bias int default 0;
+
 -- 7) Saved meals: reusable meal templates for one-tap re-logging
 create table if not exists public.saved_meals (
   id         uuid primary key default gen_random_uuid(),

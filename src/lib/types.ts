@@ -42,6 +42,8 @@ export type UserProfile = {
   createdAt: number;
   /** Daily water goal in glasses; undefined falls back to the app default. */
   waterGoal?: number;
+  /** Percent nudge applied to AI calorie estimates (e.g. 10 = +10%). Default 0. */
+  calorieBias?: number;
 };
 
 /** A single weight measurement, one per day. */

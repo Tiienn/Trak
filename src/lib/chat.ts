@@ -1,4 +1,4 @@
-import { extractError, normalizeFoodJson } from './analyzeFood';
+import { applyCalorieBias, extractError, normalizeFoodJson } from './analyzeFood';
 import { supabase } from './supabase';
 import { FoodAnalysis, FoodTotals } from './types';
 
@@ -21,6 +21,7 @@ export type TrakReply =
 export async function askTrak(
   history: ChatTurn[],
   context: { targets: FoodTotals; eaten: FoodTotals },
+  biasPct = 0,
 ): Promise<TrakReply> {
   const { data, error } = await supabase.functions.invoke('trak-chat', {
     body: { messages: history.slice(-10), context },
@@ -48,7 +49,7 @@ export async function askTrak(
   const reply = String(parsed?.reply ?? '').trim();
 
   if (parsed?.kind === 'meal') {
-    const analysis = normalizeFoodJson({ ...parsed, isFood: true });
+    const analysis = applyCalorieBias(normalizeFoodJson({ ...parsed, isFood: true }), biasPct);
     return {
       kind: 'meal',
       reply: reply || `About ${analysis.total.calories} calories.`,

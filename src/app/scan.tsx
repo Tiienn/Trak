@@ -27,7 +27,7 @@ export default function ScanScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
-  const { addMeal } = useMeals();
+  const { addMeal, calorieBias } = useMeals();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function ScanScreen() {
     setPhotoUri(uri);
     setPhase('analyzing');
     try {
-      const result = await analyzeFood(uri);
+      const result = await analyzeFood(uri, calorieBias);
       setAnalysis(result);
       setPhase('result');
     } catch (e: any) {

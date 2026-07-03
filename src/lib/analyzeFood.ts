@@ -84,10 +84,38 @@ export function normalizeFoodJson(parsed: any): FoodAnalysis {
 }
 
 /**
+ * Nudge an AI estimate up or down by a percentage to correct systematic
+ * over/under-estimation for a given user. Scales calories AND macros (total
+ * and every item) so the breakdown stays coherent. A bias of 0 is a no-op.
+ */
+export function applyCalorieBias(a: FoodAnalysis, biasPct: number): FoodAnalysis {
+  if (!biasPct || !Number.isFinite(biasPct)) return a;
+  const factor = 1 + biasPct / 100;
+  const scale = (n: number) => Math.max(0, Math.round(n * factor));
+  return {
+    ...a,
+    items: a.items.map((it) => ({
+      ...it,
+      calories: scale(it.calories),
+      protein_g: scale(it.protein_g),
+      carbs_g: scale(it.carbs_g),
+      fat_g: scale(it.fat_g),
+    })),
+    total: {
+      calories: scale(a.total.calories),
+      protein_g: scale(a.total.protein_g),
+      carbs_g: scale(a.total.carbs_g),
+      fat_g: scale(a.total.fat_g),
+    },
+  };
+}
+
+/**
  * Sends a food photo to the Trak edge function (which calls GPT-4o server-side)
  * and returns a structured nutrition estimate. Throws a friendly Error on failure.
+ * `biasPct` nudges the estimate to match the user's calibration.
  */
-export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
+export async function analyzeFood(uri: string, biasPct = 0): Promise<FoodAnalysis> {
   const base64 = await toBase64Jpeg(uri);
 
   const { data, error } = await supabase.functions.invoke('analyze-food', {
@@ -113,5 +141,5 @@ export async function analyzeFood(uri: string): Promise<FoodAnalysis> {
     throw new Error('Could not read the AI answer. Please try another photo.');
   }
 
-  return normalizeFoodJson(parsed);
+  return applyCalorieBias(normalizeFoodJson(parsed), biasPct);
 }

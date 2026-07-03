@@ -88,6 +88,7 @@ function rowToProfile(r: any): UserProfile {
     activity: r.activity,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
     waterGoal: r.water_goal != null ? Number(r.water_goal) : undefined,
+    calorieBias: r.calorie_bias != null ? Number(r.calorie_bias) : undefined,
   };
 }
 
@@ -174,6 +175,10 @@ type MealsContextValue = {
   setWater: (glasses: number) => Promise<void>;
   /** Change the daily water goal (persisted on the profile). */
   setWaterGoal: (goal: number) => Promise<void>;
+  /** Percent nudge applied to AI calorie estimates (0 by default). */
+  calorieBias: number;
+  /** Change the AI estimate bias (persisted on the profile). */
+  setCalorieBias: (pct: number) => Promise<void>;
   /** Workouts logged today. */
   todayExercises: ExerciseEntry[];
   /** Total calories burned via exercise today. */
@@ -489,7 +494,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     async (next: UserProfile) => {
       if (!user) return;
       const previous = profile;
-      setProfile(next); // optimistic
+      // Merge over the existing profile so device-local extras that aren't in
+      // this form (waterGoal, calorieBias) survive an optimistic body-stat save.
+      setProfile({ ...(profile ?? {}), ...next });
       const { error } = await supabase.from('profiles').upsert({
         user_id: user.id,
         sex: next.sex,
@@ -608,6 +615,22 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     [user, profile]
   );
 
+  // Nudge AI calorie estimates up/down (percent, snapped to 5, clamped ±25).
+  const setCalorieBias = useCallback(
+    async (pct: number) => {
+      if (!user || !profile) return;
+      const clamped = Math.max(-25, Math.min(25, Math.round(pct / 5) * 5));
+      const previous = profile;
+      setProfile({ ...profile, calorieBias: clamped });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ calorie_bias: clamped })
+        .eq('user_id', user.id);
+      if (error) setProfile(previous);
+    },
+    [user, profile]
+  );
+
   const value = useMemo<MealsContextValue>(() => {
     const todayMeals = meals.filter((m) => m.date === today);
     const todayExercises = exercises.filter((e) => e.date === today);
@@ -624,6 +647,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       waterGoal: profile?.waterGoal ?? WATER_GOAL,
       setWater,
       setWaterGoal,
+      calorieBias: profile?.calorieBias ?? 0,
+      setCalorieBias,
       todayExercises,
       burnedToday,
       addExercise,
@@ -645,7 +670,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       saveProfile,
       logWeight,
     };
-  }, [meals, savedMeals, saveMeal, removeSavedMeal, quickLog, weights, waterToday, setWater, setWaterGoal, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
+  }, [meals, savedMeals, saveMeal, removeSavedMeal, quickLog, weights, waterToday, setWater, setWaterGoal, setCalorieBias, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
 
   // Keep the Android home-screen widget in sync with today's numbers.
   const eaten = Math.round(value.todayTotals.calories);

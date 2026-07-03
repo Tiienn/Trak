@@ -104,7 +104,7 @@ function MealCard({
 export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { targets, todayTotals, addMeal } = useMeals();
+  const { targets, todayTotals, addMeal, calorieBias } = useMeals();
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -145,7 +145,7 @@ export default function ChatScreen() {
     try {
       // Only text goes back as history; meal cards stay local.
       const history: ChatTurn[] = base.map((m) => ({ role: m.role, content: m.content }));
-      const reply = await askTrak(history, { targets, eaten: todayTotals });
+      const reply = await askTrak(history, { targets, eaten: todayTotals }, calorieBias);
       setMessages((prev) => [
         ...prev,
         {
