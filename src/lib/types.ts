@@ -40,6 +40,8 @@ export type UserProfile = {
   goal: Goal;
   activity: ActivityLevel;
   createdAt: number;
+  /** Daily water goal in glasses; undefined falls back to the app default. */
+  waterGoal?: number;
 };
 
 /** A single weight measurement, one per day. */
@@ -47,6 +49,16 @@ export type WeightEntry = {
   /** Local calendar day, formatted YYYY-MM-DD. */
   date: string;
   weightKg: number;
+};
+
+/** A logged workout that adds calories back to the daily budget. */
+export type ExerciseEntry = {
+  id: string;
+  /** Local calendar day, formatted YYYY-MM-DD. */
+  date: string;
+  createdAt: number;
+  name: string;
+  caloriesBurned: number;
 };
 
 /** A meal saved to the daily log. */

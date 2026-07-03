@@ -13,7 +13,14 @@ import { useAuth } from './auth';
 import { writeMealToHealth } from './health';
 import { computeTargets } from './nutrition';
 import { supabase } from './supabase';
-import { FoodAnalysis, FoodTotals, LoggedMeal, UserProfile, WeightEntry } from './types';
+import {
+  ExerciseEntry,
+  FoodAnalysis,
+  FoodTotals,
+  LoggedMeal,
+  UserProfile,
+  WeightEntry,
+} from './types';
 
 /** Daily water goal, in glasses (~250 ml each). */
 export const WATER_GOAL = 8;
@@ -77,6 +84,17 @@ function rowToProfile(r: any): UserProfile {
     goal: r.goal,
     activity: r.activity,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    waterGoal: r.water_goal != null ? Number(r.water_goal) : undefined,
+  };
+}
+
+function rowToExercise(r: any): ExerciseEntry {
+  return {
+    id: r.id,
+    date: r.day,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    name: r.name,
+    caloriesBurned: r.calories_burned ?? 0,
   };
 }
 
@@ -120,6 +138,16 @@ type MealsContextValue = {
   waterGoal: number;
   /** Set today's water glass count. */
   setWater: (glasses: number) => Promise<void>;
+  /** Change the daily water goal (persisted on the profile). */
+  setWaterGoal: (goal: number) => Promise<void>;
+  /** Workouts logged today. */
+  todayExercises: ExerciseEntry[];
+  /** Total calories burned via exercise today. */
+  burnedToday: number;
+  /** Log a workout for today. */
+  addExercise: (name: string, caloriesBurned: number) => Promise<void>;
+  /** Remove a logged workout. */
+  removeExercise: (id: string) => Promise<void>;
   profile: UserProfile | null;
   hasProfile: boolean;
   targets: FoodTotals;
@@ -143,6 +171,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   /** Glasses of water logged today. */
   const [waterToday, setWaterToday] = useState(0);
+  /** All exercises for the signed-in user (filtered to today for the budget). */
+  const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -171,6 +201,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       setMeals([]);
       setWeights([]);
       setWaterToday(0);
+      setExercises([]);
       setProfile(null);
       setLoadError(false);
       setLoaded(true);
@@ -180,7 +211,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     setLoadError(false);
     (async () => {
       try {
-        const [profileRes, mealRes, weightRes, waterRes] = await Promise.all([
+        const [profileRes, mealRes, weightRes, waterRes, exerciseRes] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase
             .from('meals')
@@ -198,12 +229,18 @@ export function MealsProvider({ children }: { children: ReactNode }) {
             .eq('user_id', user.id)
             .eq('day', dayKey())
             .maybeSingle(),
+          supabase
+            .from('exercises')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false }),
         ]);
         if (!active) return;
-        // Weights + water are non-critical: a missing table or error just
-        // means empty state, never a hard load failure.
+        // Weights, water + exercises are non-critical: a missing table or
+        // error just means empty state, never a hard load failure.
         setWeights(weightRes.error ? [] : (weightRes.data ?? []).map(rowToWeight));
         setWaterToday(waterRes.error || !waterRes.data ? 0 : (waterRes.data.glasses ?? 0));
+        setExercises(exerciseRes.error ? [] : (exerciseRes.data ?? []).map(rowToExercise));
         if (profileRes.error || mealRes.error) {
           // A failed load must NOT look like "new user" — that would bounce
           // the user into onboarding and overwrite their real profile.
@@ -403,8 +440,62 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     [user, waterToday]
   );
 
+  // Log a workout for today (adds its calories back to today's budget).
+  const addExercise = useCallback(
+    async (name: string, caloriesBurned: number) => {
+      if (!user) return;
+      const { data, error } = await supabase
+        .from('exercises')
+        .insert({
+          user_id: user.id,
+          day: dayKey(),
+          name,
+          calories_burned: Math.max(0, Math.round(caloriesBurned)),
+        })
+        .select()
+        .single();
+      if (error || !data) {
+        throw new Error('Could not save your workout. Check your connection and try again.');
+      }
+      setExercises((prev) => [rowToExercise(data), ...prev]);
+    },
+    [user]
+  );
+
+  const removeExercise = useCallback(async (id: string) => {
+    let removed: ExerciseEntry | undefined;
+    setExercises((prev) => {
+      removed = prev.find((e) => e.id === id);
+      return prev.filter((e) => e.id !== id);
+    });
+    const { error } = await supabase.from('exercises').delete().eq('id', id);
+    if (error && removed) {
+      const back = removed;
+      setExercises((prev) => [back, ...prev]);
+      throw new Error('Could not remove the workout. Check your connection and try again.');
+    }
+  }, []);
+
+  // Change the daily water goal (persisted on the profile).
+  const setWaterGoal = useCallback(
+    async (goal: number) => {
+      if (!user || !profile) return;
+      const clamped = Math.min(20, Math.max(1, Math.round(goal)));
+      const previous = profile;
+      setProfile({ ...profile, waterGoal: clamped });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ water_goal: clamped })
+        .eq('user_id', user.id);
+      if (error) setProfile(previous);
+    },
+    [user, profile]
+  );
+
   const value = useMemo<MealsContextValue>(() => {
     const todayMeals = meals.filter((m) => m.date === today);
+    const todayExercises = exercises.filter((e) => e.date === today);
+    const burnedToday = todayExercises.reduce((a, e) => a + e.caloriesBurned, 0);
     return {
       loaded,
       loadError,
@@ -414,8 +505,13 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       weights,
       latestWeight: weights.length > 0 ? weights[weights.length - 1].weightKg : null,
       waterToday,
-      waterGoal: WATER_GOAL,
+      waterGoal: profile?.waterGoal ?? WATER_GOAL,
       setWater,
+      setWaterGoal,
+      todayExercises,
+      burnedToday,
+      addExercise,
+      removeExercise,
       profile,
       hasProfile: profile !== null,
       targets: profile ? computeTargets(profile) : DEFAULT_TARGETS,
@@ -428,7 +524,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       saveProfile,
       logWeight,
     };
-  }, [meals, weights, waterToday, setWater, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
+  }, [meals, weights, waterToday, setWater, setWaterGoal, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
 
   return <MealsContext.Provider value={value}>{children}</MealsContext.Provider>;
 }

@@ -58,7 +58,8 @@ function MacroBar({
 
 /** Tap glasses to fill; tapping the current glass empties it back one. */
 function WaterCard({ colors }: { colors: ThemeColors }) {
-  const { waterToday, waterGoal, setWater } = useMeals();
+  const { waterToday, waterGoal, setWater, setWaterGoal } = useMeals();
+  const [editingGoal, setEditingGoal] = useState(false);
   return (
     <View style={[styles.waterCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.waterHeader}>
@@ -66,9 +67,32 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
           <DropletIcon size={18} color={Brand.green} filled />
           <Text style={[styles.waterTitle, { color: colors.text }]}>Water</Text>
         </View>
-        <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
-          {waterToday} / {waterGoal} glasses
-        </Text>
+        {editingGoal ? (
+          <View style={styles.goalStepper}>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setWaterGoal(Math.max(1, waterGoal - 1))}
+              style={[styles.stepBtn, { backgroundColor: colors.background }]}>
+              <Text style={[styles.stepText, { color: colors.text }]}>−</Text>
+            </Pressable>
+            <Text style={[styles.goalValue, { color: colors.text }]}>{waterGoal}</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => setWaterGoal(waterGoal + 1)}
+              style={[styles.stepBtn, { backgroundColor: colors.background }]}>
+              <Text style={[styles.stepText, { color: colors.text }]}>+</Text>
+            </Pressable>
+            <Pressable hitSlop={8} onPress={() => setEditingGoal(false)}>
+              <Text style={[styles.goalDone, { color: Brand.greenDark }]}>Done</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={() => setEditingGoal(true)} hitSlop={8}>
+            <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
+              {waterToday} / {waterGoal} glasses ✎
+            </Text>
+          </Pressable>
+        )}
       </View>
       <View style={styles.glassRow}>
         {Array.from({ length: waterGoal }).map((_, i) => {
@@ -121,6 +145,7 @@ export default function HomeScreen() {
     targets,
     weights,
     latestWeight,
+    burnedToday,
     loaded,
     loadError,
     retryLoad,
@@ -128,6 +153,8 @@ export default function HomeScreen() {
     hasProfile,
     streak,
   } = useMeals();
+  // Exercise adds calories back to the day's budget.
+  const calorieBudget = targets.calories + burnedToday;
   const weightChange =
     weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
   const [refreshing, setRefreshing] = useState(false);
@@ -197,9 +224,10 @@ export default function HomeScreen() {
 
           {/* Calories card */}
           <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <CalorieRing consumed={todayTotals.calories} target={targets.calories} colors={colors} />
+            <CalorieRing consumed={todayTotals.calories} target={calorieBudget} colors={colors} />
             <Text style={[styles.calSub, { color: colors.textSecondary }]}>
-              {todayTotals.calories.toLocaleString()} / {targets.calories.toLocaleString()} kcal
+              {todayTotals.calories.toLocaleString()} / {calorieBudget.toLocaleString()} kcal
+              {burnedToday > 0 ? `  ·  +${burnedToday} exercise` : ''}
             </Text>
 
             <View style={[styles.divider, { backgroundColor: colors.backgroundSelected }]} />
@@ -233,6 +261,22 @@ export default function HomeScreen() {
             ) : (
               <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
             )}
+          </Pressable>
+
+          {/* Exercise — quick glance + tap to log */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.weightCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/exercise')}>
+            <View style={styles.weightInfo}>
+              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Exercise</Text>
+              <Text style={[styles.weightValue, { color: burnedToday > 0 ? colors.text : colors.textSecondary }]}>
+                {burnedToday > 0 ? `+${burnedToday} kcal` : 'Log a workout'}
+              </Text>
+            </View>
+            <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
           </Pressable>
 
           {/* Water */}
@@ -327,8 +371,13 @@ const styles = StyleSheet.create({
   waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   waterTitle: { fontSize: 16, fontWeight: '700' },
   waterCount: { fontSize: 13, fontWeight: '600' },
-  glassRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  glassRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 6 },
   glassTap: { padding: 2 },
+  goalStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stepBtn: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  stepText: { fontSize: 18, fontWeight: '800' },
+  goalValue: { fontSize: 15, fontWeight: '800', minWidth: 18, textAlign: 'center' },
+  goalDone: { fontSize: 13, fontWeight: '700', marginLeft: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700' },
   mealsList: { gap: Spacing.two },
   mealRow: {
