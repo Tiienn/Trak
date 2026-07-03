@@ -74,6 +74,26 @@ function ProfileCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+/** Tappable card that opens the weekly insights screen. */
+function InsightsCard({ colors }: { colors: ThemeColors }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.healthCard,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push('/insights')}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Insights</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
+          Your last 7 days at a glance.
+        </Text>
+      </View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
+  );
+}
+
 /** Small card offering to mirror logged meals into Android Health Connect. */
 function HealthCard({ colors }: { colors: ThemeColors }) {
   const [state, setState] = useState<HealthState>('hidden');
@@ -224,6 +244,7 @@ export default function HistoryScreen() {
           </Pressable>
         </View>
         <ProfileCard colors={colors} />
+        <InsightsCard colors={colors} />
         <HealthCard colors={colors} />
         <ProCard colors={colors} />
         <AppearanceCard colors={colors} />

@@ -15,6 +15,29 @@ export function CameraIcon({ size = 22, color = '#ffffff' }: { size?: number; co
   );
 }
 
+/** Water droplet — filled or outline. */
+export function DropletIcon({
+  size = 22,
+  color = '#ffffff',
+  filled = true,
+}: {
+  size?: number;
+  color?: string;
+  filled?: boolean;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.2 C12 3.2 5.5 10 5.5 14.5 a6.5 6.5 0 0 0 13 0 C18.5 10 12 3.2 12 3.2 Z"
+        fill={filled ? color : 'none'}
+        stroke={color}
+        strokeWidth={filled ? 0 : 2}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Classic barcode stripes — used on the barcode button. */
 export function BarcodeIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
   return (

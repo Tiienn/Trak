@@ -46,10 +46,29 @@ create table if not exists public.weights (
 
 create index if not exists weights_user_day_idx on public.weights (user_id, day);
 
--- 4) Row Level Security: users can only touch their own data
+-- 4) Water: glasses of water per day (one row per day)
+create table if not exists public.water (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  day        date not null,
+  glasses    int not null default 0,
+  created_at timestamptz not null default now(),
+  unique (user_id, day)
+);
+
+create index if not exists water_user_day_idx on public.water (user_id, day);
+
+-- 5) Row Level Security: users can only touch their own data
 alter table public.profiles enable row level security;
 alter table public.meals    enable row level security;
 alter table public.weights  enable row level security;
+alter table public.water    enable row level security;
+
+drop policy if exists "own water" on public.water;
+create policy "own water" on public.water
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 drop policy if exists "own profile" on public.profiles;
 create policy "own profile" on public.profiles

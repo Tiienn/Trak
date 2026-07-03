@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalorieRing } from '@/components/calorie-ring';
-import { BarcodeIcon, CameraIcon } from '@/components/icons';
+import { BarcodeIcon, CameraIcon, DropletIcon } from '@/components/icons';
 import { RingMark } from '@/components/logo';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -51,6 +51,38 @@ function MacroBar({
             { width: `${pct * 100}%`, backgroundColor: over ? Brand.over : Brand.green },
           ]}
         />
+      </View>
+    </View>
+  );
+}
+
+/** Tap glasses to fill; tapping the current glass empties it back one. */
+function WaterCard({ colors }: { colors: ThemeColors }) {
+  const { waterToday, waterGoal, setWater } = useMeals();
+  return (
+    <View style={[styles.waterCard, { backgroundColor: colors.backgroundElement }]}>
+      <View style={styles.waterHeader}>
+        <View style={styles.waterTitleRow}>
+          <DropletIcon size={18} color={Brand.green} filled />
+          <Text style={[styles.waterTitle, { color: colors.text }]}>Water</Text>
+        </View>
+        <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
+          {waterToday} / {waterGoal} glasses
+        </Text>
+      </View>
+      <View style={styles.glassRow}>
+        {Array.from({ length: waterGoal }).map((_, i) => {
+          const filled = i < waterToday;
+          return (
+            <Pressable
+              key={i}
+              hitSlop={4}
+              onPress={() => setWater(i + 1 === waterToday ? i : i + 1)}
+              style={styles.glassTap}>
+              <DropletIcon size={26} color={filled ? Brand.green : colors.backgroundSelected} filled />
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -203,6 +235,9 @@ export default function HomeScreen() {
             )}
           </Pressable>
 
+          {/* Water */}
+          <WaterCard colors={colors} />
+
           {/* Today's meals */}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
           {todayMeals.length === 0 ? (
@@ -286,6 +321,14 @@ const styles = StyleSheet.create({
   weightLabel: { fontSize: 14, fontWeight: '600' },
   weightValue: { fontSize: 20, fontWeight: '800' },
   weightChange: { fontSize: 14, fontWeight: '700' },
+
+  waterCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.three },
+  waterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  waterTitle: { fontSize: 16, fontWeight: '700' },
+  waterCount: { fontSize: 13, fontWeight: '600' },
+  glassRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  glassTap: { padding: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700' },
   mealsList: { gap: Spacing.two },
   mealRow: {
