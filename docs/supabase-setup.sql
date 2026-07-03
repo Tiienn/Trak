@@ -73,12 +73,34 @@ create index if not exists exercises_user_day_idx on public.exercises (user_id, 
 -- 6) Per-user water goal lives on the profile (nullable → app default of 8)
 alter table public.profiles add column if not exists water_goal int;
 
--- 7) Row Level Security: users can only touch their own data
-alter table public.profiles  enable row level security;
-alter table public.meals     enable row level security;
-alter table public.weights   enable row level security;
-alter table public.water     enable row level security;
-alter table public.exercises enable row level security;
+-- 7) Saved meals: reusable meal templates for one-tap re-logging
+create table if not exists public.saved_meals (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  title      text not null,
+  calories   int  not null,
+  protein_g  int  not null,
+  carbs_g    int  not null,
+  fat_g      int  not null,
+  items      jsonb not null default '[]'
+);
+
+create index if not exists saved_meals_user_idx on public.saved_meals (user_id, created_at desc);
+
+-- 8) Row Level Security: users can only touch their own data
+alter table public.profiles    enable row level security;
+alter table public.meals       enable row level security;
+alter table public.weights     enable row level security;
+alter table public.water       enable row level security;
+alter table public.exercises   enable row level security;
+alter table public.saved_meals enable row level security;
+
+drop policy if exists "own saved_meals" on public.saved_meals;
+create policy "own saved_meals" on public.saved_meals
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 drop policy if exists "own water" on public.water;
 create policy "own water" on public.water

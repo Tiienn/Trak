@@ -53,6 +53,10 @@ function ThemedNavigator() {
           name="achievements"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen
+          name="quick-add"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
     </ThemeProvider>
   );

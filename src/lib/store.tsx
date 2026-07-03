@@ -17,8 +17,10 @@ import { syncWidget } from './widget-sync';
 import {
   ExerciseEntry,
   FoodAnalysis,
+  FoodItem,
   FoodTotals,
   LoggedMeal,
+  SavedMeal,
   UserProfile,
   WeightEntry,
 } from './types';
@@ -103,6 +105,36 @@ function rowToWeight(r: any): WeightEntry {
   return { date: r.day, weightKg: Number(r.weight_kg) };
 }
 
+function rowToSavedMeal(r: any): SavedMeal {
+  return {
+    id: r.id,
+    createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    title: r.title,
+    total: {
+      calories: r.calories,
+      protein_g: r.protein_g,
+      carbs_g: r.carbs_g,
+      fat_g: r.fat_g,
+    },
+    items: Array.isArray(r.items) ? r.items : [],
+  };
+}
+
+/** Most recent meals with a unique title, newest first — for quick re-logging. */
+function recentUniqueMeals(meals: LoggedMeal[], limit = 12): LoggedMeal[] {
+  const seen = new Set<string>();
+  const out: LoggedMeal[] = [];
+  for (const m of meals) {
+    // `meals` is already ordered newest-first from the query.
+    const key = m.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function rowToMeal(r: any): LoggedMeal {
   return {
     id: r.id,
@@ -156,6 +188,16 @@ type MealsContextValue = {
   todayTotals: FoodTotals;
   streak: number;
   addMeal: (analysis: FoodAnalysis, photoUri?: string) => Promise<void>;
+  /** Meals the user starred as reusable templates, newest first. */
+  savedMeals: SavedMeal[];
+  /** Recent distinct meals (from the log) for one-tap re-logging. */
+  recentMeals: LoggedMeal[];
+  /** Star a meal as a reusable template. */
+  saveMeal: (meal: { title: string; total: FoodTotals; items: FoodItem[] }) => Promise<void>;
+  /** Remove a saved-meal template. */
+  removeSavedMeal: (id: string) => Promise<void>;
+  /** Log a saved/recent meal to today with one tap. */
+  quickLog: (meal: { title: string; total: FoodTotals; items: FoodItem[] }) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
   /** Edit a logged meal's title/totals (correct an AI estimate). */
   updateMeal: (id: string, patch: { title: string; total: FoodTotals }) => Promise<void>;
@@ -169,6 +211,7 @@ const MealsContext = createContext<MealsContextValue | null>(null);
 export function MealsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [meals, setMeals] = useState<LoggedMeal[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   /** Glasses of water logged today. */
   const [waterToday, setWaterToday] = useState(0);
@@ -200,6 +243,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     let active = true;
     if (!user) {
       setMeals([]);
+      setSavedMeals([]);
       setWeights([]);
       setWaterToday(0);
       setExercises([]);
@@ -212,36 +256,43 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     setLoadError(false);
     (async () => {
       try {
-        const [profileRes, mealRes, weightRes, waterRes, exerciseRes] = await Promise.all([
-          supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-          supabase
-            .from('meals')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('weights')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('day', { ascending: true }),
-          supabase
-            .from('water')
-            .select('glasses')
-            .eq('user_id', user.id)
-            .eq('day', dayKey())
-            .maybeSingle(),
-          supabase
-            .from('exercises')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false }),
-        ]);
+        const [profileRes, mealRes, weightRes, waterRes, exerciseRes, savedRes] =
+          await Promise.all([
+            supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+            supabase
+              .from('meals')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('weights')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('day', { ascending: true }),
+            supabase
+              .from('water')
+              .select('glasses')
+              .eq('user_id', user.id)
+              .eq('day', dayKey())
+              .maybeSingle(),
+            supabase
+              .from('exercises')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('saved_meals')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('created_at', { ascending: false }),
+          ]);
         if (!active) return;
-        // Weights, water + exercises are non-critical: a missing table or
-        // error just means empty state, never a hard load failure.
+        // Weights, water, exercises + saved meals are non-critical: a missing
+        // table or error just means empty state, never a hard load failure.
         setWeights(weightRes.error ? [] : (weightRes.data ?? []).map(rowToWeight));
         setWaterToday(waterRes.error || !waterRes.data ? 0 : (waterRes.data.glasses ?? 0));
         setExercises(exerciseRes.error ? [] : (exerciseRes.data ?? []).map(rowToExercise));
+        setSavedMeals(savedRes.error ? [] : (savedRes.data ?? []).map(rowToSavedMeal));
         if (profileRes.error || mealRes.error) {
           // A failed load must NOT look like "new user" — that would bounce
           // the user into onboarding and overwrite their real profile.
@@ -270,10 +321,15 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const [profileRes, mealRes] = await Promise.all([
+      const [profileRes, mealRes, savedRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
         supabase
           .from('meals')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('saved_meals')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
@@ -281,6 +337,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       if (profileRes.error || mealRes.error) return; // keep showing current data
       setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
       setMeals((mealRes.data ?? []).map(rowToMeal));
+      if (!savedRes.error) setSavedMeals((savedRes.data ?? []).map(rowToSavedMeal));
       setLoadError(false);
     } catch {
       // Offline pull-to-refresh: keep current data, no error state.
@@ -316,6 +373,62 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       writeMealToHealth(analysis.title, analysis.total, Date.now());
     },
     [user]
+  );
+
+  // Star a meal as a reusable template. Guards against exact-title duplicates.
+  const saveMeal = useCallback(
+    async (meal: { title: string; total: FoodTotals; items: FoodItem[] }) => {
+      if (!user) return;
+      const title = meal.title.trim();
+      if (!title) return;
+      if (savedMeals.some((s) => s.title.trim().toLowerCase() === title.toLowerCase())) return;
+      const { data, error } = await supabase
+        .from('saved_meals')
+        .insert({
+          user_id: user.id,
+          title,
+          calories: meal.total.calories,
+          protein_g: meal.total.protein_g,
+          carbs_g: meal.total.carbs_g,
+          fat_g: meal.total.fat_g,
+          items: meal.items,
+        })
+        .select()
+        .single();
+      if (error || !data) {
+        throw new Error('Could not save this meal. Check your connection and try again.');
+      }
+      setSavedMeals((prev) => [rowToSavedMeal(data), ...prev]);
+    },
+    [user, savedMeals]
+  );
+
+  const removeSavedMeal = useCallback(async (id: string) => {
+    let removed: SavedMeal | undefined;
+    setSavedMeals((prev) => {
+      removed = prev.find((s) => s.id === id);
+      return prev.filter((s) => s.id !== id);
+    });
+    const { error } = await supabase.from('saved_meals').delete().eq('id', id);
+    if (error && removed) {
+      const back = removed;
+      setSavedMeals((prev) => [back, ...prev]);
+      throw new Error('Could not remove this saved meal. Check your connection and try again.');
+    }
+  }, []);
+
+  // Log a saved/recent meal to today with one tap (reuses the meal insert path).
+  const quickLog = useCallback(
+    async (meal: { title: string; total: FoodTotals; items: FoodItem[] }) => {
+      await addMeal({
+        isFood: true,
+        title: meal.title,
+        items: meal.items,
+        total: meal.total,
+        confidence: 1,
+      });
+    },
+    [addMeal]
   );
 
   const removeMeal = useCallback(async (id: string) => {
@@ -520,12 +633,17 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       todayTotals: sumTotals(todayMeals),
       streak: computeStreak(meals),
       addMeal,
+      savedMeals,
+      recentMeals: recentUniqueMeals(meals),
+      saveMeal,
+      removeSavedMeal,
+      quickLog,
       removeMeal,
       updateMeal,
       saveProfile,
       logWeight,
     };
-  }, [meals, weights, waterToday, setWater, setWaterGoal, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
+  }, [meals, savedMeals, saveMeal, removeSavedMeal, quickLog, weights, waterToday, setWater, setWaterGoal, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
 
   // Keep the Android home-screen widget in sync with today's numbers.
   const eaten = Math.round(value.todayTotals.calories);

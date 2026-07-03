@@ -62,12 +62,17 @@ export default function MealDetailScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { meals, removeMeal, updateMeal } = useMeals();
+  const { meals, removeMeal, updateMeal, savedMeals, saveMeal, removeSavedMeal } = useMeals();
 
   const meal = meals.find((m) => m.id === id);
+  const savedMatch = meal
+    ? savedMeals.find((s) => s.title.trim().toLowerCase() === meal.title.trim().toLowerCase())
+    : undefined;
+  const isSaved = !!savedMatch;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingFav, setSavingFav] = useState(false);
   const [title, setTitle] = useState(meal?.title ?? '');
   const [cals, setCals] = useState(String(meal?.total.calories ?? 0));
   const [protein, setProtein] = useState(String(meal?.total.protein_g ?? 0));
@@ -122,6 +127,24 @@ export default function MealDetailScreen() {
     }
   }
 
+  async function toggleSave() {
+    if (savingFav || !meal) return;
+    setSavingFav(true);
+    try {
+      if (savedMatch) {
+        await removeSavedMeal(savedMatch.id);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      } else {
+        await saveMeal({ title: meal.title, total: meal.total, items: meal.items });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    } catch (e: any) {
+      Alert.alert('Not saved', e?.message ?? 'Please try again.');
+    } finally {
+      setSavingFav(false);
+    }
+  }
+
   function confirmDelete() {
     Alert.alert('Remove meal?', `Remove "${meal!.title}" from your log?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -166,9 +189,18 @@ export default function MealDetailScreen() {
               {meal.title}
             </Text>
           )}
-          <Pressable onPress={() => (editing ? setEditing(false) : router.back())} hitSlop={12}>
-            <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            {!editing ? (
+              <Pressable onPress={toggleSave} hitSlop={12} disabled={savingFav}>
+                <Text style={[styles.star, { color: isSaved ? Brand.green : colors.textSecondary }]}>
+                  {isSaved ? '★' : '☆'}
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => (editing ? setEditing(false) : router.back())} hitSlop={12}>
+              <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
+            </Pressable>
+          </View>
         </View>
         {!editing ? (
           <Text style={[styles.when, { color: colors.textSecondary }]}>
@@ -295,6 +327,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: '800', flex: 1 },
   titleInput: { flex: 1, fontSize: 20, fontWeight: '800', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   closeText: { fontSize: 20, fontWeight: '600' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  star: { fontSize: 24, fontWeight: '600' },
   when: { fontSize: 13, marginTop: 4, marginBottom: Spacing.three },
 
   scroll: { gap: Spacing.three, paddingBottom: Spacing.four },

@@ -152,7 +152,10 @@ export default function HomeScreen() {
     refresh,
     hasProfile,
     streak,
+    recentMeals,
+    savedMeals,
   } = useMeals();
+  const hasQuickAdd = recentMeals.length > 0 || savedMeals.length > 0;
   // Exercise adds calories back to the day's budget.
   const calorieBudget = targets.calories + burnedToday;
   const weightChange =
@@ -283,7 +286,19 @@ export default function HomeScreen() {
           <WaterCard colors={colors} />
 
           {/* Today's meals */}
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
+          <View style={styles.mealsHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
+            {hasQuickAdd ? (
+              <Pressable
+                onPress={() => router.push('/quick-add')}
+                style={({ pressed }) => [
+                  styles.quickAddPill,
+                  { backgroundColor: colors.greenTint, opacity: pressed ? 0.7 : 1 },
+                ]}>
+                <Text style={[styles.quickAddText, { color: Brand.greenDark }]}>＋ Quick add</Text>
+              </Pressable>
+            ) : null}
+          </View>
           {todayMeals.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
               <Text style={styles.emptyEmoji}>🍽️</Text>
@@ -379,6 +394,9 @@ const styles = StyleSheet.create({
   goalValue: { fontSize: 15, fontWeight: '800', minWidth: 18, textAlign: 'center' },
   goalDone: { fontSize: 13, fontWeight: '700', marginLeft: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700' },
+  mealsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quickAddPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  quickAddText: { fontSize: 13, fontWeight: '700' },
   mealsList: { gap: Spacing.two },
   mealRow: {
     flexDirection: 'row',

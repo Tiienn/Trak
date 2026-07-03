@@ -61,6 +61,15 @@ export type ExerciseEntry = {
   caloriesBurned: number;
 };
 
+/** A reusable meal template the user can re-log with one tap. */
+export type SavedMeal = {
+  id: string;
+  createdAt: number;
+  title: string;
+  total: FoodTotals;
+  items: FoodItem[];
+};
+
 /** A meal saved to the daily log. */
 export type LoggedMeal = {
   id: string;
