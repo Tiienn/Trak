@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlateIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -104,7 +105,7 @@ export default function QuickAddScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {isEmpty ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
-              <Text style={styles.emptyEmoji}>⚡️</Text>
+              <PlateIcon size={30} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 Log a few meals and they’ll show up here for one-tap re-logging.{'\n'}
                 Star a meal from its detail page to save it.
@@ -189,6 +190,5 @@ const styles = StyleSheet.create({
   removeText: { fontSize: 16, fontWeight: '600' },
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
-  emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

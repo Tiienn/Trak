@@ -4,6 +4,7 @@ import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line, Rect } from 'react-native-svg';
 
+import { TrendUpIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { dayKey, sumTotals, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -151,7 +152,7 @@ export default function InsightsScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {loggedDays.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
-              <Text style={styles.emptyEmoji}>📊</Text>
+              <TrendUpIcon size={30} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 Log meals for a few days and your trends will show up here.
               </Text>
@@ -209,6 +210,5 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, fontWeight: '600' },
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
-  emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

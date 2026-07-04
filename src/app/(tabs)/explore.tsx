@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PlateIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAppScheme, useThemeMode, type ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
@@ -293,7 +294,7 @@ export default function HistoryScreen() {
         <AppearanceCard colors={colors} />
         {days.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={styles.emptyEmoji}>📖</Text>
+            <PlateIcon size={30} color={colors.textSecondary} />
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               Your logged meals will show up here.
             </Text>
@@ -409,6 +410,5 @@ const styles = StyleSheet.create({
   mealCals: { fontSize: 16, fontWeight: '800' },
   chevron: { fontSize: 20, fontWeight: '600', marginLeft: 2 },
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two, marginTop: Spacing.four },
-  emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center' },
 });

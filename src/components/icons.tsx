@@ -202,3 +202,92 @@ export function CheckIcon({ size = 22, color = '#ffffff' }: { size?: number; col
     </Svg>
   );
 }
+
+/** Calendar page — weekly streaks. */
+export function CalendarIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={3.5} y={5} width={17} height={15.5} rx={3} stroke={color} strokeWidth={2} />
+      <Path d="M3.5 9.5h17" stroke={color} strokeWidth={2} />
+      <Path d="M8 3v4M16 3v4" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Trophy cup — long streaks. */
+export function TrophyIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M8 3.5h8V10a4 4 0 0 1-8 0V3.5Z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M8 5H4.5v.8A3.7 3.7 0 0 0 8 9.5M16 5h3.5v.8A3.7 3.7 0 0 1 16 9.5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <Path d="M12 14v6M8.5 20h7" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Bathroom scale — weight logging. */
+export function ScaleIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={4} y={4} width={16} height={16} rx={4.5} stroke={color} strokeWidth={2} />
+      <Path
+        d="M8.8 9.6a4.4 4.4 0 0 1 6.4 0"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <Path d="m12 9.4 1.7-1.9" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Rising trend line — progress over time. */
+export function TrendUpIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m4 17 5-5 3.5 3.5 7-7"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M15 8.5h4.5V13" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Dumbbell — workouts. */
+export function DumbbellIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={4.2} y={7.5} width={3.4} height={9} rx={1.4} fill={color} />
+      <Rect x={16.4} y={7.5} width={3.4} height={9} rx={1.4} fill={color} />
+      <Rect x={7.6} y={10.9} width={8.8} height={2.2} rx={1.1} fill={color} />
+      <Rect x={1.6} y={9.4} width={1.9} height={5.2} rx={0.95} fill={color} />
+      <Rect x={20.5} y={9.4} width={1.9} height={5.2} rx={0.95} fill={color} />
+    </Svg>
+  );
+}
+
+/** Game controller — playing Trak's games. */
+export function GamepadIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={3} y={7.5} width={18} height={9} rx={4.5} stroke={color} strokeWidth={2} />
+      <Path d="M7.6 10.2v3.6M5.8 12h3.6" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Circle cx={15.4} cy={10.8} r={1.15} fill={color} />
+      <Circle cx={17.7} cy={13.2} r={1.15} fill={color} />
+    </Svg>
+  );
+}

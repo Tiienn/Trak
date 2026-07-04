@@ -208,7 +208,7 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>💬</Text>
+              <RingMark size={40} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>
                 Tell me what you ate
               </Text>
@@ -317,7 +317,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  emptyEmoji: { fontSize: 40 },
   emptyTitle: { fontSize: 20, fontWeight: '800' },
   emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 280, lineHeight: 20 },
   suggestions: { gap: Spacing.two, marginTop: Spacing.three, alignSelf: 'stretch' },
