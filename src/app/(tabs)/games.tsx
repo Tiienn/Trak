@@ -93,32 +93,52 @@ export default function GamesScreen() {
             </Text>
           </Pressable>
 
-          {/* Coming soon */}
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>COMING SOON</Text>
-          <View style={[styles.soonCard, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={styles.soonEmoji}>🔼🔽</Text>
-            <View style={styles.soonInfo}>
-              <Text style={[styles.soonTitle, { color: colors.text }]}>Higher or Lower</Text>
-              <Text style={[styles.soonDesc, { color: colors.textSecondary }]}>
-                Which food has more calories?
-              </Text>
+          {/* Higher or Lower */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.gameCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/higher-lower')}>
+            <View style={styles.gameHeader}>
+              <Text style={styles.gameEmoji}>🔼🔽</Text>
+              {stats.hlBest > 0 ? (
+                <Text style={[styles.donePill, { color: Brand.greenDark }]}>
+                  Best run: {stats.hlBest}
+                </Text>
+              ) : (
+                <Text style={[styles.newPill, { color: Brand.greenDark }]}>NEW</Text>
+              )}
             </View>
-            <Text style={[styles.soonPill, { color: colors.textSecondary, borderColor: colors.backgroundSelected }]}>
-              Soon
+            <Text style={[styles.gameTitle, { color: colors.text }]}>Higher or Lower</Text>
+            <Text style={[styles.gameDesc, { color: colors.textSecondary }]}>
+              Which food has more calories? Keep the run alive.
             </Text>
-          </View>
-          <View style={[styles.soonCard, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={styles.soonEmoji}>📸</Text>
-            <View style={styles.soonInfo}>
-              <Text style={[styles.soonTitle, { color: colors.text }]}>Guess before you scan</Text>
-              <Text style={[styles.soonDesc, { color: colors.textSecondary }]}>
-                Guess your real meal before the AI reveals it.
-              </Text>
+          </Pressable>
+
+          {/* Guess before you scan */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.gameCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/scan')}>
+            <View style={styles.gameHeader}>
+              <Text style={styles.gameEmoji}>📸</Text>
+              {stats.guessCount > 0 ? (
+                <Text style={[styles.donePill, { color: Brand.greenDark }]}>
+                  avg miss {Math.round(stats.guessErrSum / stats.guessCount)}%
+                </Text>
+              ) : (
+                <Text style={[styles.newPill, { color: Brand.greenDark }]}>NEW</Text>
+              )}
             </View>
-            <Text style={[styles.soonPill, { color: colors.textSecondary, borderColor: colors.backgroundSelected }]}>
-              Soon
+            <Text style={[styles.gameTitle, { color: colors.text }]}>Guess before you scan</Text>
+            <Text style={[styles.gameDesc, { color: colors.textSecondary }]}>
+              Scan a real meal and guess its calories while the AI thinks. Every scan becomes a
+              round.
             </Text>
-          </View>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -150,25 +170,4 @@ const styles = StyleSheet.create({
   gameTitle: { fontSize: 19, fontWeight: '800' },
   gameDesc: { fontSize: 13, lineHeight: 19 },
 
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: Spacing.two },
-  soonCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: Spacing.three,
-    gap: Spacing.three,
-    opacity: 0.75,
-  },
-  soonEmoji: { fontSize: 22 },
-  soonInfo: { flex: 1 },
-  soonTitle: { fontSize: 15, fontWeight: '700' },
-  soonDesc: { fontSize: 12, marginTop: 2 },
-  soonPill: {
-    fontSize: 12,
-    fontWeight: '700',
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
 });

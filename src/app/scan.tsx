@@ -17,9 +17,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
+import { loadGameStats, recordScanGuess } from '@/lib/game';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { FoodAnalysis } from '@/lib/types';
+
+/** Quick-tap calorie guesses shown while the AI analyzes. */
+const GUESS_CHIPS = [250, 400, 550, 700, 900, 1200];
 
 type Phase = 'camera' | 'analyzing' | 'result' | 'error';
 
@@ -34,6 +38,15 @@ export default function ScanScreen() {
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  // Guess-before-you-scan: an optional quick guess made while the AI thinks.
+  const [guess, setGuess] = useState<number | null>(null);
+  const guessRef = useRef<number | null>(null);
+
+  function pickGuess(v: number) {
+    guessRef.current = v;
+    setGuess(v);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
 
   async function onAddToToday() {
     if (!analysis || saving) return; // guard against double taps
@@ -51,10 +64,20 @@ export default function ScanScreen() {
   async function runAnalysis(uri: string) {
     setPhotoUri(uri);
     setPhase('analyzing');
+    guessRef.current = null;
+    setGuess(null);
     try {
       const result = await analyzeFood(uri, calorieBias);
       setAnalysis(result);
       setPhase('result');
+      // Score the quick guess (if one was made in time) as a game round.
+      const g = guessRef.current;
+      if (g != null && result.isFood && result.total.calories > 0) {
+        const errPct = Math.round((Math.abs(g - result.total.calories) / result.total.calories) * 100);
+        loadGameStats()
+          .then((s) => recordScanGuess(errPct, s))
+          .catch(() => {});
+      }
     } catch (e: any) {
       setErrorMsg(e?.message ?? 'Something went wrong. Please try again.');
       setPhase('error');
@@ -89,6 +112,8 @@ export default function ScanScreen() {
     setAnalysis(null);
     setPhotoUri(null);
     setErrorMsg('');
+    guessRef.current = null;
+    setGuess(null);
     setPhase('camera');
   }
 
@@ -152,11 +177,27 @@ export default function ScanScreen() {
         </SafeAreaView>
       )}
 
-      {/* Analyzing */}
+      {/* Analyzing — with the guess-before-you-scan mini-game */}
       {phase === 'analyzing' && (
         <View style={styles.centerOverlay}>
           <ActivityIndicator size="large" color="#ffffff" />
           <Text style={styles.analyzingText}>Analyzing your meal…</Text>
+          <View style={styles.guessBox}>
+            {guess == null ? (
+              <>
+                <Text style={styles.guessTitle}>🎮 Quick — how many calories?</Text>
+                <View style={styles.guessChips}>
+                  {GUESS_CHIPS.map((v) => (
+                    <Pressable key={v} style={styles.guessChip} onPress={() => pickGuess(v)}>
+                      <Text style={styles.guessChipText}>{v}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.guessLocked}>You guessed {guess} kcal ✓</Text>
+            )}
+          </View>
         </View>
       )}
 
@@ -177,6 +218,7 @@ export default function ScanScreen() {
       {phase === 'result' && analysis && (
         <ResultSheet
           analysis={analysis}
+          guess={guess}
           saving={saving}
           colors={colors}
           onRetake={reset}
@@ -198,17 +240,23 @@ function MacroPill({ label, value, colors }: { label: string; value: number; col
 
 function ResultSheet({
   analysis,
+  guess,
   saving,
   colors,
   onRetake,
   onDone,
 }: {
   analysis: FoodAnalysis;
+  guess: number | null;
   saving: boolean;
   colors: ThemeColors;
   onRetake: () => void;
   onDone: () => void;
 }) {
+  // How the user's quick guess compares to the AI estimate.
+  const actual = analysis.total.calories;
+  const guessErr =
+    guess != null && actual > 0 ? Math.round((Math.abs(guess - actual) / actual) * 100) : null;
   if (!analysis.isFood) {
     return (
       <View style={[styles.sheet, { backgroundColor: colors.background }]}>
@@ -230,6 +278,16 @@ function ResultSheet({
         <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>
           AI estimate · {Math.round(analysis.confidence * 100)}% confident
         </Text>
+
+        {guess != null && guessErr != null && (
+          <View style={[styles.guessResult, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.guessResultText, { color: colors.text }]}>
+              {guessErr <= 10
+                ? `🎯 Great eye! You guessed ${guess} — only ${guessErr}% off.`
+                : `You guessed ${guess} kcal — ${guessErr}% ${guess > actual ? 'over' : 'under'}.`}
+            </Text>
+          </View>
+        )}
 
         <Text style={[styles.bigCalories, { color: colors.text }]}>
           {analysis.total.calories.toLocaleString()}
@@ -362,6 +420,19 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   analyzingText: { color: '#ffffff', fontSize: 17, fontWeight: '600' },
+  guessBox: { alignItems: 'center', gap: 12, marginTop: 24, paddingHorizontal: 24 },
+  guessTitle: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  guessChips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
+  guessChip: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  guessChipText: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
+  guessLocked: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  guessResult: { alignSelf: 'stretch', borderRadius: 14, padding: 14, marginTop: 14 },
+  guessResultText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
 
   // Generic bottom sheet (error / no-food)
   sheet: {

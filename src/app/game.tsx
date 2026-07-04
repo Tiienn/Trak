@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
@@ -92,6 +92,22 @@ export default function GameScreen() {
     setPlate({});
     setResult(null);
     setPhase('build');
+  }
+
+  async function shareResult() {
+    if (!result) return;
+    const stars = '★'.repeat(result.stars) + '☆'.repeat(3 - result.stars);
+    const lines = [
+      `🎯 Trak — ${isDaily ? `Daily Challenge ${challengeDay()}` : 'Calorie Challenge'}`,
+      `${stars} · ${result.diffPct}% off a ${challenge.targetCalories} kcal target`,
+      ...(isDaily && stats.dailyStreak > 1 ? [`🔥 ${stats.dailyStreak}-day streak`] : []),
+      'Think you can beat me? 🥗',
+    ];
+    try {
+      await Share.share({ message: lines.join('\n') });
+    } catch {
+      // User closed the share sheet — nothing to do.
+    }
   }
 
   return (
@@ -275,6 +291,12 @@ export default function GameScreen() {
                 {stats.bestDiffPct ?? '—'}%{stats.dailyStreak > 0 ? ` · 🔥 ${stats.dailyStreak}-day streak` : ''}
               </Text>
 
+              <Pressable
+                style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
+                onPress={shareResult}>
+                <Text style={[styles.shareText, { color: colors.text }]}>Share your result 📤</Text>
+              </Pressable>
+
               <View style={styles.resultButtons}>
                 <Pressable
                   style={[styles.againBtn, { backgroundColor: colors.backgroundElement }]}
@@ -367,6 +389,8 @@ const styles = StyleSheet.create({
 
   statsLine: { fontSize: 12, fontWeight: '600' },
 
+  shareBtn: { alignSelf: 'stretch', borderRadius: 16, paddingVertical: Spacing.three, alignItems: 'center' },
+  shareText: { fontSize: 15, fontWeight: '700' },
   resultButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   againBtn: { flex: 1, borderRadius: 16, paddingVertical: Spacing.three, alignItems: 'center' },
   againText: { fontSize: 15, fontWeight: '700' },

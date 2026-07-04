@@ -243,6 +243,12 @@ export type GameStats = {
   lastDailyDay: string | null;
   /** Best (lowest) calorie miss in percent. */
   bestDiffPct: number | null;
+  /** Higher-or-Lower: best run and total rounds answered. */
+  hlBest: number;
+  hlRounds: number;
+  /** Scan guesses: how many made, and the summed |error %| for an average. */
+  guessCount: number;
+  guessErrSum: number;
 };
 
 const STATS_KEY = 'trak.game.v1';
@@ -253,6 +259,10 @@ export const EMPTY_STATS: GameStats = {
   dailyStreak: 0,
   lastDailyDay: null,
   bestDiffPct: null,
+  hlBest: 0,
+  hlRounds: 0,
+  guessCount: 0,
+  guessErrSum: 0,
 };
 
 export async function loadGameStats(): Promise<GameStats> {
@@ -296,4 +306,45 @@ export async function recordRound(
     // Non-critical; stats just won't persist.
   }
   return next;
+}
+
+async function saveStats(next: GameStats): Promise<GameStats> {
+  try {
+    await AsyncStorage.setItem(STATS_KEY, JSON.stringify(next));
+  } catch {
+    // Non-critical; stats just won't persist.
+  }
+  return next;
+}
+
+/** Record a finished Higher-or-Lower run. */
+export async function recordHigherLower(run: number, stats: GameStats): Promise<GameStats> {
+  return saveStats({
+    ...stats,
+    hlRounds: stats.hlRounds + run,
+    hlBest: Math.max(stats.hlBest, run),
+  });
+}
+
+/** Record a guess-before-you-scan miss (absolute percent error). */
+export async function recordScanGuess(errPct: number, stats: GameStats): Promise<GameStats> {
+  return saveStats({
+    ...stats,
+    guessCount: stats.guessCount + 1,
+    guessErrSum: stats.guessErrSum + Math.max(0, Math.round(errPct)),
+  });
+}
+
+/**
+ * A random ingredient for Higher-or-Lower. When `differentFrom` is given the
+ * result has a different id AND different calories (so there's always a
+ * right answer).
+ */
+export function randomFood(differentFrom?: Ingredient): Ingredient {
+  const all = CATEGORIES.flatMap((c) => c.items);
+  for (;;) {
+    const i = all[Math.floor(Math.random() * all.length)];
+    if (!differentFrom) return i;
+    if (i.id !== differentFrom.id && i.calories !== differentFrom.calories) return i;
+  }
 }
