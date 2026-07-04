@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  FlagIcon,
+  ShareIcon,
+} from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   EMPTY_STATS,
@@ -39,7 +45,9 @@ function FoodCard({
             highlight === 'right' ? Brand.green : highlight === 'wrong' ? '#EF4444' : 'transparent',
         },
       ]}>
-      <Text style={styles.cardEmoji}>{food.emoji}</Text>
+      <View style={[styles.emojiTile, { backgroundColor: colors.background }]}>
+        <Text style={styles.cardEmoji}>{food.emoji}</Text>
+      </View>
       <View style={styles.cardInfo}>
         <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
           {food.name}
@@ -132,20 +140,23 @@ export default function HigherLowerScreen() {
 
         {phase === 'over' ? (
           <View style={styles.overWrap}>
-            <Text style={styles.overEmoji}>🏁</Text>
+            <View style={[styles.overBadge, { backgroundColor: colors.backgroundElement }]}>
+              <FlagIcon size={30} color={Brand.green} />
+            </View>
             <Text style={[styles.overTitle, { color: colors.text }]}>
               Run over — you got {run}!
             </Text>
             <Text style={[styles.overSub, { color: colors.textSecondary }]}>
               {run >= stats.hlBest && run > 0
-                ? 'New personal best! 🎉'
+                ? 'New personal best!'
                 : `Personal best: ${stats.hlBest}`}
             </Text>
             <View style={styles.overButtons}>
               <Pressable
                 style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
                 onPress={share}>
-                <Text style={[styles.shareText, { color: colors.text }]}>Share 📤</Text>
+                <ShareIcon size={16} color={colors.text} />
+                <Text style={[styles.shareText, { color: colors.text }]}>Share</Text>
               </Pressable>
               <Pressable style={styles.playBtn} onPress={playAgain}>
                 <Text style={styles.playText}>Play again</Text>
@@ -177,17 +188,19 @@ export default function HigherLowerScreen() {
                   styles.verdict,
                   { color: lastCorrect ? Brand.greenDark : '#EF4444' },
                 ]}>
-                {lastCorrect ? 'Correct! 🎯' : 'Wrong! 💥'}
+                {lastCorrect ? 'Correct!' : 'Wrong!'}
               </Text>
             ) : (
               <View style={styles.answerRow}>
                 <Pressable
                   style={[styles.answerBtn, { backgroundColor: colors.backgroundElement }]}
                   onPress={() => answer(false)}>
-                  <Text style={[styles.answerText, { color: colors.text }]}>🔽 Fewer</Text>
+                  <ChevronDownIcon size={20} color={colors.text} />
+                  <Text style={[styles.answerText, { color: colors.text }]}>Fewer</Text>
                 </Pressable>
                 <Pressable style={[styles.answerBtn, styles.moreBtn]} onPress={() => answer(true)}>
-                  <Text style={[styles.answerText, styles.moreText]}>🔼 More</Text>
+                  <ChevronUpIcon size={20} color="#ffffff" />
+                  <Text style={[styles.answerText, styles.moreText]}>More</Text>
                 </Pressable>
               </View>
             )}
@@ -220,7 +233,14 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.three,
   },
-  cardEmoji: { fontSize: 40 },
+  emojiTile: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardEmoji: { fontSize: 30 },
   cardInfo: { flex: 1 },
   cardName: { fontSize: 18, fontWeight: '800' },
   cardPortion: { fontSize: 13, marginTop: 2 },
@@ -230,17 +250,40 @@ const styles = StyleSheet.create({
   verdict: { fontSize: 22, fontWeight: '800', textAlign: 'center', marginTop: Spacing.three },
 
   answerRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  answerBtn: { flex: 1, borderRadius: 16, paddingVertical: Spacing.four, alignItems: 'center' },
+  answerBtn: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   moreBtn: { backgroundColor: Brand.green },
   answerText: { fontSize: 17, fontWeight: '800' },
   moreText: { color: '#ffffff' },
 
   overWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  overEmoji: { fontSize: 44 },
+  overBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.two,
+  },
   overTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   overSub: { fontSize: 14, fontWeight: '600' },
   overButtons: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four, alignSelf: 'stretch' },
-  shareBtn: { flex: 1, borderRadius: 16, paddingVertical: Spacing.three, alignItems: 'center' },
+  shareBtn: {
+    flex: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Spacing.three,
+  },
   shareText: { fontSize: 15, fontWeight: '700' },
   playBtn: {
     flex: 1,

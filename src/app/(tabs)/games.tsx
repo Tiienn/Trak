@@ -3,18 +3,44 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  ArrowsUpDownIcon,
+  CameraIcon,
+  CheckIcon,
+  DiceIcon,
+  FlameIcon,
+  TargetIcon,
+} from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { dailyChallenge, EMPTY_STATS, loadGameStats, type GameStats } from '@/lib/game';
 import { dayKey } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
-function StatBox({ value, label, colors }: { value: string; label: string; colors: ThemeColors }) {
+function StatBox({
+  value,
+  label,
+  colors,
+  flame,
+}: {
+  value: string;
+  label: string;
+  colors: ThemeColors;
+  flame?: boolean;
+}) {
   return (
     <View style={styles.statBox}>
-      <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <View style={styles.statValueRow}>
+        {flame ? <FlameIcon size={16} color={value === '—' ? colors.textSecondary : Brand.green} /> : null}
+        <Text style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      </View>
       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
     </View>
   );
+}
+
+/** Rounded icon tile that replaces decorative emojis on game cards. */
+function IconTile({ children, bg }: { children: React.ReactNode; bg: string }) {
+  return <View style={[styles.iconTile, { backgroundColor: bg }]}>{children}</View>;
 }
 
 /** The games hub — daily challenge, free play, and what's coming next. */
@@ -42,9 +68,10 @@ export default function GamesScreen() {
           {/* Lifetime stats */}
           <View style={[styles.statsCard, { backgroundColor: colors.backgroundElement }]}>
             <StatBox
-              value={stats.dailyStreak > 0 ? `🔥 ${stats.dailyStreak}` : '—'}
+              value={stats.dailyStreak > 0 ? String(stats.dailyStreak) : '—'}
               label="day streak"
               colors={colors}
+              flame
             />
             <StatBox value={String(stats.played)} label="played" colors={colors} />
             <StatBox value={String(stats.threeStar)} label="3-star" colors={colors} />
@@ -63,9 +90,14 @@ export default function GamesScreen() {
             ]}
             onPress={() => router.push('/game')}>
             <View style={styles.gameHeader}>
-              <Text style={styles.gameEmoji}>🎯</Text>
+              <IconTile bg={colors.background}>
+                <TargetIcon size={24} color={Brand.green} />
+              </IconTile>
               {dailyDone ? (
-                <Text style={[styles.donePill, { color: Brand.greenDark }]}>✓ Done today</Text>
+                <View style={styles.doneRow}>
+                  <CheckIcon size={14} color={Brand.greenDark} />
+                  <Text style={[styles.donePill, { color: Brand.greenDark }]}>Done today</Text>
+                </View>
               ) : (
                 <Text style={[styles.newPill, { color: Brand.greenDark }]}>NEW</Text>
               )}
@@ -85,7 +117,9 @@ export default function GamesScreen() {
             ]}
             onPress={() => router.push('/game?mode=free')}>
             <View style={styles.gameHeader}>
-              <Text style={styles.gameEmoji}>🎲</Text>
+              <IconTile bg={colors.greenTint}>
+                <DiceIcon size={24} color={Brand.green} />
+              </IconTile>
             </View>
             <Text style={[styles.gameTitle, { color: colors.text }]}>Free play</Text>
             <Text style={[styles.gameDesc, { color: colors.textSecondary }]}>
@@ -101,7 +135,9 @@ export default function GamesScreen() {
             ]}
             onPress={() => router.push('/higher-lower')}>
             <View style={styles.gameHeader}>
-              <Text style={styles.gameEmoji}>🔼🔽</Text>
+              <IconTile bg={colors.greenTint}>
+                <ArrowsUpDownIcon size={24} color={Brand.green} />
+              </IconTile>
               {stats.hlBest > 0 ? (
                 <Text style={[styles.donePill, { color: Brand.greenDark }]}>
                   Best run: {stats.hlBest}
@@ -124,7 +160,9 @@ export default function GamesScreen() {
             ]}
             onPress={() => router.push('/scan')}>
             <View style={styles.gameHeader}>
-              <Text style={styles.gameEmoji}>📸</Text>
+              <IconTile bg={colors.greenTint}>
+                <CameraIcon size={24} color={Brand.green} />
+              </IconTile>
               {stats.guessCount > 0 ? (
                 <Text style={[styles.donePill, { color: Brand.greenDark }]}>
                   avg miss {Math.round(stats.guessErrSum / stats.guessCount)}%
@@ -159,13 +197,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
   },
   statBox: { flex: 1, alignItems: 'center', gap: 2 },
+  statValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statValue: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
   statLabel: { fontSize: 11, fontWeight: '600' },
 
   gameCard: { borderRadius: 20, padding: Spacing.four, gap: 6 },
-  gameHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gameEmoji: { fontSize: 30 },
+  gameHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  iconTile: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   newPill: { fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   donePill: { fontSize: 13, fontWeight: '800' },
   gameTitle: { fontSize: 19, fontWeight: '800' },
   gameDesc: { fontSize: 13, lineHeight: 19 },

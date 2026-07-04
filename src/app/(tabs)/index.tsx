@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalorieRing } from '@/components/calorie-ring';
-import { BarcodeIcon, CameraIcon, DropletIcon } from '@/components/icons';
+import { BarcodeIcon, CameraIcon, DropletIcon, FlameIcon, PlateIcon } from '@/components/icons';
 import { RingMark } from '@/components/logo';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -216,8 +216,9 @@ export default function HomeScreen() {
             </View>
             {streak > 0 ? (
               <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
+                <FlameIcon size={15} color={Brand.green} />
                 <Text style={[styles.streakText, { color: colors.text }]}>
-                  🔥 {streak} day{streak > 1 ? 's' : ''}
+                  {streak} day{streak > 1 ? 's' : ''}
                 </Text>
               </View>
             ) : (
@@ -301,7 +302,7 @@ export default function HomeScreen() {
           </View>
           {todayMeals.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
-              <Text style={styles.emptyEmoji}>🍽️</Text>
+              <PlateIcon size={30} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No meals logged yet.{'\n'}Tap “Scan a meal” to add your first one.
               </Text>
@@ -354,7 +355,14 @@ const styles = StyleSheet.create({
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   todayLabel: { fontSize: 15, fontWeight: '600' },
-  streakPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
   streakText: { fontSize: 14, fontWeight: '700' },
 
   card: { borderRadius: 24, padding: Spacing.four, gap: Spacing.two },
@@ -426,7 +434,6 @@ const styles = StyleSheet.create({
   retryBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
-  emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
   bottomBar: {

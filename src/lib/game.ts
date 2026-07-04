@@ -223,7 +223,7 @@ export function scoreRound(totals: PlateTotals, challenge: Challenge): RoundResu
   else if (diffPct <= 20) stars = 1;
   const headline =
     stars === 3
-      ? 'Nailed it! 🎯'
+      ? 'Nailed it!'
       : stars === 2
         ? 'So close!'
         : stars === 1

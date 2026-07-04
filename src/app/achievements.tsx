@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable } from 'react-native';
 
+import { FlameIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { EMPTY_STATS, loadGameStats, type GameStats } from '@/lib/game';
 import { useMeals } from '@/lib/store';
@@ -80,7 +81,7 @@ export default function AchievementsScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Streak hero */}
           <View style={[styles.hero, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={styles.heroEmoji}>🔥</Text>
+            <FlameIcon size={36} color={Brand.green} />
             <Text style={[styles.heroValue, { color: colors.text }]}>
               {streak} day{streak === 1 ? '' : 's'}
             </Text>
@@ -119,7 +120,6 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: Spacing.four, gap: Spacing.four },
 
   hero: { borderRadius: 24, paddingVertical: Spacing.five, alignItems: 'center', gap: 4 },
-  heroEmoji: { fontSize: 40 },
   heroValue: { fontSize: 32, fontWeight: '800', letterSpacing: -1 },
   heroLabel: { fontSize: 14, fontWeight: '600' },
 

@@ -185,7 +185,7 @@ export default function ScanScreen() {
           <View style={styles.guessBox}>
             {guess == null ? (
               <>
-                <Text style={styles.guessTitle}>🎮 Quick — how many calories?</Text>
+                <Text style={styles.guessTitle}>Quick — how many calories?</Text>
                 <View style={styles.guessChips}>
                   {GUESS_CHIPS.map((v) => (
                     <Pressable key={v} style={styles.guessChip} onPress={() => pickGuess(v)}>
@@ -283,7 +283,7 @@ function ResultSheet({
           <View style={[styles.guessResult, { backgroundColor: colors.backgroundElement }]}>
             <Text style={[styles.guessResultText, { color: colors.text }]}>
               {guessErr <= 10
-                ? `🎯 Great eye! You guessed ${guess} — only ${guessErr}% off.`
+                ? `Great eye! You guessed ${guess} — only ${guessErr}% off.`
                 : `You guessed ${guess} kcal — ${guessErr}% ${guess > actual ? 'over' : 'under'}.`}
             </Text>
           </View>

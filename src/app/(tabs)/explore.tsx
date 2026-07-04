@@ -107,7 +107,7 @@ function AchievementsCard({ colors }: { colors: ThemeColors }) {
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Achievements</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          {streak > 0 ? `🔥 ${streak}-day streak · see your badges` : 'Streaks and badges'}
+          {streak > 0 ? `${streak}-day streak · see your badges` : 'Streaks and badges'}
         </Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>

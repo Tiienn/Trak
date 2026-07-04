@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FlameIcon, PlateIcon, ShareIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   CATEGORIES,
@@ -134,10 +135,13 @@ export default function GameScreen() {
                 serve — trust your gut!
               </Text>
               {isDaily && stats.dailyStreak > 0 ? (
-                <Text style={[styles.briefStreak, { color: Brand.greenDark }]}>
-                  🔥 {stats.dailyStreak}-day game streak
-                  {dailyDoneToday ? ' · today already counted' : ''}
-                </Text>
+                <View style={styles.briefStreakRow}>
+                  <FlameIcon size={14} color={Brand.greenDark} />
+                  <Text style={[styles.briefStreak, { color: Brand.greenDark }]}>
+                    {stats.dailyStreak}-day game streak
+                    {dailyDoneToday ? ' · today already counted' : ''}
+                  </Text>
+                </View>
               ) : null}
             </View>
 
@@ -148,8 +152,9 @@ export default function GameScreen() {
               </Text>
               {plateIds.length === 0 ? (
                 <View style={[styles.emptyPlate, { backgroundColor: colors.backgroundElement }]}>
+                  <PlateIcon size={18} color={colors.textSecondary} />
                   <Text style={[styles.emptyPlateText, { color: colors.textSecondary }]}>
-                    🍽️ Tap ingredients below to build your meal
+                    Tap ingredients below to build your meal
                   </Text>
                 </View>
               ) : (
@@ -234,7 +239,8 @@ export default function GameScreen() {
               style={[styles.serveBtn, { opacity: plateIds.length > 0 ? 1 : 0.4 }]}
               disabled={plateIds.length === 0}
               onPress={serve}>
-              <Text style={styles.serveText}>Serve it 🍽️</Text>
+              <PlateIcon size={20} color="#ffffff" />
+              <Text style={styles.serveText}>Serve it</Text>
             </Pressable>
           </>
         ) : (
@@ -288,13 +294,14 @@ export default function GameScreen() {
 
               <Text style={[styles.statsLine, { color: colors.textSecondary }]}>
                 Played {stats.played} · {stats.threeStar} perfect · best miss{' '}
-                {stats.bestDiffPct ?? '—'}%{stats.dailyStreak > 0 ? ` · 🔥 ${stats.dailyStreak}-day streak` : ''}
+                {stats.bestDiffPct ?? '—'}%{stats.dailyStreak > 0 ? ` · ${stats.dailyStreak}-day streak` : ''}
               </Text>
 
               <Pressable
                 style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
                 onPress={shareResult}>
-                <Text style={[styles.shareText, { color: colors.text }]}>Share your result 📤</Text>
+                <ShareIcon size={17} color={colors.text} />
+                <Text style={[styles.shareText, { color: colors.text }]}>Share your result</Text>
               </Pressable>
 
               <View style={styles.resultButtons}>
@@ -331,12 +338,20 @@ const styles = StyleSheet.create({
   brief: { borderRadius: 16, padding: Spacing.four, gap: 4, marginBottom: Spacing.three },
   briefTitle: { fontSize: 17, fontWeight: '800' },
   briefSub: { fontSize: 13, lineHeight: 19 },
-  briefStreak: { fontSize: 13, fontWeight: '700', marginTop: 2 },
+  briefStreakRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  briefStreak: { fontSize: 13, fontWeight: '700' },
 
   scroll: { paddingBottom: Spacing.three, gap: Spacing.three },
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
 
-  emptyPlate: { borderRadius: 14, padding: Spacing.four, alignItems: 'center' },
+  emptyPlate: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: Spacing.four,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   emptyPlateText: { fontSize: 13 },
   plate: { borderRadius: 14, paddingHorizontal: Spacing.three, paddingVertical: 4 },
   plateRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: Spacing.two },
@@ -367,7 +382,10 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.green,
     borderRadius: 16,
     paddingVertical: Spacing.three,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     marginVertical: Spacing.two,
   },
   serveText: { color: '#ffffff', fontSize: 17, fontWeight: '800' },
@@ -389,7 +407,15 @@ const styles = StyleSheet.create({
 
   statsLine: { fontSize: 12, fontWeight: '600' },
 
-  shareBtn: { alignSelf: 'stretch', borderRadius: 16, paddingVertical: Spacing.three, alignItems: 'center' },
+  shareBtn: {
+    alignSelf: 'stretch',
+    borderRadius: 16,
+    paddingVertical: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
   shareText: { fontSize: 15, fontWeight: '700' },
   resultButtons: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch' },
   againBtn: { flex: 1, borderRadius: 16, paddingVertical: Spacing.three, alignItems: 'center' },
