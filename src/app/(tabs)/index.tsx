@@ -285,20 +285,6 @@ export default function HomeScreen() {
           {/* Water */}
           <WaterCard colors={colors} />
 
-          {/* Daily calorie game */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.weightCard,
-              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-            ]}
-            onPress={() => router.push('/game')}>
-            <View style={styles.weightInfo}>
-              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>🎮 Daily challenge</Text>
-              <Text style={[styles.gameHint, { color: colors.text }]}>Guess-timate a meal</Text>
-            </View>
-            <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-          </Pressable>
-
           {/* Today's meals */}
           <View style={styles.mealsHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
@@ -394,7 +380,6 @@ const styles = StyleSheet.create({
   weightLabel: { fontSize: 14, fontWeight: '600' },
   weightValue: { fontSize: 20, fontWeight: '800' },
   weightChange: { fontSize: 14, fontWeight: '700' },
-  gameHint: { fontSize: 16, fontWeight: '800' },
 
   waterCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.three },
   waterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

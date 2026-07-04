@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,8 +36,12 @@ export default function GameScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
 
-  const [isDaily, setIsDaily] = useState(true);
-  const [challenge, setChallenge] = useState<Challenge>(() => dailyChallenge());
+  // `?mode=free` starts a random round instead of today's daily challenge.
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const [isDaily, setIsDaily] = useState(mode !== 'free');
+  const [challenge, setChallenge] = useState<Challenge>(() =>
+    mode === 'free' ? randomChallenge() : dailyChallenge()
+  );
   const [plate, setPlate] = useState<Record<string, number>>({});
   const [category, setCategory] = useState(CATEGORIES[0].key);
   const [phase, setPhase] = useState<Phase>('build');
