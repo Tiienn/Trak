@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pressable } from 'react-native';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { EMPTY_STATS, loadGameStats, type GameStats } from '@/lib/game';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
@@ -44,6 +46,11 @@ export default function AchievementsScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { meals, weights, streak, waterToday, waterGoal, burnedToday } = useMeals();
+  const [game, setGame] = useState<GameStats>(EMPTY_STATS);
+
+  useEffect(() => {
+    loadGameStats().then(setGame);
+  }, []);
 
   const badges: Badge[] = [
     { emoji: '🍽️', title: 'First bite', desc: 'Log your first meal', earned: meals.length >= 1 },
@@ -54,6 +61,8 @@ export default function AchievementsScreen() {
     { emoji: '📈', title: 'Trend setter', desc: 'Log weight 5 times', earned: weights.length >= 5 },
     { emoji: '💧', title: 'Hydrated', desc: 'Hit your water goal today', earned: waterToday >= waterGoal && waterGoal > 0 },
     { emoji: '🏃', title: 'Moved today', desc: 'Log a workout today', earned: burnedToday > 0 },
+    { emoji: '🎮', title: 'Player', desc: 'Play 5 calorie challenges', earned: game.played >= 5 },
+    { emoji: '🎯', title: 'Sharpshooter', desc: '3-star a calorie challenge', earned: game.threeStar >= 1 },
   ];
 
   const earnedCount = badges.filter((b) => b.earned).length;

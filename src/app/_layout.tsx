@@ -63,6 +63,10 @@ function ThemedNavigator() {
           name="reminders"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
+        <Stack.Screen
+          name="game"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
       </Stack>
     </ThemeProvider>
   );
