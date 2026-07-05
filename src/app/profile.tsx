@@ -14,16 +14,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { computeTargets } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { ActivityLevel, Goal, Sex, UserProfile } from '@/lib/types';
 
-const GOALS: { key: Goal; label: string; emoji: string }[] = [
-  { key: 'lose', label: 'Lose weight', emoji: '📉' },
-  { key: 'maintain', label: 'Maintain', emoji: '⚖️' },
-  { key: 'gain', label: 'Gain muscle', emoji: '📈' },
+type GoalIcon = (props: { size?: number; color?: string }) => React.JSX.Element;
+const GOALS: { key: Goal; label: string; Icon: GoalIcon }[] = [
+  { key: 'lose', label: 'Lose weight', Icon: TrendDownIcon },
+  { key: 'maintain', label: 'Maintain', Icon: BalanceIcon },
+  { key: 'gain', label: 'Gain muscle', Icon: DumbbellIcon },
 ];
 
 const SEXES: { key: Sex; label: string }[] = [
@@ -210,7 +212,7 @@ export default function ProfileScreen() {
               <View style={styles.chipRow}>
                 {GOALS.map((g) => (
                   <Chip key={g.key} selected={goal === g.key} onPress={() => setGoal(g.key)} colors={colors}>
-                    <Text style={styles.chipEmoji}>{g.emoji}</Text>
+                    <g.Icon size={17} color={goal === g.key ? Brand.green : colors.text} />
                     <Text style={[styles.chipLabel, { color: colors.text }]}>{g.label}</Text>
                   </Chip>
                 ))}

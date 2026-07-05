@@ -64,11 +64,18 @@ function Row({
   );
 }
 
+/** How many recent suggestions to show at once (dismissing one reveals the next). */
+const RECENT_WINDOW = 6;
+
 export default function QuickAddScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { savedMeals, recentMeals, quickLog, removeSavedMeal } = useMeals();
   const [added, setAdded] = useState<Record<string, boolean>>({});
+  // Recent suggestions the user waved off this session — the next ones backfill.
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
+  const visibleRecent = recentMeals.filter((m) => !dismissed[m.id]).slice(0, RECENT_WINDOW);
+  const hiddenCount = recentMeals.filter((m) => !dismissed[m.id]).length - visibleRecent.length;
 
   async function add(item: QuickItem) {
     try {
@@ -131,20 +138,29 @@ export default function QuickAddScreen() {
             </>
           ) : null}
 
-          {recentMeals.length > 0 ? (
+          {visibleRecent.length > 0 ? (
             <>
               <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>RECENT</Text>
               <View style={styles.list}>
-                {recentMeals.map((m) => (
+                {visibleRecent.map((m) => (
                   <Row
                     key={m.id}
                     item={m}
                     added={!!added[m.id]}
                     colors={colors}
                     onAdd={() => add(m)}
+                    onRemove={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setDismissed((prev) => ({ ...prev, [m.id]: true }));
+                    }}
                   />
                 ))}
               </View>
+              {hiddenCount > 0 ? (
+                <Text style={[styles.moreHint, { color: colors.textSecondary }]}>
+                  {hiddenCount} more in your history — tap ✕ to see them
+                </Text>
+              ) : null}
             </>
           ) : null}
         </ScrollView>
@@ -191,4 +207,5 @@ const styles = StyleSheet.create({
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  moreHint: { fontSize: 12, textAlign: 'center', marginTop: Spacing.two },
 });

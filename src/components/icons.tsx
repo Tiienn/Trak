@@ -251,7 +251,7 @@ export function ScaleIcon({ size = 22, color = '#ffffff' }: { size?: number; col
   );
 }
 
-/** Rising trend line — progress over time. */
+/** Rising trend line — progress over time / gain. */
 export function TrendUpIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -263,6 +263,79 @@ export function TrendUpIcon({ size = 22, color = '#ffffff' }: { size?: number; c
         strokeLinejoin="round"
       />
       <Path d="M15 8.5h4.5V13" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Falling trend line — losing weight. */
+export function TrendDownIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m4 7 5 5 3.5-3.5 7 7"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M15 15.5h4.5V11" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Balance scale — maintaining weight. */
+export function BalanceIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 4v16M7 20h10" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Path d="M4.5 6h15M12 5l7 1M12 5 5 6" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M2.8 12a2.7 2.7 0 0 0 5.4 0Zm13 0a2.7 2.7 0 0 0 5.4 0Z" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Heart — support / thanks. */
+export function HeartIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 20s-7-4.4-7-9.2A3.8 3.8 0 0 1 12 8a3.8 3.8 0 0 1 7-2.8c0 4.8-7 12-7 12Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+/** Sparkles — AI magic / better recognition. */
+export function SparklesIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.5c.6 3.4 1.6 4.4 5 5-3.4.6-4.4 1.6-5 5-.6-3.4-1.6-4.4-5-5 3.4-.6 4.4-1.6 5-5Z"
+        fill={color}
+      />
+      <Path d="M18.5 14c.3 1.7.8 2.2 2.5 2.5-1.7.3-2.2.8-2.5 2.5-.3-1.7-.8-2.2-2.5-2.5 1.7-.3 2.2-.8 2.5-2.5Z" fill={color} />
+    </Svg>
+  );
+}
+
+/** Medal — supporter badge. */
+export function MedalIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M8.5 3 12 9M15.5 3 12 9" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx={12} cy={15} r={5.2} stroke={color} strokeWidth={2} />
+      <Path d="m12 12.4.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3.9-1.9Z" fill={color} />
+    </Svg>
+  );
+}
+
+/** Droplet-in-drop / water unit toggle glyph (litre bottle). */
+export function BottleIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M10 2.5h4v2l1.2 2.2c.5.9.8 1.9.8 3V19a2.5 2.5 0 0 1-2.5 2.5h-3A2.5 2.5 0 0 1 8 19V9.7c0-1 .3-2 .8-3L10 4.5v-2Z" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+      <Path d="M8 13h8" stroke={color} strokeWidth={2} />
     </Svg>
   );
 }

@@ -37,14 +37,36 @@ export async function loadReminders(): Promise<Reminder[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_REMINDERS;
-    const stored: Reminder[] = JSON.parse(raw);
-    return DEFAULT_REMINDERS.map((d) => {
-      const s = stored.find((r) => r.id === d.id);
-      return s ? { ...d, hour: s.hour, minute: s.minute, enabled: s.enabled } : d;
-    });
+    const stored = JSON.parse(raw);
+    // Trust the stored list as-is so custom added/removed reminders persist.
+    if (Array.isArray(stored) && stored.length) {
+      return stored.map((r: any) => ({
+        id: String(r.id),
+        label: String(r.label ?? 'Reminder'),
+        message: String(r.message ?? 'Time to log your meal.'),
+        hour: Number.isFinite(r.hour) ? r.hour : 12,
+        minute: Number.isFinite(r.minute) ? r.minute : 0,
+        enabled: !!r.enabled,
+      }));
+    }
+    return DEFAULT_REMINDERS;
   } catch {
     return DEFAULT_REMINDERS;
   }
+}
+
+let reminderSeq = 0;
+/** Build a fresh custom reminder (unique id). */
+export function makeReminder(hour = 9, minute = 0): Reminder {
+  reminderSeq += 1;
+  return {
+    id: `r-${Date.now()}-${reminderSeq}`,
+    label: 'Reminder',
+    message: 'Time to log your meal.',
+    hour,
+    minute,
+    enabled: true,
+  };
 }
 
 async function persist(list: Reminder[]) {

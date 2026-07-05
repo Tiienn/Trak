@@ -1,11 +1,27 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
-import { applyReminders, ensurePermission, loadReminders, type Reminder } from '@/lib/reminders';
+import {
+  applyReminders,
+  ensurePermission,
+  loadReminders,
+  makeReminder,
+  type Reminder,
+} from '@/lib/reminders';
 import { useAppScheme } from '@/lib/theme';
 
 function formatTime(hour: number, minute: number): string {
@@ -48,7 +64,6 @@ export default function RemindersScreen() {
     loadReminders().then(setReminders);
   }, []);
 
-  // Persist + reschedule whenever the list changes (after initial load).
   async function commit(next: Reminder[]) {
     setReminders(next);
     await applyReminders(next);
@@ -74,13 +89,46 @@ export default function RemindersScreen() {
   }
 
   function changeTime(id: string, dHour: number, dMinute: number) {
-    const next = reminders.map((r) => {
-      if (r.id !== id) return r;
-      const hour = (r.hour + dHour + 24) % 24;
-      const minute = (r.minute + dMinute + 60) % 60;
-      return { ...r, hour, minute };
-    });
-    commit(next);
+    commit(
+      reminders.map((r) => {
+        if (r.id !== id) return r;
+        return {
+          ...r,
+          hour: (r.hour + dHour + 24) % 24,
+          minute: (r.minute + dMinute + 60) % 60,
+        };
+      })
+    );
+  }
+
+  function setLabel(id: string, label: string) {
+    // Update label locally as the user types; persist happens on blur/toggle.
+    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, label } : r)));
+  }
+
+  async function addReminder() {
+    const ok = await ensurePermission();
+    if (!ok) {
+      Alert.alert(
+        'Notifications are off',
+        'Turn on notifications for Trak in your phone settings to get meal reminders.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Open settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    const r = makeReminder(9, 0);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    await commit([...reminders, r]);
+    setEditingId(r.id);
+  }
+
+  function deleteReminder(id: string) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    if (editingId === id) setEditingId(null);
+    commit(reminders.filter((r) => r.id !== id));
   }
 
   return (
@@ -105,8 +153,11 @@ export default function RemindersScreen() {
                   <Pressable
                     style={styles.cardInfo}
                     onPress={() => setEditingId(editing ? null : r.id)}>
-                    <Text style={[styles.label, { color: colors.text }]}>{r.label}</Text>
-                    <Text style={[styles.time, { color: r.enabled ? Brand.greenDark : colors.textSecondary }]}>
+                    <Text style={[styles.label, { color: colors.text }]} numberOfLines={1}>
+                      {r.label || 'Reminder'}
+                    </Text>
+                    <Text
+                      style={[styles.time, { color: r.enabled ? Brand.greenDark : colors.textSecondary }]}>
                       {formatTime(r.hour, r.minute)} {editing ? '▲' : '✎'}
                     </Text>
                   </Pressable>
@@ -119,17 +170,30 @@ export default function RemindersScreen() {
                 </View>
 
                 {editing ? (
-                  <View style={styles.editRow}>
-                    <View style={styles.editGroup}>
+                  <View style={styles.editWrap}>
+                    <Text style={[styles.editHeading, { color: colors.textSecondary }]}>NAME</Text>
+                    <TextInput
+                      style={[styles.nameInput, { color: colors.text, backgroundColor: colors.background }]}
+                      value={r.label}
+                      onChangeText={(t) => setLabel(r.id, t)}
+                      onEndEditing={() => commit(reminders)}
+                      placeholder="Reminder name"
+                      placeholderTextColor={colors.textSecondary}
+                      maxLength={30}
+                    />
+
+                    <View style={styles.editLine}>
                       <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Hour</Text>
                       <Stepper
                         colors={colors}
-                        value={String(r.hour % 12 === 0 ? 12 : r.hour % 12) + (r.hour < 12 ? ' AM' : ' PM')}
+                        value={
+                          String(r.hour % 12 === 0 ? 12 : r.hour % 12) + (r.hour < 12 ? ' AM' : ' PM')
+                        }
                         onDown={() => changeTime(r.id, -1, 0)}
                         onUp={() => changeTime(r.id, 1, 0)}
                       />
                     </View>
-                    <View style={styles.editGroup}>
+                    <View style={styles.editLine}>
                       <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Minute</Text>
                       <Stepper
                         colors={colors}
@@ -138,11 +202,21 @@ export default function RemindersScreen() {
                         onUp={() => changeTime(r.id, 0, 5)}
                       />
                     </View>
+
+                    <Pressable style={styles.deleteBtn} onPress={() => deleteReminder(r.id)}>
+                      <Text style={styles.deleteText}>Delete reminder</Text>
+                    </Pressable>
                   </View>
                 ) : null}
               </View>
             );
           })}
+
+          <Pressable
+            style={[styles.addBtn, { borderColor: colors.backgroundSelected }]}
+            onPress={addReminder}>
+            <Text style={[styles.addText, { color: Brand.greenDark }]}>＋ Add reminder</Text>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -163,18 +237,37 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 20, fontWeight: '600' },
   intro: { fontSize: 14, lineHeight: 20, marginBottom: Spacing.four },
 
-  scroll: { paddingBottom: Spacing.four, gap: Spacing.three },
+  scroll: { paddingBottom: Spacing.six, gap: Spacing.three },
   card: { borderRadius: 16, padding: Spacing.four },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardInfo: { flex: 1, gap: 2 },
+  cardInfo: { flex: 1, gap: 2, paddingRight: Spacing.two },
   label: { fontSize: 16, fontWeight: '700' },
   time: { fontSize: 14, fontWeight: '600' },
 
-  editRow: { flexDirection: 'row', gap: Spacing.four, marginTop: Spacing.four },
-  editGroup: { gap: 6 },
-  editLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  stepBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  stepText: { fontSize: 20, fontWeight: '800' },
-  stepValue: { fontSize: 15, fontWeight: '800', minWidth: 54, textAlign: 'center' },
+  editWrap: { marginTop: Spacing.four, gap: Spacing.two },
+  editHeading: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  nameInput: { borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: Spacing.three, fontSize: 15, fontWeight: '600' },
+  editLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.one,
+  },
+  editLabel: { fontSize: 14, fontWeight: '700' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  stepBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  stepText: { fontSize: 22, fontWeight: '800' },
+  stepValue: { fontSize: 16, fontWeight: '800', minWidth: 64, textAlign: 'center' },
+
+  deleteBtn: { alignSelf: 'flex-start', paddingVertical: Spacing.two, marginTop: Spacing.one },
+  deleteText: { color: '#EF4444', fontSize: 14, fontWeight: '700' },
+
+  addBtn: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    paddingVertical: Spacing.four,
+    alignItems: 'center',
+  },
+  addText: { fontSize: 15, fontWeight: '800' },
 });

@@ -1,5 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect, router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -56,10 +57,39 @@ function MacroBar({
   );
 }
 
-/** Tap glasses to fill; tapping the current glass empties it back one. */
+/** A glass of water, in litres. */
+const L_PER_GLASS = 0.25;
+const WATER_UNIT_KEY = 'trak.waterUnit.v1';
+type WaterUnit = 'glasses' | 'litres';
+
+/** Format a glass count in the chosen unit (litres = glasses × 250 ml). */
+function litres(glasses: number): string {
+  return `${(glasses * L_PER_GLASS).toFixed(2).replace(/\.00$/, '')} L`;
+}
+
+/** Tap glasses to fill; tapping the current glass empties it back one. Toggle Glasses/Litres readout. */
 function WaterCard({ colors }: { colors: ThemeColors }) {
   const { waterToday, waterGoal, setWater, setWaterGoal } = useMeals();
   const [editingGoal, setEditingGoal] = useState(false);
+  const [unit, setUnit] = useState<WaterUnit>('glasses');
+
+  useEffect(() => {
+    AsyncStorage.getItem(WATER_UNIT_KEY).then((v) => {
+      if (v === 'litres' || v === 'glasses') setUnit(v);
+    });
+  }, []);
+
+  function pickUnit(u: WaterUnit) {
+    setUnit(u);
+    AsyncStorage.setItem(WATER_UNIT_KEY, u).catch(() => {});
+  }
+
+  const goalLabel = unit === 'litres' ? litres(waterGoal) : `${waterGoal}`;
+  const countLabel =
+    unit === 'litres'
+      ? `${litres(waterToday)} / ${litres(waterGoal)}`
+      : `${waterToday} / ${waterGoal} glasses`;
+
   return (
     <View style={[styles.waterCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.waterHeader}>
@@ -67,15 +97,35 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
           <DropletIcon size={18} color={Brand.green} filled />
           <Text style={[styles.waterTitle, { color: colors.text }]}>Water</Text>
         </View>
+        <View style={[styles.unitToggle, { backgroundColor: colors.background }]}>
+          {(['glasses', 'litres'] as const).map((u) => (
+            <Pressable
+              key={u}
+              onPress={() => pickUnit(u)}
+              style={[styles.unitBtn, unit === u && { backgroundColor: colors.greenTint }]}>
+              <Text
+                style={[
+                  styles.unitBtnText,
+                  { color: unit === u ? Brand.greenDark : colors.textSecondary },
+                ]}>
+                {u === 'glasses' ? 'Glasses' : 'Litres'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.waterReadout}>
         {editingGoal ? (
           <View style={styles.goalStepper}>
+            <Text style={[styles.goalPrefix, { color: colors.textSecondary }]}>Goal</Text>
             <Pressable
               hitSlop={8}
               onPress={() => setWaterGoal(Math.max(1, waterGoal - 1))}
               style={[styles.stepBtn, { backgroundColor: colors.background }]}>
               <Text style={[styles.stepText, { color: colors.text }]}>−</Text>
             </Pressable>
-            <Text style={[styles.goalValue, { color: colors.text }]}>{waterGoal}</Text>
+            <Text style={[styles.goalValue, { color: colors.text }]}>{goalLabel}</Text>
             <Pressable
               hitSlop={8}
               onPress={() => setWaterGoal(waterGoal + 1)}
@@ -88,12 +138,11 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
           </View>
         ) : (
           <Pressable onPress={() => setEditingGoal(true)} hitSlop={8}>
-            <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
-              {waterToday} / {waterGoal} glasses ✎
-            </Text>
+            <Text style={[styles.waterCount, { color: colors.textSecondary }]}>{countLabel} ✎</Text>
           </Pressable>
         )}
       </View>
+
       <View style={styles.glassRow}>
         {Array.from({ length: waterGoal }).map((_, i) => {
           const filled = i < waterToday;
@@ -393,13 +442,18 @@ const styles = StyleSheet.create({
   waterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   waterTitle: { fontSize: 16, fontWeight: '700' },
+  unitToggle: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 2 },
+  unitBtn: { paddingVertical: 5, paddingHorizontal: 12, borderRadius: 8 },
+  unitBtnText: { fontSize: 12, fontWeight: '700' },
+  waterReadout: { flexDirection: 'row' },
+  goalPrefix: { fontSize: 13, fontWeight: '600', marginRight: 4, alignSelf: 'center' },
   waterCount: { fontSize: 13, fontWeight: '600' },
   glassRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 6 },
   glassTap: { padding: 2 },
   goalStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepBtn: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontSize: 18, fontWeight: '800' },
-  goalValue: { fontSize: 15, fontWeight: '800', minWidth: 18, textAlign: 'center' },
+  goalValue: { fontSize: 15, fontWeight: '800', minWidth: 52, textAlign: 'center' },
   goalDone: { fontSize: 13, fontWeight: '700', marginLeft: 2 },
   sectionTitle: { fontSize: 18, fontWeight: '700' },
   mealsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

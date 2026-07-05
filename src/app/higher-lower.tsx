@@ -2,14 +2,16 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  FlagIcon,
-  ShareIcon,
-} from '@/components/icons';
+import { FlagIcon, ShareIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   EMPTY_STATS,
@@ -30,7 +32,6 @@ function FoodCard({
   colors,
 }: {
   food: Ingredient;
-  /** Shown when known/revealed; "?" while guessing. */
   calories: string;
   highlight?: 'right' | 'wrong' | null;
   colors: ThemeColors;
@@ -59,6 +60,8 @@ function FoodCard({
   );
 }
 
+const SWIPE_THRESHOLD = 90;
+
 export default function HigherLowerScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
@@ -71,6 +74,9 @@ export default function HigherLowerScreen() {
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const translateX = useSharedValue(0);
+  const canSwipe = useSharedValue(1);
+
   useEffect(() => {
     setMystery(randomFood(known));
     loadGameStats().then(setStats);
@@ -79,6 +85,10 @@ export default function HigherLowerScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    canSwipe.value = phase === 'guess' ? 1 : 0;
+  }, [phase, canSwipe]);
 
   function answer(saidMore: boolean) {
     if (phase !== 'guess') return;
@@ -104,11 +114,37 @@ export default function HigherLowerScreen() {
     }
   }
 
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      'worklet';
+      if (canSwipe.value) translateX.value = e.translationX;
+    })
+    .onEnd((e) => {
+      'worklet';
+      if (canSwipe.value && e.translationX > SWIPE_THRESHOLD) {
+        runOnJS(answer)(true);
+      } else if (canSwipe.value && e.translationX < -SWIPE_THRESHOLD) {
+        runOnJS(answer)(false);
+      }
+      translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
+    });
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { rotateZ: `${translateX.value / 24}deg` }],
+  }));
+  const moreHint = useAnimatedStyle(() => ({
+    opacity: Math.max(0, Math.min(1, translateX.value / SWIPE_THRESHOLD)),
+  }));
+  const fewerHint = useAnimatedStyle(() => ({
+    opacity: Math.max(0, Math.min(1, -translateX.value / SWIPE_THRESHOLD)),
+  }));
+
   function playAgain() {
     const a = randomFood();
     setKnown(a);
     setMystery(randomFood(a));
     setRun(0);
+    translateX.value = 0;
     setPhase('guess');
   }
 
@@ -116,7 +152,7 @@ export default function HigherLowerScreen() {
     const best = Math.max(stats.hlBest, run);
     try {
       await Share.share({
-        message: `🔼🔽 Trak — Higher or Lower\nI got a run of ${run}${best > run ? ` (best: ${best})` : ''} guessing which food has more calories.\nThink you know food? 🥗`,
+        message: `Trak — Higher or Lower\nI got a run of ${run}${best > run ? ` (best: ${best})` : ''} guessing which food has more calories.\nThink you know food?`,
       });
     } catch {
       // User closed the share sheet — nothing to do.
@@ -126,88 +162,88 @@ export default function HigherLowerScreen() {
   const revealHighlight = phase !== 'guess' ? (lastCorrect ? 'right' : 'wrong') : null;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Higher or Lower</Text>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
-          </Pressable>
-        </View>
-        <Text style={[styles.runLine, { color: colors.textSecondary }]}>
-          Run: {run} · Best: {Math.max(stats.hlBest, run)}
-        </Text>
-
-        {phase === 'over' ? (
-          <View style={styles.overWrap}>
-            <View style={[styles.overBadge, { backgroundColor: colors.backgroundElement }]}>
-              <FlagIcon size={30} color={Brand.green} />
-            </View>
-            <Text style={[styles.overTitle, { color: colors.text }]}>
-              Run over — you got {run}!
-            </Text>
-            <Text style={[styles.overSub, { color: colors.textSecondary }]}>
-              {run >= stats.hlBest && run > 0
-                ? 'New personal best!'
-                : `Personal best: ${stats.hlBest}`}
-            </Text>
-            <View style={styles.overButtons}>
-              <Pressable
-                style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
-                onPress={share}>
-                <ShareIcon size={16} color={colors.text} />
-                <Text style={[styles.shareText, { color: colors.text }]}>Share</Text>
-              </Pressable>
-              <Pressable style={styles.playBtn} onPress={playAgain}>
-                <Text style={styles.playText}>Play again</Text>
-              </Pressable>
-            </View>
+    <GestureHandlerRootView style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Higher or Lower</Text>
+            <Pressable onPress={() => router.back()} hitSlop={12}>
+              <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
+            </Pressable>
           </View>
-        ) : (
-          <View style={styles.gameWrap}>
-            <FoodCard
-              food={known}
-              calories={`${known.calories} kcal`}
-              colors={colors}
-            />
+          <Text style={[styles.runLine, { color: colors.textSecondary }]}>
+            Run: {run} · Best: {Math.max(stats.hlBest, run)}
+          </Text>
 
-            <Text style={[styles.vs, { color: colors.textSecondary }]}>
-              does the next one have more or fewer calories?
-            </Text>
-
-            <FoodCard
-              food={mystery}
-              calories={phase === 'reveal' ? `${mystery.calories} kcal` : '? kcal'}
-              highlight={revealHighlight}
-              colors={colors}
-            />
-
-            {phase === 'reveal' ? (
-              <Text
-                style={[
-                  styles.verdict,
-                  { color: lastCorrect ? Brand.greenDark : '#EF4444' },
-                ]}>
-                {lastCorrect ? 'Correct!' : 'Wrong!'}
+          {phase === 'over' ? (
+            <View style={styles.overWrap}>
+              <View style={[styles.overBadge, { backgroundColor: colors.backgroundElement }]}>
+                <FlagIcon size={30} color={Brand.green} />
+              </View>
+              <Text style={[styles.overTitle, { color: colors.text }]}>
+                Run over — you got {run}!
               </Text>
-            ) : (
-              <View style={styles.answerRow}>
+              <Text style={[styles.overSub, { color: colors.textSecondary }]}>
+                {run >= stats.hlBest && run > 0
+                  ? 'New personal best!'
+                  : `Personal best: ${stats.hlBest}`}
+              </Text>
+              <View style={styles.overButtons}>
                 <Pressable
-                  style={[styles.answerBtn, { backgroundColor: colors.backgroundElement }]}
-                  onPress={() => answer(false)}>
-                  <ChevronDownIcon size={20} color={colors.text} />
-                  <Text style={[styles.answerText, { color: colors.text }]}>Fewer</Text>
+                  style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
+                  onPress={share}>
+                  <ShareIcon size={16} color={colors.text} />
+                  <Text style={[styles.shareText, { color: colors.text }]}>Share</Text>
                 </Pressable>
-                <Pressable style={[styles.answerBtn, styles.moreBtn]} onPress={() => answer(true)}>
-                  <ChevronUpIcon size={20} color="#ffffff" />
-                  <Text style={[styles.answerText, styles.moreText]}>More</Text>
+                <Pressable style={styles.playBtn} onPress={playAgain}>
+                  <Text style={styles.playText}>Play again</Text>
                 </Pressable>
               </View>
-            )}
-          </View>
-        )}
-      </SafeAreaView>
-    </View>
+            </View>
+          ) : (
+            <View style={styles.gameWrap}>
+              <FoodCard food={known} calories={`${known.calories} kcal`} colors={colors} />
+
+              <Text style={[styles.vs, { color: colors.textSecondary }]}>
+                does the next one have more or fewer calories?
+              </Text>
+
+              <View>
+                {/* directional hints behind the card */}
+                <Animated.View style={[styles.swipeHint, styles.hintLeft, fewerHint]}>
+                  <Text style={[styles.hintText, { color: '#EF4444' }]}>▼ FEWER</Text>
+                </Animated.View>
+                <Animated.View style={[styles.swipeHint, styles.hintRight, moreHint]}>
+                  <Text style={[styles.hintText, { color: Brand.greenDark }]}>MORE ▲</Text>
+                </Animated.View>
+
+                <GestureDetector gesture={pan}>
+                  <Animated.View style={cardStyle}>
+                    <FoodCard
+                      food={mystery}
+                      calories={phase === 'reveal' ? `${mystery.calories} kcal` : '? kcal'}
+                      highlight={revealHighlight}
+                      colors={colors}
+                    />
+                  </Animated.View>
+                </GestureDetector>
+              </View>
+
+              {phase === 'reveal' ? (
+                <Text
+                  style={[styles.verdict, { color: lastCorrect ? Brand.greenDark : '#EF4444' }]}>
+                  {lastCorrect ? 'Correct!' : 'Wrong!'}
+                </Text>
+              ) : (
+                <Text style={[styles.swipeGuide, { color: colors.textSecondary }]}>
+                  ← swipe left for fewer · swipe right for more →
+                </Text>
+              )}
+            </View>
+          )}
+        </SafeAreaView>
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -233,13 +269,7 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     gap: Spacing.three,
   },
-  emojiTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  emojiTile: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   cardEmoji: { fontSize: 30 },
   cardInfo: { flex: 1 },
   cardName: { fontSize: 18, fontWeight: '800' },
@@ -248,20 +278,12 @@ const styles = StyleSheet.create({
 
   vs: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
   verdict: { fontSize: 22, fontWeight: '800', textAlign: 'center', marginTop: Spacing.three },
+  swipeGuide: { fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: Spacing.three },
 
-  answerRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  answerBtn: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: Spacing.four,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  moreBtn: { backgroundColor: Brand.green },
-  answerText: { fontSize: 17, fontWeight: '800' },
-  moreText: { color: '#ffffff' },
+  swipeHint: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', zIndex: 0 },
+  hintLeft: { left: Spacing.two },
+  hintRight: { right: Spacing.two },
+  hintText: { fontSize: 16, fontWeight: '900', letterSpacing: 1 },
 
   overWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
   overBadge: {

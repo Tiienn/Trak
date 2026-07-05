@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PurchasesPackage } from 'react-native-purchases';
 
+import { HeartIcon, MedalIcon, SparklesIcon } from '@/components/icons';
+import { RingMark } from '@/components/logo';
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import { useAppScheme } from '@/lib/theme';
 import {
@@ -23,11 +25,12 @@ import {
   usePro,
 } from '@/lib/purchases';
 
-const PERKS = [
-  ['💚', 'Support Trak’s development'],
-  ['🚀', 'Help fund better AI food recognition'],
-  ['🏅', 'Pro supporter badge'],
-] as const;
+type IconCmp = (props: { size?: number; color?: string }) => React.JSX.Element;
+const PERKS: [IconCmp, string][] = [
+  [HeartIcon, 'Support Trak’s development'],
+  [SparklesIcon, 'Help fund better AI food recognition'],
+  [MedalIcon, 'Pro supporter badge'],
+];
 
 function labelFor(pkg: PurchasesPackage): { title: string; sub: string; badge?: string } {
   const price = pkg.product.priceString;
@@ -107,16 +110,20 @@ export default function PaywallScreen() {
         </Pressable>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={[styles.logoDot, { backgroundColor: Brand.green }]} />
+          <View style={styles.logoWrap}>
+            <RingMark size={44} />
+          </View>
           <Text style={[styles.title, { color: colors.text }]}>Trak Pro</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Trak is free to use. Pro is for people who want to support it.
           </Text>
 
           <View style={[styles.perks, { backgroundColor: colors.backgroundElement }]}>
-            {PERKS.map(([emoji, text]) => (
+            {PERKS.map(([Icon, text]) => (
               <View key={text} style={styles.perkRow}>
-                <Text style={styles.perkEmoji}>{emoji}</Text>
+                <View style={[styles.perkIcon, { backgroundColor: colors.greenTint }]}>
+                  <Icon size={18} color={Brand.green} />
+                </View>
                 <Text style={[styles.perkText, { color: colors.text }]}>{text}</Text>
               </View>
             ))}
@@ -124,8 +131,9 @@ export default function PaywallScreen() {
 
           {isPro ? (
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
+              <HeartIcon size={20} color={Brand.green} />
               <Text style={[styles.proBoxText, { color: colors.text }]}>
-                💚 You’re a Pro supporter — thank you!
+                You’re a Pro supporter — thank you!
               </Text>
             </View>
           ) : packages === null ? (
@@ -200,7 +208,7 @@ const styles = StyleSheet.create({
   closeBtn: { alignSelf: 'flex-end', padding: Spacing.two },
   closeTxt: { fontSize: 20, fontWeight: '700' },
   scroll: { alignItems: 'center', paddingBottom: Spacing.six },
-  logoDot: { width: 40, height: 40, borderRadius: 20, marginTop: Spacing.two },
+  logoWrap: { marginTop: Spacing.two },
   title: { fontSize: 34, fontWeight: '800', marginTop: Spacing.three },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: Spacing.two, lineHeight: 21 },
 
@@ -212,12 +220,21 @@ const styles = StyleSheet.create({
     marginTop: Spacing.four,
   },
   perkRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  perkEmoji: { fontSize: 20 },
+  perkIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   perkText: { fontSize: 15, fontWeight: '600', flex: 1 },
 
   loader: { marginTop: Spacing.five },
 
-  proBox: { alignSelf: 'stretch', borderRadius: 18, padding: Spacing.four, marginTop: Spacing.four },
+  proBox: {
+    alignSelf: 'stretch',
+    borderRadius: 18,
+    padding: Spacing.four,
+    marginTop: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
   proBoxText: { fontSize: 15, textAlign: 'center', lineHeight: 21 },
 
   pkg: {

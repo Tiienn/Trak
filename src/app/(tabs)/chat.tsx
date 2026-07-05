@@ -205,7 +205,7 @@ export default function ChatScreen() {
 
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
               <RingMark size={40} />

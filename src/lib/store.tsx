@@ -661,7 +661,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       streak: computeStreak(meals),
       addMeal,
       savedMeals,
-      recentMeals: recentUniqueMeals(meals),
+      recentMeals: recentUniqueMeals(meals, 30),
       saveMeal,
       removeSavedMeal,
       quickLog,
