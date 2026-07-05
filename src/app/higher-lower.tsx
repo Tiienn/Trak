@@ -202,43 +202,48 @@ export default function HigherLowerScreen() {
             </View>
           ) : (
             <View style={styles.gameWrap}>
-              <FoodCard food={known} calories={`${known.calories} kcal`} colors={colors} />
-
-              <Text style={[styles.vs, { color: colors.textSecondary }]}>
-                does the next one have more or fewer calories?
-              </Text>
-
-              <View>
-                {/* directional hints behind the card */}
-                <Animated.View style={[styles.swipeHint, styles.hintLeft, fewerHint]}>
-                  <Text style={[styles.hintText, { color: '#EF4444' }]}>▼ FEWER</Text>
-                </Animated.View>
-                <Animated.View style={[styles.swipeHint, styles.hintRight, moreHint]}>
-                  <Text style={[styles.hintText, { color: Brand.greenDark }]}>MORE ▲</Text>
-                </Animated.View>
-
-                <GestureDetector gesture={pan}>
-                  <Animated.View style={cardStyle}>
-                    <FoodCard
-                      food={mystery}
-                      calories={phase === 'reveal' ? `${mystery.calories} kcal` : '? kcal'}
-                      highlight={revealHighlight}
-                      colors={colors}
-                    />
-                  </Animated.View>
-                </GestureDetector>
+              {/* Instructions pinned to the top */}
+              <View style={styles.topInfo}>
+                <Text style={[styles.vs, { color: colors.textSecondary }]}>
+                  does the next one have more or fewer calories?
+                </Text>
+                {phase === 'reveal' ? (
+                  <Text
+                    style={[styles.verdict, { color: lastCorrect ? Brand.greenDark : '#EF4444' }]}>
+                    {lastCorrect ? 'Correct!' : 'Wrong!'}
+                  </Text>
+                ) : (
+                  <Text style={[styles.swipeGuide, { color: colors.textSecondary }]}>
+                    ← swipe left for fewer · swipe right for more →
+                  </Text>
+                )}
               </View>
 
-              {phase === 'reveal' ? (
-                <Text
-                  style={[styles.verdict, { color: lastCorrect ? Brand.greenDark : '#EF4444' }]}>
-                  {lastCorrect ? 'Correct!' : 'Wrong!'}
-                </Text>
-              ) : (
-                <Text style={[styles.swipeGuide, { color: colors.textSecondary }]}>
-                  ← swipe left for fewer · swipe right for more →
-                </Text>
-              )}
+              {/* Cards drop to the lower third so the mystery card sits under your thumb */}
+              <View style={styles.cardsWrap}>
+                <FoodCard food={known} calories={`${known.calories} kcal`} colors={colors} />
+
+                <View>
+                  {/* directional hints behind the card */}
+                  <Animated.View style={[styles.swipeHint, styles.hintLeft, fewerHint]}>
+                    <Text style={[styles.hintText, { color: '#EF4444' }]}>▼ FEWER</Text>
+                  </Animated.View>
+                  <Animated.View style={[styles.swipeHint, styles.hintRight, moreHint]}>
+                    <Text style={[styles.hintText, { color: Brand.greenDark }]}>MORE ▲</Text>
+                  </Animated.View>
+
+                  <GestureDetector gesture={pan}>
+                    <Animated.View style={cardStyle}>
+                      <FoodCard
+                        food={mystery}
+                        calories={phase === 'reveal' ? `${mystery.calories} kcal` : '? kcal'}
+                        highlight={revealHighlight}
+                        colors={colors}
+                      />
+                    </Animated.View>
+                  </GestureDetector>
+                </View>
+              </View>
             </View>
           )}
         </SafeAreaView>
@@ -260,7 +265,10 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 20, fontWeight: '600' },
   runLine: { fontSize: 14, fontWeight: '700', marginTop: 4, marginBottom: Spacing.four },
 
-  gameWrap: { flex: 1, gap: Spacing.three },
+  gameWrap: { flex: 1 },
+  topInfo: { gap: Spacing.two },
+  // marginTop:auto pushes the cards to the bottom of the flex area — thumb reach.
+  cardsWrap: { marginTop: 'auto', gap: Spacing.three, paddingBottom: Spacing.two },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -276,9 +284,9 @@ const styles = StyleSheet.create({
   cardPortion: { fontSize: 13, marginTop: 2 },
   cardCals: { fontSize: 18, fontWeight: '800' },
 
-  vs: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  verdict: { fontSize: 22, fontWeight: '800', textAlign: 'center', marginTop: Spacing.three },
-  swipeGuide: { fontSize: 13, fontWeight: '700', textAlign: 'center', marginTop: Spacing.three },
+  vs: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  verdict: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  swipeGuide: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
 
   swipeHint: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', zIndex: 0 },
   hintLeft: { left: Spacing.two },
