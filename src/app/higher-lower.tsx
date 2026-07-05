@@ -16,10 +16,12 @@ import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   EMPTY_STATS,
   loadGameStats,
+  METRICS,
   randomFood,
   recordHigherLower,
   type GameStats,
   type Ingredient,
+  type MetricKey,
 } from '@/lib/game';
 import { useAppScheme } from '@/lib/theme';
 
@@ -27,12 +29,12 @@ type Phase = 'guess' | 'reveal' | 'over';
 
 function FoodCard({
   food,
-  calories,
+  value,
   highlight,
   colors,
 }: {
   food: Ingredient;
-  calories: string;
+  value: string;
   highlight?: 'right' | 'wrong' | null;
   colors: ThemeColors;
 }) {
@@ -53,9 +55,13 @@ function FoodCard({
         <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
           {food.name}
         </Text>
-        <Text style={[styles.cardPortion, { color: colors.textSecondary }]}>{food.portion}</Text>
+        <View style={[styles.portionPill, { backgroundColor: colors.background }]}>
+          <Text style={[styles.portionText, { color: colors.text }]} numberOfLines={1}>
+            {food.portion}
+          </Text>
+        </View>
       </View>
-      <Text style={[styles.cardCals, { color: colors.text }]}>{calories}</Text>
+      <Text style={[styles.cardCals, { color: colors.text }]}>{value}</Text>
     </View>
   );
 }
@@ -66,6 +72,7 @@ export default function HigherLowerScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
 
+  const [metric, setMetric] = useState<MetricKey>('calories');
   const [known, setKnown] = useState<Ingredient>(() => randomFood());
   const [mystery, setMystery] = useState<Ingredient>(() => randomFood());
   const [phase, setPhase] = useState<Phase>('guess');
@@ -73,6 +80,9 @@ export default function HigherLowerScreen() {
   const [lastCorrect, setLastCorrect] = useState(false);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const metricInfo = METRICS.find((m) => m.key === metric)!;
+  const fmt = (n: number) => `${n} ${metricInfo.unit}`;
 
   const translateX = useSharedValue(0);
   const canSwipe = useSharedValue(1);
@@ -92,7 +102,7 @@ export default function HigherLowerScreen() {
 
   function answer(saidMore: boolean) {
     if (phase !== 'guess') return;
-    const correct = saidMore === (mystery.calories > known.calories);
+    const correct = saidMore === (mystery[metric] > known[metric]);
     setLastCorrect(correct);
     setPhase('reveal');
     if (correct) {
@@ -102,7 +112,7 @@ export default function HigherLowerScreen() {
       timer.current = setTimeout(() => {
         const nextKnown = mystery;
         setKnown(nextKnown);
-        setMystery(randomFood(nextKnown));
+        setMystery(randomFood(nextKnown, metric));
         setPhase('guess');
       }, 1100);
     } else {
@@ -112,6 +122,20 @@ export default function HigherLowerScreen() {
         setStats(await recordHigherLower(run, stats));
       }, 1100);
     }
+  }
+
+  // Switching the compared nutrient starts a fresh pairing at run 0.
+  function pickMetric(m: MetricKey) {
+    if (m === metric) return;
+    if (timer.current) clearTimeout(timer.current);
+    Haptics.selectionAsync().catch(() => {});
+    const a = randomFood(undefined, m);
+    setMetric(m);
+    setKnown(a);
+    setMystery(randomFood(a, m));
+    setRun(0);
+    translateX.value = 0;
+    setPhase('guess');
   }
 
   const pan = Gesture.Pan()
@@ -140,9 +164,9 @@ export default function HigherLowerScreen() {
   }));
 
   function playAgain() {
-    const a = randomFood();
+    const a = randomFood(undefined, metric);
     setKnown(a);
-    setMystery(randomFood(a));
+    setMystery(randomFood(a, metric));
     setRun(0);
     translateX.value = 0;
     setPhase('guess');
@@ -152,7 +176,7 @@ export default function HigherLowerScreen() {
     const best = Math.max(stats.hlBest, run);
     try {
       await Share.share({
-        message: `Trak — Higher or Lower\nI got a run of ${run}${best > run ? ` (best: ${best})` : ''} guessing which food has more calories.\nThink you know food?`,
+        message: `Trak — Higher or Lower\nI got a run of ${run}${best > run ? ` (best: ${best})` : ''} guessing which food has more ${metricInfo.label.toLowerCase()}.\nThink you know food?`,
       });
     } catch {
       // User closed the share sheet — nothing to do.
@@ -202,10 +226,35 @@ export default function HigherLowerScreen() {
             </View>
           ) : (
             <View style={styles.gameWrap}>
-              {/* Instructions pinned to the top */}
+              {/* Instructions + nutrient picker pinned to the top */}
               <View style={styles.topInfo}>
+                <View style={styles.metricTabs}>
+                  {METRICS.map((m) => {
+                    const active = m.key === metric;
+                    return (
+                      <Pressable
+                        key={m.key}
+                        onPress={() => pickMetric(m.key)}
+                        style={[
+                          styles.metricTab,
+                          {
+                            backgroundColor: active ? Brand.green : colors.backgroundElement,
+                          },
+                        ]}>
+                        <Text
+                          style={[
+                            styles.metricTabText,
+                            { color: active ? '#ffffff' : colors.textSecondary },
+                          ]}>
+                          {m.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
                 <Text style={[styles.vs, { color: colors.textSecondary }]}>
-                  does the next one have more or fewer calories?
+                  does the next one have more or less {metricInfo.label.toLowerCase()}?
                 </Text>
                 {phase === 'reveal' ? (
                   <Text
@@ -221,7 +270,7 @@ export default function HigherLowerScreen() {
 
               {/* Cards drop to the lower third so the mystery card sits under your thumb */}
               <View style={styles.cardsWrap}>
-                <FoodCard food={known} calories={`${known.calories} kcal`} colors={colors} />
+                <FoodCard food={known} value={fmt(known[metric])} colors={colors} />
 
                 <View>
                   {/* directional hints behind the card */}
@@ -236,7 +285,7 @@ export default function HigherLowerScreen() {
                     <Animated.View style={cardStyle}>
                       <FoodCard
                         food={mystery}
-                        calories={phase === 'reveal' ? `${mystery.calories} kcal` : '? kcal'}
+                        value={phase === 'reveal' ? fmt(mystery[metric]) : `? ${metricInfo.unit}`}
                         highlight={revealHighlight}
                         colors={colors}
                       />
@@ -266,7 +315,15 @@ const styles = StyleSheet.create({
   runLine: { fontSize: 14, fontWeight: '700', marginTop: 4, marginBottom: Spacing.four },
 
   gameWrap: { flex: 1 },
-  topInfo: { gap: Spacing.two },
+  topInfo: { gap: Spacing.three },
+  metricTabs: { flexDirection: 'row', gap: Spacing.two },
+  metricTab: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: Spacing.three,
+    alignItems: 'center',
+  },
+  metricTabText: { fontSize: 14, fontWeight: '800' },
   // marginTop:auto pushes the cards to the bottom of the flex area — thumb reach.
   cardsWrap: { marginTop: 'auto', gap: Spacing.three, paddingBottom: Spacing.two },
   card: {
@@ -281,7 +338,14 @@ const styles = StyleSheet.create({
   cardEmoji: { fontSize: 30 },
   cardInfo: { flex: 1 },
   cardName: { fontSize: 18, fontWeight: '800' },
-  cardPortion: { fontSize: 13, marginTop: 2 },
+  portionPill: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  portionText: { fontSize: 13, fontWeight: '700' },
   cardCals: { fontSize: 18, fontWeight: '800' },
 
   vs: { fontSize: 14, fontWeight: '600', textAlign: 'center' },

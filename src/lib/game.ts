@@ -335,16 +335,25 @@ export async function recordScanGuess(errPct: number, stats: GameStats): Promise
   });
 }
 
+/** The nutrient Higher-or-Lower compares in a given round. */
+export type MetricKey = 'calories' | 'protein_g' | 'fat_g';
+
+export const METRICS: { key: MetricKey; label: string; unit: string }[] = [
+  { key: 'calories', label: 'Calories', unit: 'kcal' },
+  { key: 'protein_g', label: 'Protein', unit: 'g' },
+  { key: 'fat_g', label: 'Fat', unit: 'g' },
+];
+
 /**
  * A random ingredient for Higher-or-Lower. When `differentFrom` is given the
- * result has a different id AND different calories (so there's always a
- * right answer).
+ * result has a different id AND a different value for `metric` (so there's
+ * always a right answer for the nutrient being compared).
  */
-export function randomFood(differentFrom?: Ingredient): Ingredient {
+export function randomFood(differentFrom?: Ingredient, metric: MetricKey = 'calories'): Ingredient {
   const all = CATEGORIES.flatMap((c) => c.items);
   for (;;) {
     const i = all[Math.floor(Math.random() * all.length)];
     if (!differentFrom) return i;
-    if (i.id !== differentFrom.id && i.calories !== differentFrom.calories) return i;
+    if (i.id !== differentFrom.id && i[metric] !== differentFrom[metric]) return i;
   }
 }
