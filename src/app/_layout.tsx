@@ -64,6 +64,10 @@ function ThemedNavigator() {
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
+          name="history"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
           name="game"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
