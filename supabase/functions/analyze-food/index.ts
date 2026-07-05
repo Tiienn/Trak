@@ -1,11 +1,13 @@
 // Trak — server-side food analysis.
-// This runs on Supabase Edge Functions (Deno). It holds the OpenAI key as a
-// server secret (OPENAI_API_KEY) so the key is never shipped inside the app.
-// The app calls this with the user's login; Supabase rejects unauthenticated
-// callers automatically (verify_jwt is on by default).
+// This runs on Supabase Edge Functions (Deno). It holds the Gemini key as a
+// server secret (GEMINI_API_KEY) so the key is never shipped inside the app.
+// We call Gemini through its OpenAI-compatible endpoint, so the request/response
+// shape matches the Chat Completions API. The app calls this with the user's
+// login; Supabase rejects unauthenticated callers automatically (verify_jwt).
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const MODEL = 'gpt-4o';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+// Override with the GEMINI_MODEL secret to move to a newer Flash (e.g. gemini-3.5-flash).
+const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app called Trak.
 Look at the photo and estimate the food's nutrition. Use common sense and typical portion sizes when unsure.
@@ -38,6 +40,15 @@ function json(obj: unknown, status: number): Response {
   });
 }
 
+/** Gemini sometimes wraps JSON in ```json fences despite instructions; strip them. */
+function stripFences(s: string): string {
+  const t = s.trim();
+  if (t.startsWith('```')) {
+    return t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  return t;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -46,7 +57,7 @@ Deno.serve(async (req: Request) => {
   try {
     // Supabase's verify_jwt has already checked the token SIGNATURE, but the
     // public anon key is itself a valid JWT (role "anon"). Require a real
-    // signed-in user so strangers can't spend the OpenAI credit.
+    // signed-in user so strangers can't spend the API credit.
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
       const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
@@ -57,9 +68,9 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Please sign in to scan meals.' }, 401);
     }
 
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
+    const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) {
-      return json({ error: 'Server is missing its OpenAI key.' }, 500);
+      return json({ error: 'Server is missing its Gemini key.' }, 500);
     }
 
     const { imageBase64 } = await req.json().catch(() => ({}));
@@ -88,7 +99,7 @@ Deno.serve(async (req: Request) => {
       ],
     };
 
-    const res = await fetch(OPENAI_URL, {
+    const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
@@ -101,21 +112,21 @@ Deno.serve(async (req: Request) => {
       } catch {
         // ignore
       }
-      if (res.status === 401) return json({ error: 'The server OpenAI key was rejected.' }, 502);
+      if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
       if (res.status === 429) {
-        return json({ error: 'OpenAI: rate limited or out of credit. Add credit and try again.' }, 502);
+        return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
       }
-      return json({ error: `OpenAI error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
+      return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
     }
 
     const data = await res.json();
     const content: string | undefined = data?.choices?.[0]?.message?.content;
     if (!content) {
-      return json({ error: 'OpenAI returned an empty answer.' }, 502);
+      return json({ error: 'Gemini returned an empty answer.' }, 502);
     }
 
     // Return the raw JSON string; the app parses + normalizes it.
-    return json({ content }, 200);
+    return json({ content: stripFences(content) }, 200);
   } catch (e) {
     return json({ error: (e as Error)?.message ?? 'Unexpected server error.' }, 500);
   }
