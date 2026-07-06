@@ -40,12 +40,24 @@ function json(obj: unknown, status: number): Response {
   });
 }
 
-/** Gemini sometimes wraps JSON in ```json fences despite instructions; strip them. */
+/**
+ * Pull a clean JSON object string out of a model reply. Gemini doesn't reliably
+ * honor response_format, so it may wrap the JSON in ```fences``` or add prose
+ * around it. We unwrap fences, then fall back to the outermost {...} span.
+ */
 function stripFences(s: string): string {
-  const t = s.trim();
-  if (t.startsWith('```')) {
-    return t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  let t = s.trim();
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) t = fenced[1].trim();
+  try {
+    JSON.parse(t);
+    return t;
+  } catch {
+    // Not clean JSON yet — grab the first {...last } span and try that.
   }
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first >= 0 && last > first) return t.slice(first, last + 1);
   return t;
 }
 

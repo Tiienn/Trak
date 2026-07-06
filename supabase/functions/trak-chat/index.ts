@@ -46,7 +46,8 @@ Rules:
 - "quantity" is a short human portion, e.g. "1 sandwich", "1 medium", "330 ml can".
 - Never invent that something was logged — the app handles logging after the user taps Add.
 - Stay on nutrition/food/health topics; politely decline anything unrelated.
-- Keep replies short and warm. No markdown formatting in "reply".`;
+- Keep replies short and warm. No markdown formatting in "reply".
+- Your ENTIRE response must be exactly ONE of the two JSON shapes above (with a top-level "kind" of "meal" or "answer") — never any other structure, and never echo the BACKGROUND numbers.`;
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -66,12 +67,24 @@ function num(v: unknown): number | null {
   return typeof n === 'number' && Number.isFinite(n) ? n : null;
 }
 
-/** Gemini sometimes wraps JSON in ```json fences despite instructions; strip them. */
+/**
+ * Pull a clean JSON object string out of a model reply. Gemini doesn't reliably
+ * honor response_format, so it may wrap the JSON in ```fences``` or add prose
+ * around it. We unwrap fences, then fall back to the outermost {...} span.
+ */
 function stripFences(s: string): string {
-  const t = s.trim();
-  if (t.startsWith('```')) {
-    return t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  let t = s.trim();
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) t = fenced[1].trim();
+  try {
+    JSON.parse(t);
+    return t;
+  } catch {
+    // Not clean JSON yet — grab the first {...last } span and try that.
   }
+  const first = t.indexOf('{');
+  const last = t.lastIndexOf('}');
+  if (first >= 0 && last > first) return t.slice(first, last + 1);
   return t;
 }
 
@@ -352,7 +365,6 @@ Deno.serve(async (req: Request) => {
         return `${label}: ate ${Math.round(ev)}${unit} of ${Math.round(tv)}${unit} target — ${status}.`;
       };
       contextNote = [
-        "User's day so far (use these EXACT numbers; do not recalculate):",
         line('Calories', t.calories, e.calories, ' kcal'),
         line('Protein', t.protein_g, e.protein_g, 'g'),
         line('Carbs', t.carbs_g, e.carbs_g, 'g'),
@@ -362,16 +374,21 @@ Deno.serve(async (req: Request) => {
         .join('\n');
     }
 
+    // Merge everything into ONE system message. Gemini (unlike GPT-4o) latches
+    // onto a second system message and echoes it, so the day's numbers go in as
+    // clearly-labelled background the model must never output as its response.
+    const systemContent =
+      SYSTEM_PROMPT +
+      (contextNote
+        ? `\n\n---\nBACKGROUND — the user's day so far. Use these EXACT numbers ONLY to answer questions like "how much protein do I have left"; NEVER output this block as your response:\n${contextNote}`
+        : '');
+
     const body = {
       model: MODEL,
       temperature: 0.3,
       max_tokens: 700, // bounds the cost of each call
       response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...(contextNote ? [{ role: 'system', content: contextNote }] : []),
-        ...history,
-      ],
+      messages: [{ role: 'system', content: systemContent }, ...history],
     };
 
     const res = await fetch(GEMINI_URL, {
