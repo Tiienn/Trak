@@ -1,13 +1,20 @@
 // Trak — server-side food analysis.
 // This runs on Supabase Edge Functions (Deno). It holds the Gemini key as a
 // server secret (GEMINI_API_KEY) so the key is never shipped inside the app.
-// We call Gemini through its OpenAI-compatible endpoint, so the request/response
-// shape matches the Chat Completions API. The app calls this with the user's
-// login; Supabase rejects unauthenticated callers automatically (verify_jwt).
+// Gemini Flash reads the photo and estimates each item's nutrition; the shared
+// pipeline (../_shared/nutrition.ts) then refines those numbers with real data —
+// Open Food Facts for foods the model knows, Exa web search for dishes it
+// flagged unfamiliar. Every refinement fails safe back to the model's estimate.
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
-// Override with the GEMINI_MODEL secret to move to a newer Flash (e.g. gemini-3.5-flash).
-const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
+import {
+  corsHeaders,
+  enrichMeal,
+  GEMINI_URL,
+  json,
+  MODEL,
+  parseLoose,
+  stripFences,
+} from '../_shared/nutrition.ts';
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app called Trak.
 Look at the photo and estimate the food's nutrition. Use common sense and typical portion sizes when unsure.
@@ -15,51 +22,20 @@ Respond with ONLY a raw JSON object (no markdown code fences) with exactly this 
 {
   "isFood": boolean,
   "title": string,
-  "items": [ { "name": string, "quantity": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
+  "items": [ { "name": string, "quantity": string, "grams": number, "familiar": boolean, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
   "total": { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number },
   "confidence": number,
   "notes": string
 }
 Rules:
 - If the image does NOT contain food, set "isFood" to false, "title" to "No food detected", "items" to [], all totals to 0, and "confidence" to 0.
+- "name" is a clean, searchable food name. If you recognize a specific dish (including regional dishes), use its proper name — the server can look its real nutrition up.
+- "familiar": true ONLY if you genuinely know this specific food's real nutrition; false if you are guessing or unsure. Be honest — false makes the server look the food up on the web instead of trusting your guess.
+- "grams" is your best estimate of the TOTAL edible weight of that item's visible portion in grams. Always include it for every item.
 - "quantity" is a short human portion, e.g. "1 cup", "2 slices", "approx 150 g".
 - All nutrient values are plain numbers with no units. Round to whole numbers.
 - "confidence" is a number between 0 and 1.
 - "notes" explains HOW you estimated this, in 1-2 short sentences (max ~35 words): the portion size you assumed, the cooking method, and any hidden ingredients like oil, butter, or sugar. Write it directly to the user, e.g. "I assumed a grilled 150 g chicken breast with about 1 tbsp of oil, and a cup of cooked rice."`;
-
-const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-function json(obj: unknown, status: number): Response {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
-
-/**
- * Pull a clean JSON object string out of a model reply. Gemini doesn't reliably
- * honor response_format, so it may wrap the JSON in ```fences``` or add prose
- * around it. We unwrap fences, then fall back to the outermost {...} span.
- */
-function stripFences(s: string): string {
-  let t = s.trim();
-  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenced) t = fenced[1].trim();
-  try {
-    JSON.parse(t);
-    return t;
-  } catch {
-    // Not clean JSON yet — grab the first {...last } span and try that.
-  }
-  const first = t.indexOf('{');
-  const last = t.lastIndexOf('}');
-  if (first >= 0 && last > first) return t.slice(first, last + 1);
-  return t;
-}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -80,7 +56,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Please sign in to scan meals.' }, 401);
     }
 
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    const apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
     if (!apiKey) {
       return json({ error: 'Server is missing its Gemini key.' }, 500);
     }
@@ -97,7 +73,7 @@ Deno.serve(async (req: Request) => {
     const body = {
       model: MODEL,
       temperature: 0.2,
-      max_tokens: 600, // bounds the cost of each call; plenty for the JSON answer
+      max_tokens: 700, // bounds the cost of each call; plenty for the JSON answer
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -111,34 +87,47 @@ Deno.serve(async (req: Request) => {
       ],
     };
 
-    const res = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-    });
+    // Call Gemini, retrying once if the reply won't parse. Flash occasionally
+    // emits a malformed JSON object (a stray missing comma); parseLoose repairs
+    // the common case and a second try covers the rest.
+    let parsed: any = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      const res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) {
-      let detail = '';
-      try {
-        detail = (await res.json())?.error?.message ?? '';
-      } catch {
-        // ignore
+      if (!res.ok) {
+        let detail = '';
+        try {
+          detail = (await res.json())?.error?.message ?? '';
+        } catch {
+          // ignore
+        }
+        if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
+        if (res.status === 429) {
+          return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
+        }
+        return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
       }
-      if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
-      if (res.status === 429) {
-        return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
-      }
-      return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
+
+      const data = await res.json();
+      const content: string | undefined = data?.choices?.[0]?.message?.content;
+      if (!content) continue;
+      parsed = parseLoose(stripFences(content));
     }
 
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content) {
-      return json({ error: 'Gemini returned an empty answer.' }, 502);
+    if (!parsed) {
+      return json({ error: 'Could not read the analysis. Please try scanning again.' }, 502);
     }
 
-    // Return the raw JSON string; the app parses + normalizes it.
-    return json({ content: stripFences(content) }, 200);
+    // Refine the estimate with real data (OFF → Exa) when the photo contains food,
+    // then re-serialize so the app always receives valid JSON.
+    if (parsed?.isFood && Array.isArray(parsed?.items) && parsed.items.length > 0) {
+      parsed = await enrichMeal(apiKey, parsed);
+    }
+    return json({ content: JSON.stringify(parsed) }, 200);
   } catch (e) {
     return json({ error: (e as Error)?.message ?? 'Unexpected server error.' }, 500);
   }
