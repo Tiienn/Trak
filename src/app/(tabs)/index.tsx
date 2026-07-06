@@ -10,13 +10,29 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
 
-import { CalorieRing } from '@/components/calorie-ring';
-import { BarcodeIcon, CameraIcon, DropletIcon, FlameIcon, PlateIcon } from '@/components/icons';
+import {
+  BarcodeIcon,
+  CameraIcon,
+  DropletIcon,
+  FlameIcon,
+  PlateIcon,
+  ScaleIcon,
+  SparklesIcon,
+} from '@/components/icons';
 import { RingMark } from '@/components/logo';
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import {
+  Brand,
+  Colors,
+  MacroColors,
+  Spacing,
+  Type,
+  type ThemeColors,
+} from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { useMeals } from '@/lib/store';
+import { computeScore, scoreCaption } from '@/lib/score';
+import { dayKey, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { LoggedMeal } from '@/lib/types';
 
@@ -24,38 +40,202 @@ function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function MacroBar({
-  label,
-  consumed,
-  target,
+/* ------------------------------- Trak Score ------------------------------ */
+
+const SCORE_SIZE = 132;
+const SCORE_STROKE = 11;
+const SCORE_R = (SCORE_SIZE - SCORE_STROKE) / 2;
+const SCORE_C = 2 * Math.PI * SCORE_R;
+
+function ScoreCard({
+  value,
+  caption,
   colors,
 }: {
-  label: string;
-  consumed: number;
-  target: number;
+  value: number;
+  caption: string;
   colors: ThemeColors;
 }) {
-  const pct = target > 0 ? Math.min(consumed / target, 1) : 0;
-  const over = consumed > target;
+  const pct = Math.min(1, value / 100);
   return (
-    <View style={styles.macroBarRow}>
-      <View style={styles.macroBarHeader}>
-        <Text style={[styles.macroLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.macroValue, { color: colors.textSecondary }]}>
-          {consumed} / {target} g
-        </Text>
+    <Pressable
+      style={({ pressed }) => [
+        styles.scoreCard,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push('/score')}>
+      <View style={styles.scoreRingWrap}>
+        <Svg width={SCORE_SIZE} height={SCORE_SIZE}>
+          <Circle
+            cx={SCORE_SIZE / 2}
+            cy={SCORE_SIZE / 2}
+            r={SCORE_R}
+            stroke={colors.backgroundSelected}
+            strokeWidth={SCORE_STROKE}
+            fill="none"
+          />
+          <Circle
+            cx={SCORE_SIZE / 2}
+            cy={SCORE_SIZE / 2}
+            r={SCORE_R}
+            stroke={Brand.green}
+            strokeWidth={SCORE_STROKE}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${SCORE_C} ${SCORE_C}`}
+            strokeDashoffset={SCORE_C * (1 - pct)}
+            transform={`rotate(-90 ${SCORE_SIZE / 2} ${SCORE_SIZE / 2})`}
+          />
+        </Svg>
+        <View style={styles.scoreCenter}>
+          <Text style={[styles.scoreValue, { color: colors.text }]}>{value}</Text>
+        </View>
+        <View style={[styles.scoreBadge, { backgroundColor: colors.background }]}>
+          <Text style={[styles.scoreBadgeText, { color: colors.text }]}>Trak Score ›</Text>
+        </View>
       </View>
-      <View style={[styles.track, { backgroundColor: colors.backgroundSelected }]}>
-        <View
-          style={[
-            styles.fill,
-            { width: `${pct * 100}%`, backgroundColor: over ? Brand.over : Brand.green },
-          ]}
-        />
-      </View>
-    </View>
+      <Text style={[styles.scoreCaption, { color: colors.textSecondary }]}>{caption}</Text>
+    </Pressable>
   );
 }
+
+/* ------------------------------ Macro rings ------------------------------ */
+
+const MINI_SIZE = 62;
+const MINI_STROKE = 7;
+const MINI_R = (MINI_SIZE - MINI_STROKE) / 2;
+const MINI_C = 2 * Math.PI * MINI_R;
+
+function MiniRing({
+  value,
+  sub,
+  label,
+  pct,
+  color,
+  colors,
+  onPress,
+}: {
+  value: string;
+  sub: string;
+  label: string;
+  pct: number;
+  color: string;
+  colors: ThemeColors;
+  onPress: () => void;
+}) {
+  const clamped = Math.min(1, Math.max(0, pct));
+  return (
+    <Pressable style={styles.miniWrap} onPress={onPress} hitSlop={4}>
+      <View style={styles.miniRing}>
+        <Svg width={MINI_SIZE} height={MINI_SIZE}>
+          <Circle
+            cx={MINI_SIZE / 2}
+            cy={MINI_SIZE / 2}
+            r={MINI_R}
+            stroke={colors.backgroundSelected}
+            strokeWidth={MINI_STROKE}
+            fill="none"
+          />
+          <Circle
+            cx={MINI_SIZE / 2}
+            cy={MINI_SIZE / 2}
+            r={MINI_R}
+            stroke={color}
+            strokeWidth={MINI_STROKE}
+            strokeLinecap="round"
+            fill="none"
+            strokeDasharray={`${MINI_C} ${MINI_C}`}
+            strokeDashoffset={MINI_C * (1 - clamped)}
+            transform={`rotate(-90 ${MINI_SIZE / 2} ${MINI_SIZE / 2})`}
+          />
+        </Svg>
+        <View style={styles.miniCenter}>
+          <Text style={[styles.miniValue, { color: colors.text }]} numberOfLines={1}>
+            {value}
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.miniSub, { color: colors.textSecondary }]} numberOfLines={1}>
+        {sub}
+      </Text>
+      <Text style={[styles.miniLabel, { color: colors.text }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/* ----------------------------- Coaching nudge ---------------------------- */
+
+const TIP_DISMISS_KEY = 'trak.tip.dismissed.v1';
+
+function pickTip(input: {
+  mealsLogged: number;
+  proteinPct: number;
+  caloriePct: number;
+  waterPct: number;
+  streak: number;
+}): { title: string; body: string } {
+  const { mealsLogged, proteinPct, caloriePct, waterPct, streak } = input;
+  if (mealsLogged === 0) {
+    return {
+      title: 'Start the day',
+      body: 'Log your first meal — a quick photo scan or a one-line message to Trak is enough.',
+    };
+  }
+  if (proteinPct < 0.5 && caloriePct > 0.5) {
+    return {
+      title: 'Protein is lagging',
+      body: 'Your calories are ahead of your protein. Lean on eggs, yogurt, or tuna next meal.',
+    };
+  }
+  if (waterPct < 0.5) {
+    return {
+      title: 'Hydration check',
+      body: 'You’re behind on water — a glass now beats a litre at night.',
+    };
+  }
+  if (streak >= 3) {
+    return {
+      title: `Day ${streak} streak`,
+      body: 'Consistency is doing the heavy lifting. One more log keeps it alive.',
+    };
+  }
+  return {
+    title: 'Ask Trak anything',
+    body: 'Trends, gaps, or what to eat next — the chat knows your day.',
+  };
+}
+
+function TipCard({
+  tip,
+  onDismiss,
+  colors,
+}: {
+  tip: { title: string; body: string };
+  onDismiss: () => void;
+  colors: ThemeColors;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.tipCard,
+        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+      ]}
+      onPress={() => router.push('/chat')}>
+      <View style={[styles.tipIcon, { backgroundColor: colors.greenTint }]}>
+        <SparklesIcon size={18} color={Brand.greenDark} />
+      </View>
+      <View style={styles.tipInfo}>
+        <Text style={[styles.tipTitle, { color: colors.text }]}>{tip.title}</Text>
+        <Text style={[styles.tipBody, { color: colors.textSecondary }]}>{tip.body}</Text>
+      </View>
+      <Pressable hitSlop={10} onPress={onDismiss}>
+        <Text style={[styles.tipClose, { color: colors.textSecondary }]}>✕</Text>
+      </Pressable>
+    </Pressable>
+  );
+}
+
+/* ------------------------------- Water card ------------------------------ */
 
 /** A glass of water, in litres. */
 const L_PER_GLASS = 0.25;
@@ -184,6 +364,12 @@ function MealRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
   );
 }
 
+const GOAL_LABEL: Record<string, string> = {
+  lose: 'Losing weight',
+  maintain: 'Maintaining weight',
+  gain: 'Gaining muscle',
+};
+
 export default function HomeScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
@@ -200,9 +386,12 @@ export default function HomeScreen() {
     retryLoad,
     refresh,
     hasProfile,
+    profile,
     streak,
     recentMeals,
     savedMeals,
+    waterToday,
+    waterGoal,
   } = useMeals();
   const hasQuickAdd = recentMeals.length > 0 || savedMeals.length > 0;
   // Exercise adds calories back to the day's budget.
@@ -210,6 +399,11 @@ export default function HomeScreen() {
   const weightChange =
     weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
   const [refreshing, setRefreshing] = useState(false);
+  const [tipDismissed, setTipDismissed] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem(TIP_DISMISS_KEY).then((v) => setTipDismissed(v === dayKey()));
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -227,7 +421,6 @@ export default function HomeScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <SafeAreaView style={[styles.safe, styles.loadErrorWrap]}>
-          <Text style={styles.loadErrorEmoji}>📡</Text>
           <Text style={[styles.loadErrorTitle, { color: colors.text }]}>
             Couldn&apos;t load your data
           </Text>
@@ -247,6 +440,25 @@ export default function HomeScreen() {
     );
   }
   if (!hasProfile) return <Redirect href="/onboarding" />;
+
+  const score = computeScore({
+    totals: todayTotals,
+    targets,
+    calorieBudget,
+    mealsLogged: todayMeals.length,
+    waterToday,
+    waterGoal,
+    streak,
+  });
+  const tip = pickTip({
+    mealsLogged: todayMeals.length,
+    proteinPct: targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0,
+    caloriePct: calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0,
+    waterPct: waterGoal > 0 ? waterToday / waterGoal : 0,
+    streak,
+  });
+  const caloriesLeft = Math.max(0, calorieBudget - todayTotals.calories);
+  const caloriesOver = todayTotals.calories > calorieBudget;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -275,19 +487,92 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {/* Calories card */}
-          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <CalorieRing consumed={todayTotals.calories} target={calorieBudget} colors={colors} />
-            <Text style={[styles.calSub, { color: colors.textSecondary }]}>
-              {todayTotals.calories.toLocaleString()} / {calorieBudget.toLocaleString()} kcal
-              {burnedToday > 0 ? `  ·  +${burnedToday} exercise` : ''}
-            </Text>
+          {/* Trak Score hero */}
+          <ScoreCard value={score.value} caption={scoreCaption(score.value)} colors={colors} />
 
-            <View style={[styles.divider, { backgroundColor: colors.backgroundSelected }]} />
+          {/* Coaching nudge */}
+          {!tipDismissed ? (
+            <TipCard
+              tip={tip}
+              colors={colors}
+              onDismiss={() => {
+                setTipDismissed(true);
+                AsyncStorage.setItem(TIP_DISMISS_KEY, dayKey()).catch(() => {});
+              }}
+            />
+          ) : null}
 
-            <MacroBar label="Protein" consumed={todayTotals.protein_g} target={targets.protein_g} colors={colors} />
-            <MacroBar label="Carbs" consumed={todayTotals.carbs_g} target={targets.carbs_g} colors={colors} />
-            <MacroBar label="Fat" consumed={todayTotals.fat_g} target={targets.fat_g} colors={colors} />
+          {/* Goal + macro rings */}
+          <View style={[styles.macroCard, { backgroundColor: colors.backgroundElement }]}>
+            <View style={styles.goalRow}>
+              <Pressable style={styles.goalInfo} onPress={() => router.push('/profile')} hitSlop={6}>
+                <ScaleIcon size={16} color={colors.text} />
+                <Text style={[styles.goalText, { color: colors.text }]}>
+                  {GOAL_LABEL[profile?.goal ?? 'maintain']}
+                </Text>
+                <Text style={[styles.goalChevron, { color: colors.textSecondary }]}>›</Text>
+              </Pressable>
+              {hasQuickAdd ? (
+                <Pressable
+                  onPress={() => router.push('/quick-add')}
+                  style={({ pressed }) => [
+                    styles.plusBtn,
+                    { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
+                  ]}
+                  hitSlop={6}>
+                  <Text style={[styles.plusText, { color: colors.text }]}>＋</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View style={styles.miniRow}>
+              <MiniRing
+                value={`${todayTotals.calories}`}
+                sub={`of ${calorieBudget.toLocaleString()}`}
+                label="Calories"
+                pct={calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0}
+                color={caloriesOver ? Brand.over : Brand.green}
+                colors={colors}
+                onPress={() => router.push('/macro/calories')}
+              />
+              <MiniRing
+                value={`${todayTotals.protein_g}g`}
+                sub={`of ${targets.protein_g}`}
+                label="Protein"
+                pct={targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0}
+                color={MacroColors.protein}
+                colors={colors}
+                onPress={() => router.push('/macro/protein')}
+              />
+              <MiniRing
+                value={`${todayTotals.carbs_g}g`}
+                sub={`of ${targets.carbs_g}`}
+                label="Carbs"
+                pct={targets.carbs_g > 0 ? todayTotals.carbs_g / targets.carbs_g : 0}
+                color={MacroColors.carbs}
+                colors={colors}
+                onPress={() => router.push('/macro/carbs')}
+              />
+              <MiniRing
+                value={`${todayTotals.fat_g}g`}
+                sub={`of ${targets.fat_g}`}
+                label="Fat"
+                pct={targets.fat_g > 0 ? todayTotals.fat_g / targets.fat_g : 0}
+                color={MacroColors.fat}
+                colors={colors}
+                onPress={() => router.push('/macro/fat')}
+              />
+            </View>
+            {caloriesOver ? (
+              <Text style={[styles.overNote, { color: Brand.over }]}>
+                {todayTotals.calories - calorieBudget} kcal over budget
+              </Text>
+            ) : (
+              <Text style={[styles.leftNote, { color: colors.textSecondary }]}>
+                {caloriesLeft.toLocaleString()} kcal left
+                {burnedToday > 0 ? ` · +${burnedToday} from exercise` : ''}
+              </Text>
+            )}
           </View>
 
           {/* Weight — quick glance + tap to log/track */}
@@ -394,7 +679,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
-  scroll: { paddingBottom: Spacing.four, gap: Spacing.four },
+  scroll: { paddingBottom: Spacing.four, gap: Spacing.three },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -402,7 +687,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  wordmark: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  wordmark: { fontSize: 27, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
   todayLabel: { fontSize: 15, fontWeight: '600' },
   streakPill: {
     flexDirection: 'row',
@@ -414,22 +699,91 @@ const styles = StyleSheet.create({
   },
   streakText: { fontSize: 14, fontWeight: '700' },
 
-  card: { borderRadius: 24, padding: Spacing.four, gap: Spacing.two },
-  calSub: { fontSize: 13, textAlign: 'center', marginTop: Spacing.one },
-  divider: { height: StyleSheet.hairlineWidth, marginVertical: Spacing.three },
+  /* Trak Score */
+  scoreCard: {
+    borderRadius: 28,
+    padding: Spacing.four,
+    paddingBottom: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  scoreRingWrap: { alignItems: 'center' },
+  scoreCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreValue: { fontSize: 46, fontFamily: Type.display, fontWeight: '700', letterSpacing: -1 },
+  scoreBadge: {
+    marginTop: -16,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  scoreBadgeText: { fontSize: 12, fontWeight: '700' },
+  scoreCaption: { fontSize: 13, textAlign: 'center', lineHeight: 19, maxWidth: 300 },
 
-  macroBarRow: { gap: 6, marginBottom: Spacing.two },
-  macroBarHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  macroLabel: { fontSize: 14, fontWeight: '600' },
-  macroValue: { fontSize: 13 },
-  track: { height: 8, borderRadius: 4, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 4 },
+  /* Coaching nudge */
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 20,
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  tipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipInfo: { flex: 1, gap: 2 },
+  tipTitle: { fontSize: 15, fontWeight: '700' },
+  tipBody: { fontSize: 13, lineHeight: 19 },
+  tipClose: { fontSize: 15, fontWeight: '600', padding: 2 },
+
+  /* Goal + macro rings */
+  macroCard: { borderRadius: 24, padding: Spacing.four, gap: Spacing.three },
+  goalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  goalInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalText: { fontSize: 15, fontWeight: '700' },
+  goalChevron: { fontSize: 16, fontWeight: '600' },
+  plusBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusText: { fontSize: 18, fontWeight: '700' },
+  miniRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  miniWrap: { alignItems: 'center', gap: 2, flex: 1 },
+  miniRing: { alignItems: 'center', justifyContent: 'center' },
+  miniCenter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniValue: { fontSize: 13, fontWeight: '800' },
+  miniSub: { fontSize: 10, marginTop: 4 },
+  miniLabel: { fontSize: 12, fontWeight: '700', marginTop: 1 },
+  overNote: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  leftNote: { fontSize: 13, textAlign: 'center' },
 
   weightCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 16,
+    borderRadius: 20,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
   },
@@ -438,7 +792,7 @@ const styles = StyleSheet.create({
   weightValue: { fontSize: 20, fontWeight: '800' },
   weightChange: { fontSize: 14, fontWeight: '700' },
 
-  waterCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.three },
+  waterCard: { borderRadius: 20, padding: Spacing.four, gap: Spacing.three },
   waterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   waterTitle: { fontSize: 16, fontWeight: '700' },
@@ -455,7 +809,7 @@ const styles = StyleSheet.create({
   stepText: { fontSize: 18, fontWeight: '800' },
   goalValue: { fontSize: 15, fontWeight: '800', minWidth: 52, textAlign: 'center' },
   goalDone: { fontSize: 13, fontWeight: '700', marginLeft: 2 },
-  sectionTitle: { fontSize: 18, fontWeight: '700' },
+  sectionTitle: { fontSize: 19, fontFamily: Type.display, fontWeight: '700' },
   mealsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   quickAddPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   quickAddText: { fontSize: 13, fontWeight: '700' },
@@ -475,8 +829,7 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 20, fontWeight: '600', marginLeft: 2 },
 
   loadErrorWrap: { alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  loadErrorEmoji: { fontSize: 40 },
-  loadErrorTitle: { fontSize: 20, fontWeight: '800' },
+  loadErrorTitle: { fontSize: 20, fontFamily: Type.display, fontWeight: '700' },
   loadErrorBody: { fontSize: 14, textAlign: 'center' },
   retryBtn: {
     marginTop: Spacing.two,
@@ -498,7 +851,7 @@ const styles = StyleSheet.create({
   },
   scanButton: {
     flex: 1.8,
-    borderRadius: 18,
+    borderRadius: 999,
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',
@@ -508,7 +861,7 @@ const styles = StyleSheet.create({
   scanButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
   barcodeButton: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: 999,
     height: 56,
     flexDirection: 'row',
     alignItems: 'center',

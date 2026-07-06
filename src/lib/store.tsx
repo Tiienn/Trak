@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useCallback,
@@ -75,6 +76,24 @@ function computeStreak(meals: LoggedMeal[]): number {
     cursor.setDate(cursor.getDate() - 1);
   }
   return streak;
+}
+
+/**
+ * Diet style lives on-device (like the water unit) rather than in the profiles
+ * table, so no DB migration is needed. Merged into the profile after load.
+ */
+const DIET_KEY = 'trak.dietStyle.v1';
+
+async function mergeLocalDiet(p: UserProfile): Promise<UserProfile> {
+  try {
+    const diet = await AsyncStorage.getItem(DIET_KEY);
+    if (diet === 'balanced' || diet === 'high_protein' || diet === 'low_carb') {
+      return { ...p, diet };
+    }
+  } catch {
+    // Missing/broken cache just means the default diet.
+  }
+  return p;
 }
 
 /** Map a Supabase row to our client types. */
@@ -306,7 +325,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           setLoaded(true);
           return;
         }
-        setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
+        setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data)) : null);
         setMeals((mealRes.data ?? []).map(rowToMeal));
         setLoaded(true);
       } catch {
@@ -341,7 +360,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           .order('created_at', { ascending: false }),
       ]);
       if (profileRes.error || mealRes.error) return; // keep showing current data
-      setProfile(profileRes.data ? rowToProfile(profileRes.data) : null);
+      setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data)) : null);
       setMeals((mealRes.data ?? []).map(rowToMeal));
       if (!savedRes.error) setSavedMeals((savedRes.data ?? []).map(rowToSavedMeal));
       setLoadError(false);
@@ -497,6 +516,8 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       // Merge over the existing profile so device-local extras that aren't in
       // this form (waterGoal, calorieBias) survive an optimistic body-stat save.
       setProfile({ ...(profile ?? {}), ...next });
+      // Diet style is device-local (no DB column) — persist it separately.
+      if (next.diet) AsyncStorage.setItem(DIET_KEY, next.diet).catch(() => {});
       const { error } = await supabase.from('profiles').upsert({
         user_id: user.id,
         sex: next.sex,

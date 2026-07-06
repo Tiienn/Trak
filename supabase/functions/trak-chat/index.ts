@@ -110,6 +110,11 @@ Deno.serve(async (req: Request) => {
       ]
         .filter(Boolean)
         .join('\n');
+      // A one-line-per-day digest of the last week, for trend questions.
+      const week = (context as any).week;
+      if (typeof week === 'string' && week.trim()) {
+        contextNote += `\nLast 7 days (newest first):\n${week.slice(0, 700)}`;
+      }
     }
 
     // Merge everything into ONE system message. Gemini (unlike GPT-4o) latches

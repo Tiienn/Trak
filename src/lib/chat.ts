@@ -20,7 +20,7 @@ export type TrakReply =
  */
 export async function askTrak(
   history: ChatTurn[],
-  context: { targets: FoodTotals; eaten: FoodTotals },
+  context: { targets: FoodTotals; eaten: FoodTotals; week?: string },
   biasPct = 0,
 ): Promise<TrakReply> {
   const { data, error } = await supabase.functions.invoke('trak-chat', {

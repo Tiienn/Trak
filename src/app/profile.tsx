@@ -16,10 +16,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
-import { computeTargets } from '@/lib/nutrition';
+import { computeTargets, DIETS } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
-import { ActivityLevel, Goal, Sex, UserProfile } from '@/lib/types';
+import { ActivityLevel, DietStyle, Goal, Sex, UserProfile } from '@/lib/types';
 
 type GoalIcon = (props: { size?: number; color?: string }) => React.JSX.Element;
 const GOALS: { key: Goal; label: string; Icon: GoalIcon }[] = [
@@ -112,6 +112,7 @@ export default function ProfileScreen() {
   const [goal, setGoal] = useState<Goal | null>(profile?.goal ?? null);
   const [sex, setSex] = useState<Sex | null>(profile?.sex ?? null);
   const [activity, setActivity] = useState<ActivityLevel | null>(profile?.activity ?? null);
+  const [diet, setDiet] = useState<DietStyle>(profile?.diet ?? 'balanced');
   const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
   const [age, setAge] = useState(profile ? String(profile.age) : '');
   const [heightCm, setHeightCm] = useState(profile ? String(Math.round(profile.heightCm)) : '');
@@ -132,7 +133,7 @@ export default function ProfileScreen() {
   const canSave = stats !== null && goal !== null && sex !== null && activity !== null;
   const preview =
     stats && goal && sex && activity
-      ? computeTargets({ ...stats, goal, sex, activity, createdAt: 0 })
+      ? computeTargets({ ...stats, goal, sex, activity, diet, createdAt: 0 })
       : null;
 
   async function save() {
@@ -142,6 +143,7 @@ export default function ProfileScreen() {
       sex,
       goal,
       activity,
+      diet,
       age: stats.age,
       heightCm: stats.heightCm,
       weightKg: stats.weightKg,
@@ -214,6 +216,16 @@ export default function ProfileScreen() {
                   <Chip key={g.key} selected={goal === g.key} onPress={() => setGoal(g.key)} colors={colors}>
                     <g.Icon size={17} color={goal === g.key ? Brand.green : colors.text} />
                     <Text style={[styles.chipLabel, { color: colors.text }]}>{g.label}</Text>
+                  </Chip>
+                ))}
+              </View>
+            </Section>
+
+            <Section title="DIET STYLE" colors={colors}>
+              <View style={styles.chipRow}>
+                {DIETS.map((d) => (
+                  <Chip key={d.key} selected={diet === d.key} onPress={() => setDiet(d.key)} colors={colors}>
+                    <Text style={[styles.chipLabel, { color: colors.text }]}>{d.label}</Text>
                   </Chip>
                 ))}
               </View>

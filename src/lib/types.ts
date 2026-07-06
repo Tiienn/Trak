@@ -30,6 +30,8 @@ export type FoodAnalysis = {
 export type Sex = 'male' | 'female';
 export type Goal = 'lose' | 'maintain' | 'gain';
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+/** How the user prefers to balance macros within their calorie target. */
+export type DietStyle = 'balanced' | 'high_protein' | 'low_carb';
 
 /** The user's profile, collected during onboarding, used to compute daily targets. */
 export type UserProfile = {
@@ -39,6 +41,8 @@ export type UserProfile = {
   weightKg: number;
   goal: Goal;
   activity: ActivityLevel;
+  /** Macro-split preference; undefined behaves as 'balanced'. */
+  diet?: DietStyle;
   createdAt: number;
   /** Daily water goal in glasses; undefined falls back to the app default. */
   waterGoal?: number;

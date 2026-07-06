@@ -68,6 +68,14 @@ function ThemedNavigator() {
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
+          name="score"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="macro/[key]"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
           name="game"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />

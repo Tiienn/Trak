@@ -1,6 +1,7 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Trak's design system — warm, editorial, premium.
+ * Cream paper backgrounds, white cards, deep forest-green actions, terracotta /
+ * lime / gold macro colors, and a serif display face for big numbers + titles.
  */
 
 import '@/global.css';
@@ -9,22 +10,24 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#0B1512',
-    background: '#ffffff',
-    backgroundElement: '#F1F4F2',
-    backgroundSelected: '#E1E7E4',
-    textSecondary: '#5F6B66',
-    /** Soft emerald tint for tonal buttons / selected chips. */
-    greenTint: '#D8F3E7',
+    text: '#2B2721',
+    // Warm cream "paper" — the app's canvas.
+    background: '#F5F2E9',
+    // Cards float as soft white on the cream.
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#ECE7DB',
+    textSecondary: '#8A8274',
+    /** Soft sage tint for tonal buttons / selected chips. */
+    greenTint: '#E3EAD7',
   },
   dark: {
-    text: '#F2F7F4',
-    // Trak's signature near-black green — same family as the splash + app icon.
-    background: '#0C1210',
-    backgroundElement: '#182420',
-    backgroundSelected: '#24332C',
-    textSecondary: '#9DABA4',
-    greenTint: '#0F2E23',
+    text: '#F3F1E9',
+    // Warm espresso-green near-black.
+    background: '#12140F',
+    backgroundElement: '#1D2018',
+    backgroundSelected: '#2A2E22',
+    textSecondary: '#A6A192',
+    greenTint: '#25301D',
   },
 } as const;
 
@@ -32,10 +35,17 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 /** Trak brand colors — one place to change the whole app's identity. */
 export const Brand = {
-  /** Primary — emerald. */
-  green: '#10B981',
-  greenDark: '#059669',
-  over: '#F97316',
+  /** Primary — deep forest green. */
+  green: '#3D6B4F',
+  greenDark: '#2C5039',
+  over: '#D97843',
+} as const;
+
+/** Macro identity colors — used for rings, bubbles, and chips. */
+export const MacroColors = {
+  protein: '#DE7A3D',
+  carbs: '#9CB53E',
+  fat: '#E6BE4C',
 } as const;
 
 /** Structural shape shared by the light and dark palettes (safe to pass either). */
@@ -47,6 +57,11 @@ export type ThemeColors = {
   textSecondary: string;
   greenTint: string;
 };
+
+/** Display face for hero numbers and screen titles — warm editorial serif. */
+export const Type = {
+  display: Platform.select({ ios: 'Georgia', default: 'serif' }) as string,
+} as const;
 
 export const Fonts = Platform.select({
   ios: {

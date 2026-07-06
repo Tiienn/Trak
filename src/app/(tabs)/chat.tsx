@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,12 +15,31 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
 import { RingMark } from '@/components/logo';
 import { askTrak, type ChatTurn } from '@/lib/chat';
-import { useMeals } from '@/lib/store';
+import { sumTotals, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
-import { FoodAnalysis } from '@/lib/types';
+import { FoodAnalysis, LoggedMeal } from '@/lib/types';
+
+/**
+ * A compact "last 7 days" digest the assistant can reason about for trend
+ * questions — one line per day, newest first.
+ */
+function weekSummary(meals: LoggedMeal[]): string {
+  const byDay = new Map<string, LoggedMeal[]>();
+  for (const m of meals) {
+    if (!byDay.has(m.date)) byDay.set(m.date, []);
+    byDay.get(m.date)!.push(m);
+  }
+  return [...byDay.entries()]
+    .slice(0, 7)
+    .map(([date, dayMeals]) => {
+      const t = sumTotals(dayMeals);
+      return `${date}: ${t.calories} kcal, ${t.protein_g}p ${t.carbs_g}c ${t.fat_g}f (${dayMeals.length} meals)`;
+    })
+    .join('\n');
+}
 
 type UiMessage = {
   id: string;
@@ -33,10 +53,20 @@ type UiMessage = {
   isError?: boolean;
 };
 
-const SUGGESTIONS = [
-  '1 big mac, 1 fries, 1 coke zero',
-  '2 eggs and a slice of toast',
-  'How much protein do I have left today?',
+/** Grouped conversation starters — tap to send. */
+const SUGGESTION_GROUPS: { heading: string; items: string[] }[] = [
+  {
+    heading: 'LOG BY TEXT',
+    items: ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'],
+  },
+  {
+    heading: 'FOR YOU',
+    items: ['How am I doing today?', 'What should I focus on tomorrow?'],
+  },
+  {
+    heading: 'DIVE DEEPER',
+    items: ['Any trends in my last 7 days?', 'Is my protein spread evenly across meals?'],
+  },
 ];
 
 /** Conversation persists across app launches (latest turns only). */
@@ -104,7 +134,7 @@ function MealCard({
 export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { targets, todayTotals, addMeal, calorieBias } = useMeals();
+  const { targets, todayTotals, addMeal, calorieBias, meals } = useMeals();
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -145,7 +175,11 @@ export default function ChatScreen() {
     try {
       // Only text goes back as history; meal cards stay local.
       const history: ChatTurn[] = base.map((m) => ({ role: m.role, content: m.content }));
-      const reply = await askTrak(history, { targets, eaten: todayTotals }, calorieBias);
+      const reply = await askTrak(
+        history,
+        { targets, eaten: todayTotals, week: weekSummary(meals) },
+        calorieBias
+      );
       setMessages((prev) => [
         ...prev,
         {
@@ -207,26 +241,33 @@ export default function ChatScreen() {
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           {messages.length === 0 ? (
-            <View style={styles.empty}>
+            <ScrollView
+              contentContainerStyle={styles.empty}
+              showsVerticalScrollIndicator={false}>
               <RingMark size={40} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                Tell me what you ate
-              </Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask Trak anything</Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-                Describe a meal in plain words and I’ll estimate the calories — or ask me about
-                your day.
+                Describe a meal to log it, or ask about your day, your trends, and what to eat
+                next.
               </Text>
-              <View style={styles.suggestions}>
-                {SUGGESTIONS.map((s) => (
-                  <Pressable
-                    key={s}
-                    style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
-                    onPress={() => send(s)}>
-                    <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+              {SUGGESTION_GROUPS.map((group) => (
+                <View key={group.heading} style={styles.suggestionGroup}>
+                  <Text style={[styles.suggestionHeading, { color: colors.textSecondary }]}>
+                    {group.heading}
+                  </Text>
+                  <View style={styles.suggestionGrid}>
+                    {group.items.map((s) => (
+                      <Pressable
+                        key={s}
+                        style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
+                        onPress={() => send(s)}>
+                        <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           ) : (
             <FlatList
               ref={listRef}
@@ -314,14 +355,23 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  title: { fontSize: 27, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  emptyTitle: { fontSize: 20, fontWeight: '800' },
-  emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 280, lineHeight: 20 },
-  suggestions: { gap: Spacing.two, marginTop: Spacing.three, alignSelf: 'stretch' },
-  suggestion: { borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16 },
-  suggestionText: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  empty: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.four, paddingBottom: Spacing.four },
+  emptyTitle: { fontSize: 24, fontFamily: Type.display, fontWeight: '700' },
+  emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
+  suggestionGroup: { alignSelf: 'stretch', marginTop: Spacing.three, gap: Spacing.two },
+  suggestionHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
+  suggestionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  suggestion: {
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexBasis: '47%',
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  suggestionText: { fontSize: 13.5, fontWeight: '600', lineHeight: 19 },
 
   listContent: { paddingVertical: Spacing.two, gap: Spacing.two },
   bubble: { maxWidth: '85%', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },

@@ -14,16 +14,21 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
-import { computeTargets } from '@/lib/nutrition';
+import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
+import { Brand, Colors, MacroColors, Spacing, Type, type ThemeColors } from '@/constants/theme';
+import { computeTargets, DIETS } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
-import { ActivityLevel, Goal, Sex, UserProfile } from '@/lib/types';
+import { ActivityLevel, DietStyle, FoodTotals, Goal, Sex, UserProfile } from '@/lib/types';
 
-const GOALS: { key: Goal; label: string; emoji: string }[] = [
-  { key: 'lose', label: 'Lose weight', emoji: '📉' },
-  { key: 'maintain', label: 'Maintain', emoji: '⚖️' },
-  { key: 'gain', label: 'Gain muscle', emoji: '📈' },
+const GOALS: {
+  key: Goal;
+  label: string;
+  Icon: (props: { size?: number; color?: string }) => React.JSX.Element;
+}[] = [
+  { key: 'lose', label: 'Lose weight', Icon: TrendDownIcon },
+  { key: 'maintain', label: 'Maintain', Icon: BalanceIcon },
+  { key: 'gain', label: 'Gain muscle', Icon: DumbbellIcon },
 ];
 
 const SEXES: { key: Sex; label: string }[] = [
@@ -39,7 +44,7 @@ const ACTIVITIES: { key: ActivityLevel; label: string; desc: string }[] = [
   { key: 'very_active', label: 'Extra active', desc: 'Hard exercise or physical job' },
 ];
 
-const STEP_COUNT = 5;
+const STEP_COUNT = 6;
 
 function OptionCard({
   selected,
@@ -58,12 +63,70 @@ function OptionCard({
       style={[
         styles.optionCard,
         {
-          backgroundColor: selected ? '#10B98122' : colors.backgroundElement,
+          backgroundColor: selected ? `${Brand.green}22` : colors.backgroundElement,
           borderColor: selected ? Brand.green : 'transparent',
         },
       ]}>
       {children}
     </Pressable>
+  );
+}
+
+/**
+ * The macro "bubble" preview — the calorie circle with three macro bubbles
+ * sized by their gram targets, so diet styles feel tangible while choosing.
+ */
+function MacroBubbles({ targets, colors }: { targets: FoodTotals; colors: ThemeColors }) {
+  const d = (g: number) => Math.max(50, Math.min(112, 24 + Math.sqrt(Math.max(0, g)) * 5.6));
+  const pd = d(targets.protein_g);
+  const cd = d(targets.carbs_g);
+  const fd = d(targets.fat_g);
+  return (
+    <View style={styles.bubbleWrap}>
+      <View style={styles.bubbleCluster}>
+        <View style={[styles.calCircle, { backgroundColor: colors.backgroundElement }]}>
+          <Text style={[styles.calValue, { color: colors.text }]}>
+            {targets.calories.toLocaleString()}
+          </Text>
+          <Text style={[styles.calUnit, { color: colors.textSecondary }]}>cal</Text>
+        </View>
+        <View
+          style={[
+            styles.bubble,
+            { width: pd, height: pd, borderRadius: pd / 2, top: 2, right: 74, backgroundColor: MacroColors.protein },
+          ]}>
+          <Text style={styles.bubbleText}>{targets.protein_g}g</Text>
+        </View>
+        <View
+          style={[
+            styles.bubble,
+            { width: fd, height: fd, borderRadius: fd / 2, top: 26, right: 4, backgroundColor: MacroColors.fat },
+          ]}>
+          <Text style={styles.bubbleText}>{targets.fat_g}g</Text>
+        </View>
+        <View
+          style={[
+            styles.bubble,
+            { width: cd, height: cd, borderRadius: cd / 2, top: 92, right: 34, backgroundColor: MacroColors.carbs },
+          ]}>
+          <Text style={styles.bubbleText}>{targets.carbs_g}g</Text>
+        </View>
+      </View>
+      <View style={styles.legend}>
+        {(
+          [
+            ['Protein', MacroColors.protein],
+            ['Carbs', MacroColors.carbs],
+            ['Fat', MacroColors.fat],
+          ] as const
+        ).map(([label, color]) => (
+          <View key={label} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: color }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>{label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -76,6 +139,7 @@ export default function OnboardingScreen() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
   const [activity, setActivity] = useState<ActivityLevel | null>(null);
+  const [diet, setDiet] = useState<DietStyle>('balanced');
   const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
   const [age, setAge] = useState('');
   const [heightCm, setHeightCm] = useState('');
@@ -108,6 +172,7 @@ export default function OnboardingScreen() {
       sex,
       goal,
       activity,
+      diet,
       age: stats.age,
       heightCm: stats.heightCm,
       weightKg: stats.weightKg,
@@ -184,7 +249,7 @@ export default function OnboardingScreen() {
                 </Text>
                 {GOALS.map((g) => (
                   <OptionCard key={g.key} selected={goal === g.key} onPress={() => setGoal(g.key)} colors={colors}>
-                    <Text style={styles.optionEmoji}>{g.emoji}</Text>
+                    <g.Icon size={22} color={goal === g.key ? Brand.green : colors.text} />
                     <Text style={[styles.optionLabel, { color: colors.text }]}>{g.label}</Text>
                   </OptionCard>
                 ))}
@@ -319,7 +384,31 @@ export default function OnboardingScreen() {
               </>
             )}
 
-            {step === 4 && preview && (
+            {step === 4 && (
+              <>
+                <Text style={[styles.title, { color: colors.text }]}>Choose your diet</Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                  Decide how to balance your macronutrients.
+                </Text>
+                {preview ? <MacroBubbles targets={preview} colors={colors} /> : null}
+                {DIETS.map((dOpt) => (
+                  <OptionCard
+                    key={dOpt.key}
+                    selected={diet === dOpt.key}
+                    onPress={() => setDiet(dOpt.key)}
+                    colors={colors}>
+                    <View style={styles.flex}>
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>{dOpt.label}</Text>
+                      <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>
+                        {dOpt.desc}
+                      </Text>
+                    </View>
+                  </OptionCard>
+                ))}
+              </>
+            )}
+
+            {step === 5 && preview && (
               <>
                 <Text style={[styles.title, { color: colors.text }]}>Your daily target</Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -410,8 +499,29 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 6, justifyContent: 'center', paddingVertical: Spacing.three },
   dot: { height: 8, borderRadius: 4 },
   scroll: { paddingBottom: Spacing.four, gap: Spacing.two },
-  title: { fontSize: 28, fontWeight: '800', marginTop: Spacing.two },
+  title: { fontSize: 28, fontFamily: Type.display, fontWeight: '700', marginTop: Spacing.two },
   subtitle: { fontSize: 15, marginBottom: Spacing.three },
+
+  bubbleWrap: { alignItems: 'center', gap: Spacing.three, marginBottom: Spacing.three },
+  bubbleCluster: { width: 300, height: 208 },
+  calCircle: {
+    position: 'absolute',
+    left: 0,
+    top: 26,
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calValue: { fontSize: 34, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
+  calUnit: { fontSize: 13, fontWeight: '600', marginTop: -2 },
+  bubble: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  bubbleText: { color: '#ffffff', fontSize: 15, fontWeight: '800' },
+  legend: { flexDirection: 'row', gap: Spacing.four },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { fontSize: 13, fontWeight: '600' },
 
   optionCard: {
     flexDirection: 'row',
