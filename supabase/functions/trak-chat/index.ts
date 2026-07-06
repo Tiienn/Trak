@@ -1,18 +1,20 @@
 // Trak — server-side chat assistant.
-// Runs on Supabase Edge Functions (Deno) and holds the Gemini key as a server
-// secret (GEMINI_API_KEY). We call Gemini through its OpenAI-compatible endpoint.
-// The app sends a short chat history plus the user's daily numbers; the model
-// replies as "Trak" and, when the user describes food, returns a structured meal
-// estimate. Before returning a meal we enrich each item against Open Food Facts:
-// the model gives a gram estimate per item, and when OFF has that food we scale
-// its real per-100 g nutrition to those grams. OFF is additive — if it has no
-// match (or is unreachable) we keep the model's estimate, so nothing regresses.
+// Runs on Supabase Edge Functions (Deno). Calls Gemini via its OpenAI-compatible
+// endpoint (GEMINI_API_KEY). When the user describes food, we improve the model's
+// estimate with real data, cheapest source first:
+//   1. Open Food Facts (free) — great for packaged/branded foods.
+//   2. For foods OFF doesn't have, Exa (EXA_API_KEY) searches the web for the
+//      nutrition facts and Gemini scales them to the portion.
+// Every layer fails safe: no match / service down / no key → we keep the model's
+// own estimate, so the chat never regresses. Exa is optional — without its key
+// the function simply runs OFF + the model estimate.
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 // Override with the GEMINI_MODEL secret to move to a newer Flash (e.g. gemini-3.5-flash).
 const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
 
 const OFF_SEARCH = 'https://world.openfoodfacts.org/cgi/search.pl';
+const EXA_URL = 'https://api.exa.ai/answer';
 
 const SYSTEM_PROMPT = `You are "Trak", the friendly assistant inside the Trak calorie-tracking app.
 Respond with ONLY a raw JSON object (no markdown fences) in ONE of these two shapes:
@@ -25,7 +27,7 @@ Respond with ONLY a raw JSON object (no markdown fences) in ONE of these two sha
   "items": [ { "name": string, "quantity": string, "grams": number, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
   "total": { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number },
   "confidence": number,          // 0..1
-  "notes": string,               // 1-2 sentences on HOW you estimated it: portions assumed, brand nutrition used, any hidden ingredients. Max ~35 words, written to the user.
+  "notes": string,               // 1-2 sentences on HOW you estimated it. Max ~35 words, written to the user.
   "reply": string                // ONE short friendly sentence summarizing the estimate
 }
 
@@ -39,6 +41,7 @@ Rules:
 - Use typical portion sizes and well-known brand nutrition when the user names brands.
 - "name" must be a clean, searchable food name (e.g. "Greek yogurt", "Big Mac"), no counts inside it.
 - "grams" is your best estimate of the TOTAL edible weight of that item's portion in grams (e.g. 3 pieces of a small snack might be ~90). Always include it for every item.
+- The calories/macros you give are a fallback estimate; the server may refine them with real data.
 - All nutrient values are plain whole numbers, no units.
 - "quantity" is a short human portion, e.g. "1 sandwich", "1 medium", "330 ml can".
 - Never invent that something was logged — the app handles logging after the user taps Add.
@@ -75,10 +78,9 @@ function stripFences(s: string): string {
 type Macro = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
 /**
- * Look a food name up in Open Food Facts and scale its per-100 g nutrition to
- * `grams`. Returns null when there's no confident match, OFF is unreachable, or
- * the grams estimate is out of a sane range — the caller then keeps the model's
- * own estimate. Never throws.
+ * Free Open Food Facts pass: scale a matched product's per-100 g nutrition to
+ * `grams`. Returns null when there's no confident match / OFF is unreachable /
+ * grams is out of range — the caller keeps the model's estimate. Never throws.
  */
 async function offLookup(name: string, grams: number): Promise<Macro | null> {
   if (!name || !(grams > 0) || grams > 5000) return null;
@@ -101,7 +103,6 @@ async function offLookup(name: string, grams: number): Promise<Macro | null> {
     if (!res.ok) return null;
     const data = await res.json();
     const products: any[] = Array.isArray(data?.products) ? data.products : [];
-    // Require lexical overlap with the query so we don't grab an unrelated product.
     const words = name.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
     for (const p of products) {
       const pname = String(p?.product_name ?? '').toLowerCase();
@@ -120,36 +121,161 @@ async function offLookup(name: string, grams: number): Promise<Macro | null> {
     }
     return null;
   } catch {
-    return null; // network error / abort / bad JSON — fall back to the estimate.
+    return null;
   }
 }
 
 /**
- * Replace each item's macros with Open Food Facts data where a confident match
- * exists, recompute the totals, and note which items came from OFF. Mutates and
- * returns the parsed meal object. Safe to call on any parsed meal.
+ * Exa web search: ask for the nutrition facts of the given foods and return a
+ * text reference (synthesized answer + a little citation text) for Gemini to
+ * read. Returns null when EXA_API_KEY is unset, Exa errors, or times out.
  */
-async function enrichWithOFF(meal: any): Promise<any> {
+async function exaSearch(query: string): Promise<string | null> {
+  const key = Deno.env.get('EXA_API_KEY');
+  if (!key) return null; // Exa fallback disabled — degrade to OFF + model estimate.
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    let res: Response;
+    try {
+      res = await fetch(EXA_URL, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, text: true }),
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!res.ok) return null;
+    const data = await res.json();
+    const answer = typeof data?.answer === 'string' ? data.answer : '';
+    const cites: any[] = Array.isArray(data?.citations) ? data.citations : [];
+    const snippets = cites
+      .slice(0, 3)
+      .map((c) => (typeof c?.text === 'string' ? c.text.slice(0, 500) : ''))
+      .filter(Boolean)
+      .join('\n---\n');
+    const combined = [answer, snippets].filter(Boolean).join('\n\nSources:\n');
+    return combined || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Gemini "calculation" pass: read the web reference's per-100 g (or per-serving)
+ * values and scale them to each food's grams. Returns macros keyed by the item's
+ * index in `items`, or null on any failure (caller keeps the model estimate).
+ */
+async function geminiScale(
+  apiKey: string,
+  reference: string,
+  items: { name: string; grams: number }[],
+): Promise<Record<number, Macro> | null> {
+  const list = items.map((it, i) => `${i}: ${it.name} — ${it.grams} g`).join('\n');
+  const prompt =
+    `Web nutrition reference:\n${reference}\n\n` +
+    `For each food below, read the reference's per-100 g (or per-serving) values ` +
+    `and scale them to the given grams. If the reference doesn't cover a food, use ` +
+    `your best general knowledge.\nFoods (index: name — grams):\n${list}\n\n` +
+    `Respond ONLY JSON: {"items":[{"index":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}]} with whole numbers.`;
+  try {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: MODEL,
+        temperature: 0.1,
+        max_tokens: 500,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a precise nutrition calculator. Scale per-100 g values to the requested grams. Output only the requested JSON.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const content: string | undefined = data?.choices?.[0]?.message?.content;
+    if (!content) return null;
+    const parsed = JSON.parse(stripFences(content));
+    const arr: any[] = Array.isArray(parsed?.items) ? parsed.items : [];
+    const out: Record<number, Macro> = {};
+    for (const r of arr) {
+      const idx = num(r?.index);
+      if (idx === null) continue;
+      out[idx] = {
+        calories: Math.round(num(r?.calories) ?? 0),
+        protein_g: Math.round(num(r?.protein_g) ?? 0),
+        carbs_g: Math.round(num(r?.carbs_g) ?? 0),
+        fat_g: Math.round(num(r?.fat_g) ?? 0),
+      };
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refine a parsed meal's numbers: Open Food Facts first (free), then Exa + Gemini
+ * for whatever OFF didn't cover, then recompute totals. Every step fails safe.
+ */
+async function enrichMeal(apiKey: string, meal: any): Promise<any> {
   const items: any[] = Array.isArray(meal?.items) ? meal.items : [];
   if (items.length === 0) return meal;
-
   const originalTotal = num(meal?.total?.calories) ?? 0;
-  const hits = await Promise.all(
-    items.map((it) => offLookup(String(it?.name ?? ''), num(it?.grams) ?? 0))
-  );
 
-  const sourced: string[] = [];
+  // 1) Free Open Food Facts pass (parallel, one lookup per item).
+  const offHits = await Promise.all(
+    items.map((it) => offLookup(String(it?.name ?? ''), num(it?.grams) ?? 0)),
+  );
+  const offSourced: string[] = [];
   items.forEach((it, i) => {
-    const hit = hits[i];
+    const hit = offHits[i];
     if (!hit) return;
     it.calories = hit.calories;
     it.protein_g = hit.protein_g;
     it.carbs_g = hit.carbs_g;
     it.fat_g = hit.fat_g;
-    sourced.push(String(it?.name ?? '').trim());
+    offSourced.push(String(it?.name ?? '').trim());
   });
 
-  // Recompute totals from the (possibly OFF-corrected) items.
+  // 2) Web search (Exa) + Gemini scaling for the foods OFF didn't cover.
+  const missedIdx = items.map((_, i) => i).filter((i) => !offHits[i]);
+  const webSourced: string[] = [];
+  if (missedIdx.length > 0) {
+    const missed = missedIdx.map((i) => ({
+      name: String(items[i]?.name ?? ''),
+      grams: num(items[i]?.grams) ?? 0,
+    }));
+    const query =
+      `Nutrition facts — calories, protein grams, carbohydrate grams, fat grams, ` +
+      `per 100 grams — for each of: ${missed.map((m) => m.name).filter(Boolean).join('; ')}`;
+    const reference = await exaSearch(query);
+    if (reference) {
+      const scaled = await geminiScale(apiKey, reference, missed);
+      if (scaled) {
+        missedIdx.forEach((itemIdx, localIdx) => {
+          const m = scaled[localIdx];
+          if (!m) return;
+          const it = items[itemIdx];
+          it.calories = m.calories;
+          it.protein_g = m.protein_g;
+          it.carbs_g = m.carbs_g;
+          it.fat_g = m.fat_g;
+          webSourced.push(String(it?.name ?? '').trim());
+        });
+      }
+    }
+  }
+
+  // 3) Recompute totals from the (possibly corrected) items.
   const total: Macro = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
   for (const it of items) {
     total.calories += num(it?.calories) ?? 0;
@@ -159,15 +285,18 @@ async function enrichWithOFF(meal: any): Promise<any> {
   }
   meal.total = total;
 
-  if (sourced.length > 0) {
+  // 4) Confidence, notes, and reply reflect where the numbers came from.
+  const parts: string[] = [];
+  if (offSourced.length) parts.push(`${offSourced.join(', ')} from Open Food Facts`);
+  if (webSourced.length) parts.push(`${webSourced.join(', ')} from a web search`);
+  if (parts.length) {
     meal.confidence = Math.max(num(meal?.confidence) ?? 0, 0.85);
-    const note = `Nutrition for ${sourced.join(', ')} came from Open Food Facts.`;
+    const note = `Nutrition sourced: ${parts.join('; ')}.`;
     meal.notes = meal?.notes ? `${String(meal.notes).trim()} ${note}` : note;
-    // If OFF moved the total a lot, the model's reply sentence is stale — replace
-    // it with an accurate one so the bubble and the card agree.
     const drift = originalTotal > 0 ? Math.abs(total.calories - originalTotal) / originalTotal : 0;
     if (drift > 0.15) {
-      meal.reply = `About ${total.calories} calories, using Open Food Facts data.`;
+      const via = webSourced.length ? 'web nutrition data' : 'Open Food Facts';
+      meal.reply = `About ${total.calories} calories, based on ${via}.`;
     }
   }
   return meal;
@@ -180,6 +309,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Require a real signed-in user (the public anon key is also a valid JWT).
+    let apiKey: string;
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
       const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
@@ -190,7 +320,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Please sign in to chat.' }, 401);
     }
 
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
     if (!apiKey) {
       return json({ error: 'Server is missing its Gemini key.' }, 500);
     }
@@ -270,14 +400,14 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Gemini returned an empty answer.' }, 502);
     }
 
-    // Enrich meals with Open Food Facts; pass non-meals (and anything unpar. able)
+    // Enrich meals (OFF → Exa+Gemini); pass non-meals and anything unparseable
     // straight through so a bad parse never breaks the chat.
     const clean = stripFences(content);
     let out = clean;
     try {
       const parsed = JSON.parse(clean);
       if (parsed?.kind === 'meal') {
-        out = JSON.stringify(await enrichWithOFF(parsed));
+        out = JSON.stringify(await enrichMeal(apiKey, parsed));
       }
     } catch {
       out = clean;
