@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -53,12 +54,11 @@ type UiMessage = {
   isError?: boolean;
 };
 
-/** Grouped conversation starters — tap to send. */
-const SUGGESTION_GROUPS: { heading: string; items: string[] }[] = [
-  {
-    heading: 'LOG BY TEXT',
-    items: ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'],
-  },
+/** Quick logging examples shown on a fresh, empty Chat. */
+const LOG_EXAMPLES = ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'];
+
+/** Grouped insight prompts for the Ask panel — always available, tap to send. */
+const ASK_GROUPS: { heading: string; items: string[] }[] = [
   {
     heading: 'FOR YOU',
     items: ['How am I doing today?', 'What should I focus on tomorrow?'],
@@ -131,17 +131,27 @@ function MealCard({
   );
 }
 
+type Mode = 'chat' | 'ask';
+
 export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { targets, todayTotals, addMeal, calorieBias, meals } = useMeals();
+  const params = useLocalSearchParams<{ mode?: string }>();
 
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('chat');
   const listRef = useRef<FlatList<UiMessage>>(null);
+
+  // Jumping here from the Home "Ask Trak anything" card opens straight into
+  // Ask mode, even if Chat is already mounted (tabs stay alive in the background).
+  useEffect(() => {
+    if (params.mode === 'ask') setMode('ask');
+  }, [params.mode]);
 
   // Restore the conversation once per app launch, then keep it saved.
   useEffect(() => {
@@ -165,6 +175,7 @@ export default function ChatScreen() {
   async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || thinking) return;
+    setMode('chat'); // sending (from Ask or Chat) always reveals the conversation thread
 
     const userMsg: UiMessage = { id: makeId(), role: 'user', content: trimmed };
     const base = [...messages, userMsg];
@@ -237,20 +248,33 @@ export default function ChatScreen() {
           <Text style={[styles.title, { color: colors.text }]}>Trak</Text>
         </View>
 
+        <View style={[styles.modeSwitch, { backgroundColor: colors.backgroundElement }]}>
+          {(['chat', 'ask'] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[styles.modeBtn, mode === m && { backgroundColor: colors.background }]}
+              onPress={() => setMode(m)}>
+              <Text
+                style={[
+                  styles.modeBtnText,
+                  { color: mode === m ? colors.text : colors.textSecondary },
+                ]}>
+                {m === 'chat' ? 'Chat' : 'Ask'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          {messages.length === 0 ? (
-            <ScrollView
-              contentContainerStyle={styles.empty}
-              showsVerticalScrollIndicator={false}>
-              <RingMark size={40} />
+          {mode === 'ask' ? (
+            <ScrollView contentContainerStyle={styles.empty} showsVerticalScrollIndicator={false}>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask Trak anything</Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-                Describe a meal to log it, or ask about your day, your trends, and what to eat
-                next.
+                Trends, gaps, and patterns in your data — pick a question or type your own below.
               </Text>
-              {SUGGESTION_GROUPS.map((group) => (
+              {ASK_GROUPS.map((group) => (
                 <View key={group.heading} style={styles.suggestionGroup}>
                   <Text style={[styles.suggestionHeading, { color: colors.textSecondary }]}>
                     {group.heading}
@@ -268,6 +292,24 @@ export default function ChatScreen() {
                 </View>
               ))}
             </ScrollView>
+          ) : messages.length === 0 ? (
+            <View style={styles.empty}>
+              <RingMark size={40} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Tell me what you ate</Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                Describe a meal in plain words and I’ll estimate the calories.
+              </Text>
+              <View style={styles.suggestionGrid}>
+                {LOG_EXAMPLES.map((s) => (
+                  <Pressable
+                    key={s}
+                    style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
+                    onPress={() => send(s)}>
+                    <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           ) : (
             <FlatList
               ref={listRef}
@@ -356,6 +398,17 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   title: { fontSize: 27, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
+
+  modeSwitch: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    borderRadius: 999,
+    padding: 3,
+    gap: 2,
+    marginBottom: Spacing.two,
+  },
+  modeBtn: { paddingVertical: 7, paddingHorizontal: 22, borderRadius: 999 },
+  modeBtnText: { fontSize: 14, fontWeight: '700' },
 
   empty: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.four, paddingBottom: Spacing.four },
   emptyTitle: { fontSize: 24, fontFamily: Type.display, fontWeight: '700' },

@@ -32,7 +32,7 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { computeScore, scoreCaption } from '@/lib/score';
-import { dayKey, useMeals } from '@/lib/store';
+import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { LoggedMeal } from '@/lib/types';
 
@@ -163,74 +163,27 @@ function MiniRing({
   );
 }
 
-/* ----------------------------- Coaching nudge ---------------------------- */
+/* -------------------------------- Ask card -------------------------------- */
 
-const TIP_DISMISS_KEY = 'trak.tip.dismissed.v1';
-
-function pickTip(input: {
-  mealsLogged: number;
-  proteinPct: number;
-  caloriePct: number;
-  waterPct: number;
-  streak: number;
-}): { title: string; body: string } {
-  const { mealsLogged, proteinPct, caloriePct, waterPct, streak } = input;
-  if (mealsLogged === 0) {
-    return {
-      title: 'Start the day',
-      body: 'Log your first meal — a quick photo scan or a one-line message to Trak is enough.',
-    };
-  }
-  if (proteinPct < 0.5 && caloriePct > 0.5) {
-    return {
-      title: 'Protein is lagging',
-      body: 'Your calories are ahead of your protein. Lean on eggs, yogurt, or tuna next meal.',
-    };
-  }
-  if (waterPct < 0.5) {
-    return {
-      title: 'Hydration check',
-      body: 'You’re behind on water — a glass now beats a litre at night.',
-    };
-  }
-  if (streak >= 3) {
-    return {
-      title: `Day ${streak} streak`,
-      body: 'Consistency is doing the heavy lifting. One more log keeps it alive.',
-    };
-  }
-  return {
-    title: 'Ask Trak anything',
-    body: 'Trends, gaps, or what to eat next — the chat knows your day.',
-  };
-}
-
-function TipCard({
-  tip,
-  onDismiss,
-  colors,
-}: {
-  tip: { title: string; body: string };
-  onDismiss: () => void;
-  colors: ThemeColors;
-}) {
+/** Always-visible entry point into Chat's Ask mode — no dismiss, no daily reset. */
+function AskCard({ colors }: { colors: ThemeColors }) {
   return (
     <Pressable
       style={({ pressed }) => [
         styles.tipCard,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
       ]}
-      onPress={() => router.push('/chat')}>
+      onPress={() => router.push({ pathname: '/chat', params: { mode: 'ask' } })}>
       <View style={[styles.tipIcon, { backgroundColor: colors.greenTint }]}>
         <SparklesIcon size={18} color={Brand.greenDark} />
       </View>
       <View style={styles.tipInfo}>
-        <Text style={[styles.tipTitle, { color: colors.text }]}>{tip.title}</Text>
-        <Text style={[styles.tipBody, { color: colors.textSecondary }]}>{tip.body}</Text>
+        <Text style={[styles.tipTitle, { color: colors.text }]}>Ask Trak anything</Text>
+        <Text style={[styles.tipBody, { color: colors.textSecondary }]}>
+          Trends, gaps, or what to eat next — tap to ask.
+        </Text>
       </View>
-      <Pressable hitSlop={10} onPress={onDismiss}>
-        <Text style={[styles.tipClose, { color: colors.textSecondary }]}>✕</Text>
-      </Pressable>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
     </Pressable>
   );
 }
@@ -399,11 +352,6 @@ export default function HomeScreen() {
   const weightChange =
     weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
   const [refreshing, setRefreshing] = useState(false);
-  const [tipDismissed, setTipDismissed] = useState(true);
-
-  useEffect(() => {
-    AsyncStorage.getItem(TIP_DISMISS_KEY).then((v) => setTipDismissed(v === dayKey()));
-  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -450,13 +398,6 @@ export default function HomeScreen() {
     waterGoal,
     streak,
   });
-  const tip = pickTip({
-    mealsLogged: todayMeals.length,
-    proteinPct: targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0,
-    caloriePct: calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0,
-    waterPct: waterGoal > 0 ? waterToday / waterGoal : 0,
-    streak,
-  });
   const caloriesLeft = Math.max(0, calorieBudget - todayTotals.calories);
   const caloriesOver = todayTotals.calories > calorieBudget;
 
@@ -490,17 +431,8 @@ export default function HomeScreen() {
           {/* Trak Score hero */}
           <ScoreCard value={score.value} caption={scoreCaption(score.value)} colors={colors} />
 
-          {/* Coaching nudge */}
-          {!tipDismissed ? (
-            <TipCard
-              tip={tip}
-              colors={colors}
-              onDismiss={() => {
-                setTipDismissed(true);
-                AsyncStorage.setItem(TIP_DISMISS_KEY, dayKey()).catch(() => {});
-              }}
-            />
-          ) : null}
+          {/* Always-visible entry point into Chat's Ask mode */}
+          <AskCard colors={colors} />
 
           {/* Goal + macro rings */}
           <View style={[styles.macroCard, { backgroundColor: colors.backgroundElement }]}>
@@ -745,7 +677,6 @@ const styles = StyleSheet.create({
   tipInfo: { flex: 1, gap: 2 },
   tipTitle: { fontSize: 15, fontWeight: '700' },
   tipBody: { fontSize: 13, lineHeight: 19 },
-  tipClose: { fontSize: 15, fontWeight: '600', padding: 2 },
 
   /* Goal + macro rings */
   macroCard: { borderRadius: 24, padding: Spacing.four, gap: Spacing.three },
