@@ -129,7 +129,9 @@ Deno.serve(async (req: Request) => {
     const body = {
       model: MODEL,
       temperature: 0.3,
-      max_tokens: 700, // bounds the cost of each call
+      // Bounds cost, but must fit a multi-item meal's full JSON — a 700-token cap
+      // truncated 4+ item meals mid-object, which no repair can fix.
+      max_tokens: 2048,
       response_format: { type: 'json_object' },
       messages: [{ role: 'system', content: systemContent }, ...history],
     };
