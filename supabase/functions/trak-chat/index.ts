@@ -24,7 +24,7 @@ Respond with ONLY a raw JSON object (no markdown fences) in ONE of these two sha
 {
   "kind": "meal",
   "title": string,               // short label, e.g. "Big Mac meal"
-  "items": [ { "name": string, "quantity": string, "grams": number, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
+  "items": [ { "name": string, "quantity": string, "grams": number, "familiar": boolean, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number } ],
   "total": { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number },
   "confidence": number,          // 0..1
   "notes": string,               // 1-2 sentences on HOW you estimated it. Max ~35 words, written to the user.
@@ -39,7 +39,8 @@ Respond with ONLY a raw JSON object (no markdown fences) in ONE of these two sha
 
 Rules:
 - Use typical portion sizes and well-known brand nutrition when the user names brands.
-- "name" must be a clean, searchable food name (e.g. "Greek yogurt", "Big Mac"), no counts inside it.
+- "name" is a clean, searchable food name (e.g. "Greek yogurt", "Big Mac"), no counts inside it. If you do NOT recognize a dish (e.g. a regional or homemade dish like "niouk yen"), KEEP the user's exact term — NEVER swap in a different food you think it resembles.
+- "familiar": true ONLY if you genuinely know this specific food's real nutrition; false if you are guessing or unsure. Be honest — false makes the server look the food up on the web instead of trusting your guess.
 - "grams" is your best estimate of the TOTAL edible weight of that item's portion in grams (e.g. 3 pieces of a small snack might be ~90). Always include it for every item.
 - The calories/macros you give are a fallback estimate; the server may refine them with real data.
 - All nutrient values are plain whole numbers, no units.
@@ -86,6 +87,30 @@ function stripFences(s: string): string {
   const last = t.lastIndexOf('}');
   if (first >= 0 && last > first) return t.slice(first, last + 1);
   return t;
+}
+
+/**
+ * Parse model JSON, tolerating the one malformation Gemini Flash actually emits:
+ * a missing comma between two object properties. If a plain parse fails we insert
+ * the comma (value immediately followed by a "key":) and drop any trailing comma,
+ * then retry. Returns null if it still won't parse.
+ */
+function parseLoose(s: string): any | null {
+  try {
+    return JSON.parse(s);
+  } catch {
+    const repaired = s
+      .replace(
+        /("(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|\}|\]|true|false|null)(\s*)("(?:[^"\\]|\\.)*"\s*:)/g,
+        '$1,$2$3',
+      )
+      .replace(/,(\s*[}\]])/g, '$1');
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return null;
+    }
+  }
 }
 
 type Macro = { calories: number; protein_g: number; carbs_g: number; fat_g: number };
@@ -244,9 +269,15 @@ async function enrichMeal(apiKey: string, meal: any): Promise<any> {
   if (items.length === 0) return meal;
   const originalTotal = num(meal?.total?.calories) ?? 0;
 
-  // 1) Free Open Food Facts pass (parallel, one lookup per item).
+  // 1) Free Open Food Facts pass — but only for foods the model is confident it
+  //    knows. Dishes it flagged unfamiliar (e.g. "niouk yen") skip OFF entirely
+  //    so we don't accept a bad packaged-product match and can web-search the
+  //    user's actual term instead.
   const offHits = await Promise.all(
-    items.map((it) => offLookup(String(it?.name ?? ''), num(it?.grams) ?? 0)),
+    items.map((it) => {
+      if (it?.familiar === false) return Promise.resolve<Macro | null>(null);
+      return offLookup(String(it?.name ?? ''), num(it?.grams) ?? 0);
+    }),
   );
   const offSourced: string[] = [];
   items.forEach((it, i) => {
@@ -391,45 +422,58 @@ Deno.serve(async (req: Request) => {
       messages: [{ role: 'system', content: systemContent }, ...history],
     };
 
-    const res = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify(body),
-    });
+    // Call Gemini, retrying once if the reply won't parse. Flash occasionally
+    // emits a malformed JSON object (a stray missing comma); a second try almost
+    // always comes back clean, so one retry beats surfacing a hard error.
+    let parsed: any = null;
+    let cleaned = '';
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      const res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+      });
 
-    if (!res.ok) {
-      let detail = '';
-      try {
-        detail = (await res.json())?.error?.message ?? '';
-      } catch {
-        // ignore
+      if (!res.ok) {
+        let detail = '';
+        try {
+          detail = (await res.json())?.error?.message ?? '';
+        } catch {
+          // ignore
+        }
+        if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
+        if (res.status === 429) {
+          return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
+        }
+        return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
       }
-      if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
-      if (res.status === 429) {
-        return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
-      }
-      return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
+
+      const data = await res.json();
+      const content: string | undefined = data?.choices?.[0]?.message?.content;
+      if (!content) continue;
+      cleaned = stripFences(content);
+      parsed = parseLoose(cleaned); // repairs a dropped comma; loop retries if still bad
     }
 
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content) {
-      return json({ error: 'Gemini returned an empty answer.' }, 502);
+    // Both attempts unparseable — degrade to a friendly nudge, not a hard error.
+    if (!parsed) {
+      return json(
+        {
+          content: JSON.stringify({
+            kind: 'answer',
+            reply: 'Sorry, I had trouble reading that — mind rephrasing?',
+          }),
+        },
+        200,
+      );
     }
 
-    // Enrich meals (OFF → Exa+Gemini); pass non-meals and anything unparseable
-    // straight through so a bad parse never breaks the chat.
-    const clean = stripFences(content);
-    let out = clean;
-    try {
-      const parsed = JSON.parse(clean);
-      if (parsed?.kind === 'meal') {
-        out = JSON.stringify(await enrichMeal(apiKey, parsed));
-      }
-    } catch {
-      out = clean;
-    }
-
+    // Re-serialize the parsed object so the app always receives valid JSON (the
+    // raw text may have needed a repair). Meals also get OFF → Exa enrichment.
+    const out =
+      parsed?.kind === 'meal'
+        ? JSON.stringify(await enrichMeal(apiKey, parsed))
+        : JSON.stringify(parsed);
     return json({ content: out }, 200);
   } catch (e) {
     return json({ error: (e as Error)?.message ?? 'Unexpected server error.' }, 500);
