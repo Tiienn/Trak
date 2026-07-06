@@ -163,10 +163,58 @@ function MiniRing({
   );
 }
 
-/* -------------------------------- Ask card -------------------------------- */
+/* ------------------------------ Coaching card ----------------------------- */
 
-/** Always-visible entry point into Chat's Ask mode — no dismiss, no daily reset. */
-function AskCard({ colors }: { colors: ThemeColors }) {
+/**
+ * Pick today's coaching nudge from the day's state — most urgent gap first.
+ * Always visible (no dismissal); the message itself changes as the day evolves.
+ */
+function pickTip(input: {
+  mealsLogged: number;
+  proteinPct: number;
+  caloriePct: number;
+  waterPct: number;
+  streak: number;
+}): { title: string; body: string } {
+  const { mealsLogged, proteinPct, caloriePct, waterPct, streak } = input;
+  if (mealsLogged === 0) {
+    return {
+      title: 'Start the day',
+      body: 'Log your first meal — a quick photo scan or a one-line message to Trak is enough.',
+    };
+  }
+  if (proteinPct < 0.5 && caloriePct > 0.5) {
+    return {
+      title: 'Protein is lagging',
+      body: 'Your calories are ahead of your protein. Lean on eggs, yogurt, or tuna next meal.',
+    };
+  }
+  if (waterPct < 0.5) {
+    return {
+      title: 'Hydration check',
+      body: 'You’re behind on water — a glass now beats a litre at night.',
+    };
+  }
+  if (streak >= 3) {
+    return {
+      title: `Day ${streak} streak`,
+      body: 'Consistency is doing the heavy lifting. One more log keeps it alive.',
+    };
+  }
+  return {
+    title: 'Looking steady',
+    body: 'No gaps right now — ask Trak about your trends or what to eat next.',
+  };
+}
+
+/** The permanent coaching card — tapping it opens Chat's Ask panel. */
+function CoachCard({
+  tip,
+  colors,
+}: {
+  tip: { title: string; body: string };
+  colors: ThemeColors;
+}) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -178,10 +226,8 @@ function AskCard({ colors }: { colors: ThemeColors }) {
         <SparklesIcon size={18} color={Brand.greenDark} />
       </View>
       <View style={styles.tipInfo}>
-        <Text style={[styles.tipTitle, { color: colors.text }]}>Ask Trak anything</Text>
-        <Text style={[styles.tipBody, { color: colors.textSecondary }]}>
-          Trends, gaps, or what to eat next — tap to ask.
-        </Text>
+        <Text style={[styles.tipTitle, { color: colors.text }]}>{tip.title}</Text>
+        <Text style={[styles.tipBody, { color: colors.textSecondary }]}>{tip.body}</Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
     </Pressable>
@@ -398,6 +444,13 @@ export default function HomeScreen() {
     waterGoal,
     streak,
   });
+  const tip = pickTip({
+    mealsLogged: todayMeals.length,
+    proteinPct: targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0,
+    caloriePct: calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0,
+    waterPct: waterGoal > 0 ? waterToday / waterGoal : 0,
+    streak,
+  });
   const caloriesLeft = Math.max(0, calorieBudget - todayTotals.calories);
   const caloriesOver = todayTotals.calories > calorieBudget;
 
@@ -431,8 +484,8 @@ export default function HomeScreen() {
           {/* Trak Score hero */}
           <ScoreCard value={score.value} caption={scoreCaption(score.value)} colors={colors} />
 
-          {/* Always-visible entry point into Chat's Ask mode */}
-          <AskCard colors={colors} />
+          {/* Daily coaching nudge — always visible, opens Chat's Ask panel */}
+          <CoachCard tip={tip} colors={colors} />
 
           {/* Goal + macro rings */}
           <View style={[styles.macroCard, { backgroundColor: colors.backgroundElement }]}>

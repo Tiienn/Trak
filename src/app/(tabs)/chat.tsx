@@ -69,8 +69,9 @@ const ASK_GROUPS: { heading: string; items: string[] }[] = [
   },
 ];
 
-/** Conversation persists across app launches (latest turns only). */
+/** Both conversations persist across app launches (latest turns only). */
 const CHAT_STORAGE_KEY = 'trak.chat.v1';
+const ASK_STORAGE_KEY = 'trak.ask.v1';
 const CHAT_KEEP = 40;
 
 let nextId = 1;
@@ -139,26 +140,38 @@ export default function ChatScreen() {
   const { targets, todayTotals, addMeal, calorieBias, meals } = useMeals();
   const params = useLocalSearchParams<{ mode?: string }>();
 
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  // Chat and Ask are two independent conversations with their own histories.
+  const [chatMessages, setChatMessages] = useState<UiMessage[]>([]);
+  const [askMessages, setAskMessages] = useState<UiMessage[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('chat');
   const listRef = useRef<FlatList<UiMessage>>(null);
+  // Synchronous re-entry guard: `thinking` state commits async, so a fast
+  // double-tap could start two sends. A ref flips immediately.
+  const sendingRef = useRef(false);
 
-  // Jumping here from the Home "Ask Trak anything" card opens straight into
-  // Ask mode, even if Chat is already mounted (tabs stay alive in the background).
+  const messages = mode === 'chat' ? chatMessages : askMessages;
+  const setMessages = mode === 'chat' ? setChatMessages : setAskMessages;
+
+  // Jumping here from the Home coaching card opens straight into Ask mode,
+  // even if Chat is already mounted (tabs stay alive in the background).
   useEffect(() => {
     if (params.mode === 'ask') setMode('ask');
   }, [params.mode]);
 
-  // Restore the conversation once per app launch, then keep it saved.
+  // Restore both conversations once per app launch, then keep them saved.
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(CHAT_STORAGE_KEY);
-        if (raw) setMessages(JSON.parse(raw));
+        const [chatRaw, askRaw] = await Promise.all([
+          AsyncStorage.getItem(CHAT_STORAGE_KEY),
+          AsyncStorage.getItem(ASK_STORAGE_KEY),
+        ]);
+        if (chatRaw) setChatMessages(JSON.parse(chatRaw));
+        if (askRaw) setAskMessages(JSON.parse(askRaw));
       } catch {
         // A broken cache just means a fresh conversation.
       }
@@ -167,15 +180,21 @@ export default function ChatScreen() {
   }, []);
   useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-CHAT_KEEP))).catch(
+    AsyncStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatMessages.slice(-CHAT_KEEP))).catch(
       () => {}
     );
-  }, [messages, hydrated]);
+  }, [chatMessages, hydrated]);
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(ASK_STORAGE_KEY, JSON.stringify(askMessages.slice(-CHAT_KEEP))).catch(
+      () => {}
+    );
+  }, [askMessages, hydrated]);
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || thinking) return;
-    setMode('chat'); // sending (from Ask or Chat) always reveals the conversation thread
+    if (!trimmed || thinking || sendingRef.current) return;
+    sendingRef.current = true;
 
     const userMsg: UiMessage = { id: makeId(), role: 'user', content: trimmed };
     const base = [...messages, userMsg];
@@ -211,6 +230,7 @@ export default function ChatScreen() {
         },
       ]);
     } finally {
+      sendingRef.current = false;
       setThinking(false);
     }
   }
@@ -268,7 +288,7 @@ export default function ChatScreen() {
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          {mode === 'ask' ? (
+          {messages.length === 0 && mode === 'ask' ? (
             <ScrollView contentContainerStyle={styles.empty} showsVerticalScrollIndicator={false}>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask Trak anything</Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
@@ -293,7 +313,7 @@ export default function ChatScreen() {
               ))}
             </ScrollView>
           ) : messages.length === 0 ? (
-            <View style={styles.empty}>
+            <View style={[styles.empty, styles.emptyCenter]}>
               <RingMark size={40} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>Tell me what you ate</Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
@@ -364,7 +384,9 @@ export default function ChatScreen() {
           <View style={[styles.inputRow, { backgroundColor: colors.backgroundElement }]}>
             <TextInput
               style={[styles.input, { color: colors.text }]}
-              placeholder="e.g. 1 big mac, 1 fries, 1 coke zero"
+              placeholder={
+                mode === 'chat' ? 'e.g. 1 big mac, 1 fries, 1 coke zero' : 'Ask about your day…'
+              }
               placeholderTextColor={colors.textSecondary}
               value={input}
               onChangeText={setInput}
@@ -411,6 +433,7 @@ const styles = StyleSheet.create({
   modeBtnText: { fontSize: 14, fontWeight: '700' },
 
   empty: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.four, paddingBottom: Spacing.four },
+  emptyCenter: { flex: 1, justifyContent: 'center' },
   emptyTitle: { fontSize: 24, fontFamily: Type.display, fontWeight: '700' },
   emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
   suggestionGroup: { alignSelf: 'stretch', marginTop: Spacing.three, gap: Spacing.two },
