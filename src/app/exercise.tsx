@@ -72,7 +72,7 @@ export default function ExerciseScreen() {
           Burned calories add back to today&apos;s budget.
         </Text>
 
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Today's total */}
             <View style={[styles.totalCard, { backgroundColor: colors.backgroundElement }]}>

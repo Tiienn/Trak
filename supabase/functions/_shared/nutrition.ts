@@ -40,6 +40,38 @@ export function jwtPayload(token: string): any {
   return JSON.parse(atob(padded));
 }
 
+/**
+ * Per-user daily request cap on the paid AI endpoints. Counts one unit per
+ * client request in the `ai_usage` table (service role only; no RLS policies).
+ * FAILS OPEN: if the table is missing or the write errors, the request is
+ * allowed — the limiter is cost protection, not an availability risk.
+ */
+export async function underDailyLimit(userId: string, limit = 150): Promise<boolean> {
+  try {
+    if (!userId) return true;
+    const url = Deno.env.get('SUPABASE_URL');
+    const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) return true;
+    const { createClient } = await import('jsr:@supabase/supabase-js@2');
+    const admin = createClient(url, key);
+    const day = new Date().toISOString().slice(0, 10);
+    const { data } = await admin
+      .from('ai_usage')
+      .select('count')
+      .eq('user_id', userId)
+      .eq('day', day)
+      .maybeSingle();
+    const current = data?.count ?? 0;
+    if (current >= limit) return false;
+    await admin
+      .from('ai_usage')
+      .upsert({ user_id: userId, day, count: current + 1 }, { onConflict: 'user_id,day' });
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 /** fetch() with a hard timeout so a hung upstream can't eat the whole function. */
 export async function fetchWithTimeout(
   url: string,

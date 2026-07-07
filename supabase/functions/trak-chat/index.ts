@@ -20,6 +20,7 @@ import {
   num,
   parseLoose,
   stripFences,
+  underDailyLimit,
 } from '../_shared/nutrition.ts';
 
 const SYSTEM_PROMPT = `You are "Trak", the friendly assistant inside the Trak calorie-tracking app.
@@ -63,14 +64,21 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Require a real signed-in user (the public anon key is also a valid JWT).
+    let userId = '';
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
       const payload = jwtPayload(token);
+      userId = String(payload?.sub ?? '');
       if (payload?.role !== 'authenticated') {
         return json({ error: 'Please sign in to chat.' }, 401);
       }
     } catch {
       return json({ error: 'Please sign in to chat.' }, 401);
+    }
+
+    // Per-user daily cap on the paid AI endpoints (fails open if unavailable).
+    if (!(await underDailyLimit(userId))) {
+      return json({ error: 'Daily AI limit reached — resets tomorrow.' }, 429);
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';

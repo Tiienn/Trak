@@ -55,7 +55,12 @@ type UiMessage = {
 };
 
 /** Quick logging examples shown on a fresh, empty Chat. */
-const LOG_EXAMPLES = ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'];
+const CHAT_GROUPS: { heading: string; items: string[] }[] = [
+  {
+    heading: 'LOG BY TEXT',
+    items: ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'],
+  },
+];
 
 /** Grouped insight prompts for the Ask panel — always available, tap to send. */
 const ASK_GROUPS: { heading: string; items: string[] }[] = [
@@ -291,50 +296,43 @@ export default function ChatScreen() {
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          {messages.length === 0 && mode === 'ask' ? (
-            <ScrollView contentContainerStyle={styles.empty} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask Trak anything</Text>
-              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-                Trends, gaps, and patterns in your data — pick a question or type your own below.
-              </Text>
-              {ASK_GROUPS.map((group) => (
-                <View key={group.heading} style={styles.suggestionGroup}>
-                  <Text style={[styles.suggestionHeading, { color: colors.textSecondary }]}>
-                    {group.heading}
-                  </Text>
-                  <View style={styles.suggestionGrid}>
-                    {group.items.map((s) => (
-                      <Pressable
-                        key={s}
-                        style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
-                        onPress={() => send(s)}>
-                        <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+          {/* Suggestions stay pinned above the thread — the conversation
+              scrolls in its own area and can never cover them. */}
+          <View style={styles.pinned}>
+            {(mode === 'ask' ? ASK_GROUPS : CHAT_GROUPS).map((group) => (
+              <View key={group.heading} style={styles.suggestionGroup}>
+                <Text style={[styles.suggestionHeading, { color: colors.textSecondary }]}>
+                  {group.heading}
+                </Text>
+                <View style={styles.suggestionGrid}>
+                  {group.items.map((s) => (
+                    <Pressable
+                      key={s}
+                      style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
+                      onPress={() => send(s)}>
+                      <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
+                    </Pressable>
+                  ))}
                 </View>
-              ))}
-            </ScrollView>
-          ) : messages.length === 0 ? (
-            <View style={[styles.empty, styles.emptyCenter]}>
-              <RingMark size={40} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Tell me what you ate</Text>
-              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
-                Describe a meal in plain words and I’ll estimate the calories.
-              </Text>
-              <View style={styles.suggestionGrid}>
-                {LOG_EXAMPLES.map((s) => (
-                  <Pressable
-                    key={s}
-                    style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
-                    onPress={() => send(s)}>
-                    <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
-                  </Pressable>
-                ))}
               </View>
+            ))}
+          </View>
+
+          {messages.length === 0 ? (
+            <View style={[styles.empty, styles.emptyCenter]}>
+              <RingMark size={36} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                {mode === 'ask' ? 'Ask Trak anything' : 'Tell me what you ate'}
+              </Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+                {mode === 'ask'
+                  ? 'Trends, gaps, and patterns in your data — pick a question above or type your own.'
+                  : 'Describe a meal in plain words and I’ll estimate the calories.'}
+              </Text>
             </View>
           ) : (
             <FlatList
+              style={styles.flex}
               ref={listRef}
               data={listData}
               inverted
@@ -441,7 +439,8 @@ const styles = StyleSheet.create({
   emptyCenter: { flex: 1, justifyContent: 'center' },
   emptyTitle: { fontSize: 24, fontFamily: Type.display, fontWeight: '700' },
   emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
-  suggestionGroup: { alignSelf: 'stretch', marginTop: Spacing.three, gap: Spacing.two },
+  pinned: { paddingTop: Spacing.two, gap: Spacing.two },
+  suggestionGroup: { alignSelf: 'stretch', gap: Spacing.two },
   suggestionHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
   suggestionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   suggestion: {

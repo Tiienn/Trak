@@ -213,7 +213,7 @@ export default function MealDetailScreen() {
           <Text style={[styles.when, { color: colors.textSecondary }]}>Editing meal</Text>
         )}
 
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {meal.photoUri && !editing ? (
               <Image source={{ uri: meal.photoUri }} style={styles.photo} contentFit="cover" />

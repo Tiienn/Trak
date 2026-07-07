@@ -709,7 +709,10 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .update({ water_goal: clamped })
         .eq('user_id', user.id);
-      if (error) setProfile(previous);
+      if (error) {
+        setProfile(previous);
+        throw new Error('Could not save your water goal. Check your connection and try again.');
+      }
     },
     [user, profile]
   );
@@ -725,7 +728,10 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         .from('profiles')
         .update({ calorie_bias: clamped })
         .eq('user_id', user.id);
-      if (error) setProfile(previous);
+      if (error) {
+        setProfile(previous);
+        throw new Error('Could not save the adjustment. Check your connection and try again.');
+      }
     },
     [user, profile]
   );

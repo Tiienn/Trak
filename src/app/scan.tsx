@@ -1,4 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -50,11 +51,29 @@ export default function ScanScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }
 
+  /**
+   * Camera/picker URIs point into the app CACHE directory, which Android may
+   * trim at any time — photos silently vanished from the log. Copy the file
+   * into the persistent document directory when the meal is saved; on any
+   * failure, fall back to the original URI (worst case: the old behavior).
+   */
+  async function persistPhoto(uri: string): Promise<string> {
+    try {
+      const dir = `${FileSystem.documentDirectory}meal-photos/`;
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+      const dest = `${dir}${Date.now()}.jpg`;
+      await FileSystem.copyAsync({ from: uri, to: dest });
+      return dest;
+    } catch {
+      return uri;
+    }
+  }
+
   async function onAddToToday() {
     if (!analysis || saving) return; // guard against double taps
     setSaving(true);
     try {
-      await addMeal(analysis, photoUri ?? undefined);
+      await addMeal(analysis, photoUri ? await persistPhoto(photoUri) : undefined);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.back();
     } catch (e: any) {

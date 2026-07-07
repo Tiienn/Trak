@@ -16,6 +16,7 @@ import {
   MODEL,
   parseLoose,
   stripFences,
+  underDailyLimit,
 } from '../_shared/nutrition.ts';
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant for a calorie-tracking app called Trak.
@@ -48,14 +49,21 @@ Deno.serve(async (req: Request) => {
     // Supabase's verify_jwt has already checked the token SIGNATURE, but the
     // public anon key is itself a valid JWT (role "anon"). Require a real
     // signed-in user so strangers can't spend the API credit.
+    let userId = '';
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
       const payload = jwtPayload(token);
+      userId = String(payload?.sub ?? '');
       if (payload?.role !== 'authenticated') {
         return json({ error: 'Please sign in to scan meals.' }, 401);
       }
     } catch {
       return json({ error: 'Please sign in to scan meals.' }, 401);
+    }
+
+    // Per-user daily cap on the paid AI endpoints (fails open if unavailable).
+    if (!(await underDailyLimit(userId))) {
+      return json({ error: 'Daily AI limit reached — resets tomorrow.' }, 429);
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';

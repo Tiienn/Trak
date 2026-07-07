@@ -208,7 +208,7 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
@@ -392,7 +392,11 @@ export default function ProfileScreen() {
                   <View style={styles.biasRow}>
                     <Pressable
                       hitSlop={8}
-                      onPress={() => setCalorieBias(calorieBias - 5)}
+                      onPress={() =>
+                        setCalorieBias(calorieBias - 5).catch((e) =>
+                          Alert.alert('Not saved', e?.message ?? 'Please try again.')
+                        )
+                      }
                       style={[styles.biasBtn, { backgroundColor: colors.background }]}>
                       <Text style={[styles.biasBtnText, { color: colors.text }]}>−</Text>
                     </Pressable>
@@ -411,7 +415,11 @@ export default function ProfileScreen() {
                     </View>
                     <Pressable
                       hitSlop={8}
-                      onPress={() => setCalorieBias(calorieBias + 5)}
+                      onPress={() =>
+                        setCalorieBias(calorieBias + 5).catch((e) =>
+                          Alert.alert('Not saved', e?.message ?? 'Please try again.')
+                        )
+                      }
                       style={[styles.biasBtn, { backgroundColor: colors.background }]}>
                       <Text style={[styles.biasBtnText, { color: colors.text }]}>+</Text>
                     </Pressable>

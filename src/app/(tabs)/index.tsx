@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Redirect, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -304,14 +305,22 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
             <Text style={[styles.goalPrefix, { color: colors.textSecondary }]}>Goal</Text>
             <Pressable
               hitSlop={8}
-              onPress={() => setWaterGoal(Math.max(1, waterGoal - 1))}
+              onPress={() =>
+                setWaterGoal(Math.max(1, waterGoal - 1)).catch((e) =>
+                  Alert.alert('Not saved', e?.message ?? 'Please try again.')
+                )
+              }
               style={[styles.stepBtn, { backgroundColor: colors.background }]}>
               <Text style={[styles.stepText, { color: colors.text }]}>−</Text>
             </Pressable>
             <Text style={[styles.goalValue, { color: colors.text }]}>{goalLabel}</Text>
             <Pressable
               hitSlop={8}
-              onPress={() => setWaterGoal(waterGoal + 1)}
+              onPress={() =>
+                setWaterGoal(waterGoal + 1).catch((e) =>
+                  Alert.alert('Not saved', e?.message ?? 'Please try again.')
+                )
+              }
               style={[styles.stepBtn, { backgroundColor: colors.background }]}>
               <Text style={[styles.stepText, { color: colors.text }]}>+</Text>
             </Pressable>

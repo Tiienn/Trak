@@ -63,7 +63,7 @@ export default function AuthScreen() {
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.center}>
             <View style={styles.logoRow}>
               <View style={[styles.logoDot, { backgroundColor: Brand.green }]} />
