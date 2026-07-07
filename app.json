@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trak",
     "slug": "trak",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trak",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.tien.trak",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.health.READ_NUTRITION",
         "android.permission.health.WRITE_NUTRITION"
