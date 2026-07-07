@@ -10,14 +10,16 @@
 // ../_shared/nutrition.ts and is shared with analyze-food.
 
 import {
+  corsHeaders,
   enrichMeal,
+  fetchWithTimeout,
   GEMINI_URL,
   json,
+  jwtPayload,
   MODEL,
   num,
   parseLoose,
   stripFences,
-  corsHeaders,
 } from '../_shared/nutrition.ts';
 
 const SYSTEM_PROMPT = `You are "Trak", the friendly assistant inside the Trak calorie-tracking app.
@@ -63,7 +65,7 @@ Deno.serve(async (req: Request) => {
     // Require a real signed-in user (the public anon key is also a valid JWT).
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-      const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+      const payload = jwtPayload(token);
       if (payload?.role !== 'authenticated') {
         return json({ error: 'Please sign in to chat.' }, 401);
       }
@@ -141,24 +143,28 @@ Deno.serve(async (req: Request) => {
     // the common case and a second try covers the rest.
     let parsed: any = null;
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-      const res = await fetch(GEMINI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(body),
-      });
+      const res = await fetchWithTimeout(
+        GEMINI_URL,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(body),
+        },
+        45_000,
+      );
 
       if (!res.ok) {
-        let detail = '';
+        // Log the upstream detail server-side; never echo internals to clients.
         try {
-          detail = (await res.json())?.error?.message ?? '';
+          console.error('gemini error', res.status, (await res.json())?.error?.message ?? '');
         } catch {
           // ignore
         }
         if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
         if (res.status === 429) {
-          return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
+          return json({ error: 'The assistant is busy right now. Try again shortly.' }, 502);
         }
-        return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
+        return json({ error: 'The assistant hit a snag. Please try again.' }, 502);
       }
 
       const data = await res.json();
@@ -188,6 +194,7 @@ Deno.serve(async (req: Request) => {
         : JSON.stringify(parsed);
     return json({ content: out }, 200);
   } catch (e) {
-    return json({ error: (e as Error)?.message ?? 'Unexpected server error.' }, 500);
+    console.error('trak-chat error', (e as Error)?.message);
+    return json({ error: 'Unexpected server error. Please try again.' }, 500);
   }
 });

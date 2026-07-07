@@ -30,6 +30,32 @@ export function num(v: unknown): number | null {
 }
 
 /**
+ * Decode a JWT's payload segment. JWT uses base64url; plain `atob` throws on
+ * its `-`/`_` characters, which locked out any user whose token payload
+ * happened to encode with them. Throws on malformed input — callers catch.
+ */
+export function jwtPayload(token: string): any {
+  const seg = (token.split('.')[1] ?? '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = seg + '='.repeat((4 - (seg.length % 4)) % 4);
+  return JSON.parse(atob(padded));
+}
+
+/** fetch() with a hard timeout so a hung upstream can't eat the whole function. */
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Pull a clean JSON object string out of a model reply. Gemini doesn't reliably
  * honor response_format, so it may wrap the JSON in ```fences``` or add prose
  * around it. We unwrap fences, then fall back to the outermost {...} span.
@@ -106,7 +132,9 @@ async function offLookup(name: string, grams: number): Promise<Macro | null> {
     for (const p of products) {
       const pname = String(p?.product_name ?? '').toLowerCase();
       if (!pname) continue;
-      if (words.length && !words.some((w) => pname.includes(w))) continue;
+      // Require EVERY query word — a single shared word matched "chicken curry"
+      // to "chicken broth" and served wildly wrong nutrition with confidence.
+      if (words.length && !words.every((w) => pname.includes(w))) continue;
       const n = p?.nutriments ?? {};
       const kcal100 = num(n['energy-kcal_100g']);
       if (kcal100 === null) continue;
@@ -180,13 +208,13 @@ async function geminiScale(
     `your best general knowledge.\nFoods (index: name — grams):\n${list}\n\n` +
     `Respond ONLY JSON: {"items":[{"index":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}]} with whole numbers.`;
   try {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetchWithTimeout(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
         temperature: 0.1,
-        max_tokens: 500,
+        max_tokens: 1000,
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -197,7 +225,7 @@ async function geminiScale(
           { role: 'user', content: prompt },
         ],
       }),
-    });
+    }, 45_000);
     if (!res.ok) return null;
     const data = await res.json();
     const content: string | undefined = data?.choices?.[0]?.message?.content;
@@ -236,12 +264,20 @@ export async function enrichMeal(apiKey: string, meal: any): Promise<any> {
   //    knows. Dishes it flagged unfamiliar (e.g. "niouk yen") skip OFF entirely
   //    so we don't accept a bad packaged-product match and can web-search the
   //    user's actual term instead.
-  const offHits = await Promise.all(
+  const rawHits = await Promise.all(
     items.map((it) => {
       if (it?.familiar === false) return Promise.resolve<Macro | null>(null);
       return offLookup(String(it?.name ?? ''), num(it?.grams) ?? 0);
     }),
   );
+  // Sanity gate: an OFF product whose calories diverge >3x from the model's own
+  // estimate is almost certainly the wrong product — keep the estimate instead.
+  const offHits = rawHits.map((hit, i) => {
+    if (!hit) return null;
+    const est = num(items[i]?.calories) ?? 0;
+    if (est > 0 && (hit.calories > est * 3 || hit.calories * 3 < est)) return null;
+    return hit;
+  });
   const offSourced: string[] = [];
   items.forEach((it, i) => {
     const hit = offHits[i];
@@ -254,7 +290,11 @@ export async function enrichMeal(apiKey: string, meal: any): Promise<any> {
   });
 
   // 2) Web search (Exa) + Gemini scaling for the foods OFF didn't cover.
-  const missedIdx = items.map((_, i) => i).filter((i) => !offHits[i]);
+  //    Items without a usable gram estimate stay on the model's numbers —
+  //    scaling per-100g data to 0 g would zero them out.
+  const missedIdx = items
+    .map((_, i) => i)
+    .filter((i) => !offHits[i] && (num(items[i]?.grams) ?? 0) > 0);
   const webSourced: string[] = [];
   if (missedIdx.length > 0) {
     const missed = missedIdx.map((i) => ({

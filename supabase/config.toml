@@ -1,0 +1,11 @@
+# Supabase project configuration.
+# The edge functions check the JWT's role WITHOUT verifying its signature —
+# they rely on the platform's verify_jwt gateway doing that. Pinning it here
+# keeps a future `--no-verify-jwt` deploy from silently disabling auth.
+project_id = "trak"
+
+[functions.trak-chat]
+verify_jwt = true
+
+[functions.analyze-food]
+verify_jwt = true

@@ -9,8 +9,10 @@
 import {
   corsHeaders,
   enrichMeal,
+  fetchWithTimeout,
   GEMINI_URL,
   json,
+  jwtPayload,
   MODEL,
   parseLoose,
   stripFences,
@@ -48,7 +50,7 @@ Deno.serve(async (req: Request) => {
     // signed-in user so strangers can't spend the API credit.
     try {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-      const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+      const payload = jwtPayload(token);
       if (payload?.role !== 'authenticated') {
         return json({ error: 'Please sign in to scan meals.' }, 401);
       }
@@ -73,7 +75,9 @@ Deno.serve(async (req: Request) => {
     const body = {
       model: MODEL,
       temperature: 0.2,
-      max_tokens: 700, // bounds the cost of each call; plenty for the JSON answer
+      // Bounds cost, but must fit a multi-item plate's full JSON — a 700-token
+      // cap truncated 4+ item analyses mid-object, which no repair can fix.
+      max_tokens: 2048,
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
@@ -92,24 +96,28 @@ Deno.serve(async (req: Request) => {
     // the common case and a second try covers the rest.
     let parsed: any = null;
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-      const res = await fetch(GEMINI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(body),
-      });
+      const res = await fetchWithTimeout(
+        GEMINI_URL,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify(body),
+        },
+        60_000, // vision requests are slower than text
+      );
 
       if (!res.ok) {
-        let detail = '';
+        // Log the upstream detail server-side; never echo internals to clients.
         try {
-          detail = (await res.json())?.error?.message ?? '';
+          console.error('gemini error', res.status, (await res.json())?.error?.message ?? '');
         } catch {
           // ignore
         }
         if (res.status === 401) return json({ error: 'The server Gemini key was rejected.' }, 502);
         if (res.status === 429) {
-          return json({ error: 'Gemini: rate limited or out of quota. Try again shortly.' }, 502);
+          return json({ error: 'The analyzer is busy right now. Try again shortly.' }, 502);
         }
-        return json({ error: `Gemini error ${res.status}${detail ? `: ${detail}` : ''}` }, 502);
+        return json({ error: 'The analyzer hit a snag. Please try again.' }, 502);
       }
 
       const data = await res.json();
@@ -129,6 +137,7 @@ Deno.serve(async (req: Request) => {
     }
     return json({ content: JSON.stringify(parsed) }, 200);
   } catch (e) {
-    return json({ error: (e as Error)?.message ?? 'Unexpected server error.' }, 500);
+    console.error('analyze-food error', (e as Error)?.message);
+    return json({ error: 'Unexpected server error. Please try again.' }, 500);
   }
 });
