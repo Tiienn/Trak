@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
   emptyCenter: { flex: 1, justifyContent: 'center' },
   emptyTitle: { fontSize: 24, fontFamily: Type.display, fontWeight: '700' },
   emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
-  pinned: { paddingTop: Spacing.two, gap: Spacing.two },
+  pinned: { paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: Spacing.two },
   suggestionGroup: { alignSelf: 'stretch', gap: Spacing.two },
   suggestionHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
   suggestionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
