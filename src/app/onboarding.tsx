@@ -160,8 +160,9 @@ export default function OnboardingScreen() {
       hCm = (parseInt(heightFt || '0', 10) * 12 + parseInt(heightIn || '0', 10)) * 2.54;
     }
     if (!Number.isFinite(ageN) || ageN < 10 || ageN > 100) return null;
-    if (!Number.isFinite(weightKg) || weightKg <= 0) return null;
-    if (!Number.isFinite(hCm) || hCm <= 0) return null;
+    // Plausibility bounds keep a typo from silently corrupting all targets.
+    if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) return null;
+    if (!Number.isFinite(hCm) || hCm < 90 || hCm > 250) return null;
     return { age: ageN, weightKg, heightCm: hCm };
   }
 

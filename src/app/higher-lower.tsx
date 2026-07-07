@@ -117,9 +117,12 @@ export default function HigherLowerScreen() {
       }, 1100);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      timer.current = setTimeout(async () => {
+      // Record IMMEDIATELY — recording inside the reveal timer meant leaving
+      // the screen (or switching metric) during the 1.1s reveal silently
+      // discarded the run, including personal bests.
+      recordHigherLower(run, stats).then(setStats).catch(() => {});
+      timer.current = setTimeout(() => {
         setPhase('over');
-        setStats(await recordHigherLower(run, stats));
       }, 1100);
     }
   }

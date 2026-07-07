@@ -99,8 +99,20 @@ async function ensureChannel() {
  * Cancel every scheduled reminder and re-schedule the enabled ones.
  * Reminders are the only notifications Trak schedules, so a blanket
  * cancel is safe. Persists the list too.
+ *
+ * Calls are SERIALIZED through a promise chain: rapid stepper taps used to
+ * overlap, letting an older list's schedule land after a newer list's
+ * cancel-all — leaving a stale notification time behind the fresh UI.
  */
-export async function applyReminders(list: Reminder[]): Promise<void> {
+let applyChain: Promise<void> = Promise.resolve();
+
+export function applyReminders(list: Reminder[]): Promise<void> {
+  const run = applyChain.then(() => applyNow(list));
+  applyChain = run.catch(() => {}); // a failed apply must not poison the chain
+  return run;
+}
+
+async function applyNow(list: Reminder[]): Promise<void> {
   await persist(list);
   await ensureChannel();
   await Notifications.cancelAllScheduledNotificationsAsync();

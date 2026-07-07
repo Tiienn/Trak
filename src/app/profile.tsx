@@ -116,16 +116,56 @@ export default function ProfileScreen() {
   const [unit, setUnit] = useState<'metric' | 'imperial'>('metric');
   const [age, setAge] = useState(profile ? String(profile.age) : '');
   const [heightCm, setHeightCm] = useState(profile ? String(Math.round(profile.heightCm)) : '');
+  const [heightFt, setHeightFt] = useState('');
+  const [heightIn, setHeightIn] = useState('');
   const [weight, setWeight] = useState(profile ? String(Math.round(profile.weightKg)) : '');
   const [saving, setSaving] = useState(false);
 
+  // Switching units CONVERTS the field values — reinterpreting "80" (kg) as
+  // 80 lb silently corrupted body stats and wrecked calorie targets.
+  function switchUnit(next: 'metric' | 'imperial') {
+    if (next === unit) return;
+    if (next === 'imperial') {
+      const kg = parseFloat(weight);
+      if (Number.isFinite(kg)) setWeight(String(Math.round(kg / 0.453592)));
+      const cm = parseFloat(heightCm);
+      if (Number.isFinite(cm)) {
+        const totalIn = cm / 2.54;
+        let ft = Math.floor(totalIn / 12);
+        let inches = Math.round(totalIn % 12);
+        if (inches === 12) {
+          ft += 1;
+          inches = 0;
+        }
+        setHeightFt(String(ft));
+        setHeightIn(String(inches));
+      }
+    } else {
+      const lb = parseFloat(weight);
+      if (Number.isFinite(lb)) setWeight(String(Math.round(lb * 0.453592)));
+      const ft = parseInt(heightFt || '0', 10);
+      const inches = parseInt(heightIn || '0', 10);
+      if (ft > 0 || inches > 0) setHeightCm(String(Math.round((ft * 12 + inches) * 2.54)));
+    }
+    setUnit(next);
+  }
+
   function parseStats(): { age: number; weightKg: number; heightCm: number } | null {
     const ageN = parseInt(age, 10);
-    const weightKg = unit === 'metric' ? parseFloat(weight) : parseFloat(weight) * 0.453592;
-    const hCm = parseFloat(heightCm);
+    let weightKg: number;
+    let hCm: number;
+    if (unit === 'metric') {
+      weightKg = parseFloat(weight);
+      hCm = parseFloat(heightCm);
+    } else {
+      weightKg = parseFloat(weight) * 0.453592;
+      hCm = (parseInt(heightFt || '0', 10) * 12 + parseInt(heightIn || '0', 10)) * 2.54;
+    }
     if (!Number.isFinite(ageN) || ageN < 10 || ageN > 100) return null;
-    if (!Number.isFinite(weightKg) || weightKg <= 0) return null;
-    if (!Number.isFinite(hCm) || hCm <= 0) return null;
+    // Plausibility bounds — a typo like "700" (meaning 70.0) would otherwise
+    // silently corrupt every calorie/macro target.
+    if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) return null;
+    if (!Number.isFinite(hCm) || hCm < 90 || hCm > 250) return null;
     return { age: ageN, weightKg, heightCm: hCm };
   }
 
@@ -247,7 +287,7 @@ export default function ProfileScreen() {
                   <Pressable
                     key={u}
                     style={[styles.unitBtn, unit === u && { backgroundColor: Brand.green }]}
-                    onPress={() => setUnit(u)}>
+                    onPress={() => switchUnit(u)}>
                     <Text
                       style={[
                         styles.unitBtnText,
@@ -270,17 +310,44 @@ export default function ProfileScreen() {
                     maxLength={3}
                   />
                 </Field>
-                <Field label={unit === 'metric' ? 'Height (cm)' : 'Height (cm)'} colors={colors} style={styles.flex}>
-                  <TextInput
-                    style={[styles.input, { color: colors.text }]}
-                    keyboardType="numeric"
-                    value={heightCm}
-                    onChangeText={setHeightCm}
-                    placeholder="cm"
-                    placeholderTextColor={colors.textSecondary}
-                    maxLength={3}
-                  />
-                </Field>
+                {unit === 'metric' ? (
+                  <Field label="Height (cm)" colors={colors} style={styles.flex}>
+                    <TextInput
+                      style={[styles.input, { color: colors.text }]}
+                      keyboardType="numeric"
+                      value={heightCm}
+                      onChangeText={setHeightCm}
+                      placeholder="cm"
+                      placeholderTextColor={colors.textSecondary}
+                      maxLength={3}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <Field label="Height (ft)" colors={colors} style={styles.flex}>
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        keyboardType="number-pad"
+                        value={heightFt}
+                        onChangeText={setHeightFt}
+                        placeholder="ft"
+                        placeholderTextColor={colors.textSecondary}
+                        maxLength={1}
+                      />
+                    </Field>
+                    <Field label="(in)" colors={colors} style={styles.flex}>
+                      <TextInput
+                        style={[styles.input, { color: colors.text }]}
+                        keyboardType="number-pad"
+                        value={heightIn}
+                        onChangeText={setHeightIn}
+                        placeholder="in"
+                        placeholderTextColor={colors.textSecondary}
+                        maxLength={2}
+                      />
+                    </Field>
+                  </>
+                )}
               </View>
               <Field label={unit === 'metric' ? 'Weight (kg)' : 'Weight (lb)'} colors={colors}>
                 <TextInput

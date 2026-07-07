@@ -29,14 +29,20 @@ export default function AuthScreen() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
-  const canSubmit = email.includes('@') && password.length >= 6 && !busy;
+  // Android keyboards often append a space after autocomplete; a trailing
+  // space passes the '@' check but makes Supabase reject the credentials.
+  const cleanEmail = email.trim();
+  const canSubmit = cleanEmail.includes('@') && password.length >= 6 && !busy;
 
   async function submit() {
     setError('');
     setInfo('');
     setBusy(true);
     try {
-      const res = mode === 'signin' ? await signIn(email, password) : await signUp(email, password);
+      const res =
+        mode === 'signin'
+          ? await signIn(cleanEmail, password)
+          : await signUp(cleanEmail, password);
       if (res.error) {
         setError(res.error);
         return;

@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,10 +32,18 @@ const PERKS: [IconCmp, string][] = [
   [MedalIcon, 'Pro supporter badge'],
 ];
 
-function labelFor(pkg: PurchasesPackage): { title: string; sub: string; badge?: string } {
+function labelFor(
+  pkg: PurchasesPackage,
+  all: PurchasesPackage[]
+): { title: string; sub: string; badge?: string } {
   const price = pkg.product.priceString;
   if (pkg.packageType === 'ANNUAL') {
-    return { title: `${price} / year`, sub: 'Best value', badge: 'SAVE 66%' };
+    // Compute the real saving vs 12x monthly — a hardcoded number goes stale
+    // the moment either price changes in Play Console.
+    const monthly = all.find((p) => p.packageType === 'MONTHLY')?.product.price ?? 0;
+    const annual = pkg.product.price;
+    const pct = monthly > 0 && annual > 0 ? Math.round((1 - annual / (monthly * 12)) * 100) : 0;
+    return { title: `${price} / year`, sub: 'Best value', badge: pct >= 5 ? `SAVE ${pct}%` : undefined };
   }
   if (pkg.packageType === 'MONTHLY') {
     return { title: `${price} / month`, sub: 'Cancel anytime' };
@@ -51,6 +59,9 @@ export default function PaywallScreen() {
   const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
+  // State commits async — a fast double-tap could start two purchase flows and
+  // pop an error alert over the live Play sheet. A ref flips synchronously.
+  const busyRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -68,36 +79,40 @@ export default function PaywallScreen() {
   }, []);
 
   async function onSubscribe() {
-    if (!packages || !packages[selected] || busy) return;
+    if (!packages || !packages[selected] || busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const ok = await purchasePro(packages[selected]);
       if (ok) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        Alert.alert('Thank you! 💚', 'You are now a Trak Pro supporter.', [
+        Alert.alert('Thank you!', 'You are now a Trak Pro supporter.', [
           { text: 'Done', onPress: () => router.back() },
         ]);
       }
     } catch (e: any) {
       Alert.alert('Purchase failed', e?.message ?? 'Please try again.');
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   async function onRestore() {
-    if (busy) return;
+    if (busy || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const ok = await restorePro();
       Alert.alert(
-        ok ? 'Restored 💚' : 'Nothing to restore',
+        ok ? 'Restored' : 'Nothing to restore',
         ok ? 'Welcome back, Pro supporter.' : 'No previous purchase was found for this account.'
       );
       if (ok) router.back();
     } catch (e: any) {
       Alert.alert('Restore failed', e?.message ?? 'Please try again.');
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -149,7 +164,7 @@ export default function PaywallScreen() {
           ) : (
             <>
               {packages.map((pkg, i) => {
-                const { title, sub, badge } = labelFor(pkg);
+                const { title, sub, badge } = labelFor(pkg, packages);
                 const active = i === selected;
                 return (
                   <Pressable
@@ -158,7 +173,7 @@ export default function PaywallScreen() {
                     style={[
                       styles.pkg,
                       { backgroundColor: colors.backgroundElement, borderColor: 'transparent' },
-                      active && { borderColor: Brand.green, backgroundColor: '#10B98122' },
+                      active && { borderColor: Brand.green, backgroundColor: `${Brand.green}22` },
                     ]}>
                     <View style={styles.pkgInfo}>
                       <Text style={[styles.pkgTitle, { color: colors.text }]}>{title}</Text>

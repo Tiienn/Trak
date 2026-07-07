@@ -221,7 +221,11 @@ function CoachCard({
         styles.tipCard,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
       ]}
-      onPress={() => router.push({ pathname: '/chat', params: { mode: 'ask' } })}>
+      // The nonce forces the chat screen's mode effect to re-fire — a bare
+      // {mode:'ask'} is referentially identical on the 2nd tap and gets ignored.
+      onPress={() =>
+        router.push({ pathname: '/chat', params: { mode: 'ask', t: String(Date.now()) } })
+      }>
       <View style={[styles.tipIcon, { backgroundColor: colors.greenTint }]}>
         <SparklesIcon size={18} color={Brand.greenDark} />
       </View>

@@ -152,10 +152,13 @@ export default function MealDetailScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          // Close first: the optimistic removal empties this screen instantly,
+          // and awaiting the network here left a "meal no longer in your log"
+          // fallback lingering. removeMeal restores the row if the delete fails.
+          router.back();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           try {
             await removeMeal(meal!.id);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            router.back();
           } catch (e: any) {
             Alert.alert('Not removed', e?.message ?? 'Please try again.');
           }

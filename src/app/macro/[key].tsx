@@ -50,11 +50,19 @@ function insight(
   return `Nice pace — ${left}${cfg.unit} to go.${from}`;
 }
 
-function MacroChip({ color, value }: { color: string; value: number }) {
+function MacroChip({
+  color,
+  value,
+  colors,
+}: {
+  color: string;
+  value: number;
+  colors: ThemeColors;
+}) {
   return (
     <View style={styles.chip}>
       <View style={[styles.chipDot, { backgroundColor: color }]} />
-      <Text style={styles.chipText}>{value}</Text>
+      <Text style={[styles.chipText, { color: colors.textSecondary }]}>{value}</Text>
     </View>
   );
 }
@@ -75,9 +83,9 @@ function FoodRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
           <Text style={[styles.foodCals, { color: colors.textSecondary }]}>
             {meal.total.calories} cal
           </Text>
-          <MacroChip color={MacroColors.protein} value={meal.total.protein_g} />
-          <MacroChip color={MacroColors.carbs} value={meal.total.carbs_g} />
-          <MacroChip color={MacroColors.fat} value={meal.total.fat_g} />
+          <MacroChip color={MacroColors.protein} value={meal.total.protein_g} colors={colors} />
+          <MacroChip color={MacroColors.carbs} value={meal.total.carbs_g} colors={colors} />
+          <MacroChip color={MacroColors.fat} value={meal.total.fat_g} colors={colors} />
         </View>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
@@ -234,7 +242,7 @@ const styles = StyleSheet.create({
   foodCals: { fontSize: 13, fontWeight: '600' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   chipDot: { width: 9, height: 9, borderRadius: 5 },
-  chipText: { fontSize: 12, fontWeight: '700', color: '#8A8274' },
+  chipText: { fontSize: 12, fontWeight: '700' },
   chevron: { fontSize: 20, fontWeight: '600' },
 
   empty: { borderRadius: 16, padding: Spacing.four },

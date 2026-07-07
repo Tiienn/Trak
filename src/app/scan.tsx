@@ -7,13 +7,14 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
@@ -31,6 +32,7 @@ export default function ScanScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
+  const insets = useSafeAreaInsets();
   const { addMeal, calorieBias } = useMeals();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
@@ -129,8 +131,14 @@ export default function ScanScreen() {
       <SafeAreaView style={styles.permissionWrap}>
         <Text style={styles.permTitle}>Camera access</Text>
         <Text style={styles.permBody}>Trak needs your camera to scan meals.</Text>
-        <Pressable style={styles.primaryBtn} onPress={requestPermission}>
-          <Text style={styles.primaryBtnText}>Allow camera</Text>
+        <Pressable
+          style={styles.primaryBtn}
+          onPress={() =>
+            permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()
+          }>
+          <Text style={styles.primaryBtnText}>
+            {permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'}
+          </Text>
         </Pressable>
         <Pressable style={styles.linkBtn} onPress={onPickFromGallery}>
           <Text style={styles.linkText}>Or choose a photo instead</Text>
@@ -203,7 +211,7 @@ export default function ScanScreen() {
 
       {/* Error */}
       {phase === 'error' && (
-        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 40 + insets.bottom }]}>
           <Text style={[styles.sheetTitle, { color: colors.text }]}>
             Hmm, that didn&apos;t work
           </Text>
@@ -253,13 +261,14 @@ function ResultSheet({
   onRetake: () => void;
   onDone: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   // How the user's quick guess compares to the AI estimate.
   const actual = analysis.total.calories;
   const guessErr =
     guess != null && actual > 0 ? Math.round((Math.abs(guess - actual) / actual) * 100) : null;
   if (!analysis.isFood) {
     return (
-      <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+      <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 40 + insets.bottom }]}>
         <Text style={[styles.sheetTitle, { color: colors.text }]}>No food detected</Text>
         <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>
           {analysis.notes ?? "I couldn't find food in that photo."}
@@ -329,7 +338,7 @@ function ResultSheet({
         )}
       </ScrollView>
 
-      <View style={[styles.resultButtons, { borderTopColor: colors.backgroundSelected }]}>
+      <View style={[styles.resultButtons, { borderTopColor: colors.backgroundSelected, paddingBottom: 16 + insets.bottom }]}>
         <Pressable
           style={[styles.secondaryBtn, { backgroundColor: colors.backgroundElement }]}
           onPress={onRetake}

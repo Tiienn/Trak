@@ -71,18 +71,23 @@ export default function QuickAddScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { savedMeals, recentMeals, quickLog, removeSavedMeal } = useMeals();
+  // Keyed by normalized TITLE, not id: logging a recent meal inserts a new row
+  // whose id replaces the old one in the dedup list, orphaning id-keyed flags
+  // (no "Added ✓" feedback, and dismissed rows resurrected).
+  const keyOf = (m: { title: string }) => m.title.trim().toLowerCase();
   const [added, setAdded] = useState<Record<string, boolean>>({});
   // Recent suggestions the user waved off this session — the next ones backfill.
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
-  const visibleRecent = recentMeals.filter((m) => !dismissed[m.id]).slice(0, RECENT_WINDOW);
-  const hiddenCount = recentMeals.filter((m) => !dismissed[m.id]).length - visibleRecent.length;
+  const visibleRecent = recentMeals.filter((m) => !dismissed[keyOf(m)]).slice(0, RECENT_WINDOW);
+  const hiddenCount = recentMeals.filter((m) => !dismissed[keyOf(m)]).length - visibleRecent.length;
 
   async function add(item: QuickItem) {
     try {
       await quickLog({ title: item.title, total: item.total, items: item.items });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setAdded((prev) => ({ ...prev, [item.id]: true }));
-      setTimeout(() => setAdded((prev) => ({ ...prev, [item.id]: false })), 1300);
+      const key = keyOf(item);
+      setAdded((prev) => ({ ...prev, [key]: true }));
+      setTimeout(() => setAdded((prev) => ({ ...prev, [key]: false })), 1300);
     } catch (e: any) {
       Alert.alert('Not added', e?.message ?? 'Please try again.');
     }
@@ -128,7 +133,7 @@ export default function QuickAddScreen() {
                   <Row
                     key={s.id}
                     item={s}
-                    added={!!added[s.id]}
+                    added={!!added[keyOf(s)]}
                     colors={colors}
                     onAdd={() => add(s)}
                     onRemove={() => remove(s.id)}
@@ -146,12 +151,12 @@ export default function QuickAddScreen() {
                   <Row
                     key={m.id}
                     item={m}
-                    added={!!added[m.id]}
+                    added={!!added[keyOf(m)]}
                     colors={colors}
                     onAdd={() => add(m)}
                     onRemove={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                      setDismissed((prev) => ({ ...prev, [m.id]: true }));
+                      setDismissed((prev) => ({ ...prev, [keyOf(m)]: true }));
                     }}
                   />
                 ))}

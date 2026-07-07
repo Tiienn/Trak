@@ -183,11 +183,11 @@ function ProCard({ colors }: { colors: ThemeColors }) {
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Trak Pro</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          {isPro ? 'You’re a supporter — thank you! 💚' : 'Enjoying Trak? Support its development.'}
+          {isPro ? 'You’re a supporter — thank you!' : 'Enjoying Trak? Support its development.'}
         </Text>
       </View>
       {isPro ? (
-        <Text style={styles.healthOn}>💚 Pro</Text>
+        <Text style={styles.healthOn}>✓ Pro</Text>
       ) : (
         <Pressable style={styles.healthBtn} onPress={() => router.push('/paywall')}>
           <Text style={styles.healthBtnText}>Support</Text>

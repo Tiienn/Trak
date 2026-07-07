@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -59,13 +59,22 @@ export default function RemindersScreen() {
   const colors = Colors[scheme];
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Label edits only persist on blur — closing the screen with the keyboard
+  // still up skipped that commit. Track dirtiness and flush on unmount.
+  const remindersRef = useRef<Reminder[]>([]);
+  const dirtyRef = useRef(false);
+  remindersRef.current = reminders;
 
   useEffect(() => {
     loadReminders().then(setReminders);
+    return () => {
+      if (dirtyRef.current) applyReminders(remindersRef.current).catch(() => {});
+    };
   }, []);
 
   async function commit(next: Reminder[]) {
     setReminders(next);
+    dirtyRef.current = false;
     await applyReminders(next);
   }
 
@@ -102,7 +111,9 @@ export default function RemindersScreen() {
   }
 
   function setLabel(id: string, label: string) {
-    // Update label locally as the user types; persist happens on blur/toggle.
+    // Update label locally as the user types; persist happens on blur/toggle
+    // (or on unmount, via dirtyRef, if the screen closes mid-edit).
+    dirtyRef.current = true;
     setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, label } : r)));
   }
 

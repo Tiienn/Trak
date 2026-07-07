@@ -5,13 +5,14 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Alert,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { BarcodeProduct, barcodeToAnalysis, lookupBarcode } from '@/lib/barcode';
@@ -34,6 +35,7 @@ export default function BarcodeScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
+  const insets = useSafeAreaInsets();
   const { addMeal } = useMeals();
   const [phase, setPhase] = useState<Phase>('scanning');
   const [product, setProduct] = useState<BarcodeProduct | null>(null);
@@ -105,8 +107,14 @@ export default function BarcodeScreen() {
       <SafeAreaView style={styles.permWrap}>
         <Text style={styles.permTitle}>Camera access</Text>
         <Text style={styles.permBody}>Trak needs your camera to scan barcodes.</Text>
-        <Pressable style={styles.primaryBtn} onPress={requestPermission}>
-          <Text style={styles.primaryBtnText}>Allow camera</Text>
+        <Pressable
+          style={styles.primaryBtn}
+          onPress={() =>
+            permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()
+          }>
+          <Text style={styles.primaryBtnText}>
+            {permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'}
+          </Text>
         </Pressable>
         <Pressable style={styles.linkBtn} onPress={onPickBarcodePhoto}>
           <Text style={styles.link}>Or choose a barcode photo</Text>
@@ -158,7 +166,7 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'notfound' && (
-        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 40 + insets.bottom }]}>
           <Text style={[styles.sheetTitle, { color: colors.text }]}>Product not found</Text>
           <Text style={[styles.sheetBody, { color: colors.textSecondary }]}>
             That barcode isn&apos;t in the Open Food Facts database yet. Try photo‑scanning the meal
@@ -171,7 +179,7 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'error' && (
-        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+        <View style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: 40 + insets.bottom }]}>
           <Text style={[styles.sheetTitle, { color: colors.text }]}>
             Hmm, that didn&apos;t work
           </Text>
@@ -183,7 +191,7 @@ export default function BarcodeScreen() {
       )}
 
       {phase === 'result' && product && (
-        <View style={[styles.resultSheet, { backgroundColor: colors.background }]}>
+        <View style={[styles.resultSheet, { backgroundColor: colors.background, paddingBottom: 36 + insets.bottom }]}>
           <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>
             {product.name}
           </Text>

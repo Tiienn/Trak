@@ -40,7 +40,9 @@ export default function WeightScreen() {
 
   async function save() {
     const kg = parseFloat(input);
-    if (!Number.isFinite(kg) || kg <= 0 || saving) return;
+    // Plausibility bounds: this value also overwrites the profile weight that
+    // drives calorie targets, so a typo like 700 (meaning 70.0) must not pass.
+    if (!Number.isFinite(kg) || kg < 20 || kg > 400 || saving) return;
     setSaving(true);
     try {
       await logWeight(kg);

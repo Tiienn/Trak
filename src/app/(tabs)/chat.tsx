@@ -138,7 +138,7 @@ export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { targets, todayTotals, addMeal, calorieBias, meals } = useMeals();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; t?: string }>();
 
   // Chat and Ask are two independent conversations with their own histories.
   const [chatMessages, setChatMessages] = useState<UiMessage[]>([]);
@@ -157,10 +157,11 @@ export default function ChatScreen() {
   const setMessages = mode === 'chat' ? setChatMessages : setAskMessages;
 
   // Jumping here from the Home coaching card opens straight into Ask mode,
-  // even if Chat is already mounted (tabs stay alive in the background).
+  // even if Chat is already mounted (tabs stay alive in the background). The
+  // nonce param makes repeat taps re-fire this despite an unchanged mode value.
   useEffect(() => {
     if (params.mode === 'ask') setMode('ask');
-  }, [params.mode]);
+  }, [params.mode, params.t]);
 
   // Restore both conversations once per app launch, then keep them saved.
   useEffect(() => {
@@ -193,7 +194,9 @@ export default function ChatScreen() {
 
   async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed || thinking || sendingRef.current) return;
+    // The hydrated gate closes a cold-start race: a message sent before the
+    // stored history loads would be overwritten (deleted) by the late restore.
+    if (!trimmed || thinking || sendingRef.current || !hydrated) return;
     sendingRef.current = true;
 
     const userMsg: UiMessage = { id: makeId(), role: 'user', content: trimmed };
@@ -392,7 +395,9 @@ export default function ChatScreen() {
               onChangeText={setInput}
               onSubmitEditing={() => send(input)}
               returnKeyType="send"
-              editable={!thinking}
+              // Kept editable while thinking: flipping `editable` blurs the
+              // input on Android, closing the keyboard after every send. The
+              // send guard already prevents double submissions.
               multiline={false}
             />
             <Pressable

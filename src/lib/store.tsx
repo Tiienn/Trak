@@ -80,15 +80,27 @@ function computeStreak(meals: LoggedMeal[]): number {
 
 /**
  * Diet style lives on-device (like the water unit) rather than in the profiles
- * table, so no DB migration is needed. Merged into the profile after load.
+ * table, so no DB migration is needed. Keyed BY USER so a shared device never
+ * leaks one account's macro split into another. Merged into the profile after
+ * load (the un-namespaced v1 key is read once as a legacy fallback).
  */
-const DIET_KEY = 'trak.dietStyle.v1';
+const dietKey = (userId: string) => `trak.dietStyle.v1.${userId}`;
+const LEGACY_DIET_KEY = 'trak.dietStyle.v1';
 
-async function mergeLocalDiet(p: UserProfile): Promise<UserProfile> {
+function isDiet(v: string | null): v is 'balanced' | 'high_protein' | 'low_carb' {
+  return v === 'balanced' || v === 'high_protein' || v === 'low_carb';
+}
+
+async function mergeLocalDiet(p: UserProfile, userId: string): Promise<UserProfile> {
   try {
-    const diet = await AsyncStorage.getItem(DIET_KEY);
-    if (diet === 'balanced' || diet === 'high_protein' || diet === 'low_carb') {
-      return { ...p, diet };
+    const scoped = await AsyncStorage.getItem(dietKey(userId));
+    if (isDiet(scoped)) return { ...p, diet: scoped };
+    const legacy = await AsyncStorage.getItem(LEGACY_DIET_KEY);
+    if (isDiet(legacy)) {
+      // Migrate the pre-namespacing value to this user, then retire it.
+      AsyncStorage.setItem(dietKey(userId), legacy).catch(() => {});
+      AsyncStorage.removeItem(LEGACY_DIET_KEY).catch(() => {});
+      return { ...p, diet: legacy };
     }
   } catch {
     // Missing/broken cache just means the default diet.
@@ -262,6 +274,30 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // When the calendar day rolls over, water must reset with it — it's a plain
+  // counter loaded for the launch day, unlike meals/exercises which re-filter
+  // by date. Without this, yesterday's glasses display against the new day and
+  // the next tap writes that stale count into the new day's row.
+  useEffect(() => {
+    if (!user || !loaded) return;
+    let active = true;
+    setWaterToday(0);
+    supabase
+      .from('water')
+      .select('glasses')
+      .eq('user_id', user.id)
+      .eq('day', today)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (active && !error && data) setWaterToday(data.glasses ?? 0);
+      });
+    return () => {
+      active = false;
+    };
+    // Intentionally only on day change — the initial load already fetched water.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
+
   // Load the signed-in user's data from Supabase whenever the user changes
   // (or a retry is requested).
   useEffect(() => {
@@ -325,7 +361,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           setLoaded(true);
           return;
         }
-        setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data)) : null);
+        setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id) : null);
         setMeals((mealRes.data ?? []).map(rowToMeal));
         setLoaded(true);
       } catch {
@@ -346,7 +382,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const [profileRes, mealRes, savedRes] = await Promise.all([
+      const [profileRes, mealRes, savedRes, weightRes, waterRes, exerciseRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
         supabase
           .from('meals')
@@ -358,11 +394,26 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
+        supabase.from('weights').select('*').eq('user_id', user.id).order('day', { ascending: true }),
+        supabase
+          .from('water')
+          .select('glasses')
+          .eq('user_id', user.id)
+          .eq('day', dayKey())
+          .maybeSingle(),
+        supabase
+          .from('exercises')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
       ]);
       if (profileRes.error || mealRes.error) return; // keep showing current data
-      setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data)) : null);
+      setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id) : null);
       setMeals((mealRes.data ?? []).map(rowToMeal));
       if (!savedRes.error) setSavedMeals((savedRes.data ?? []).map(rowToSavedMeal));
+      if (!weightRes.error) setWeights((weightRes.data ?? []).map(rowToWeight));
+      if (!waterRes.error) setWaterToday(waterRes.data?.glasses ?? 0);
+      if (!exerciseRes.error) setExercises((exerciseRes.data ?? []).map(rowToExercise));
       setLoadError(false);
     } catch {
       // Offline pull-to-refresh: keep current data, no error state.
@@ -480,26 +531,41 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Edit a logged meal's title and/or totals (to correct an AI estimate).
+  // The item breakdown is scaled proportionally so it can't contradict the
+  // edited totals (an 800-kcal item list under a 500-kcal total).
   const updateMeal = useCallback(
     async (id: string, patch: { title: string; total: FoodTotals }) => {
       let previous: LoggedMeal | undefined;
+      let scaledItems: FoodItem[] | undefined;
       setMeals((prev) =>
         prev.map((m) => {
           if (m.id !== id) return m;
           previous = m;
-          return { ...m, title: patch.title, total: patch.total };
+          const factor = (oldTotal: number, newTotal: number) =>
+            oldTotal > 0 ? newTotal / oldTotal : 1;
+          const fCal = factor(m.total.calories, patch.total.calories);
+          const fPro = factor(m.total.protein_g, patch.total.protein_g);
+          const fCarb = factor(m.total.carbs_g, patch.total.carbs_g);
+          const fFat = factor(m.total.fat_g, patch.total.fat_g);
+          scaledItems = m.items.map((it) => ({
+            ...it,
+            calories: Math.round(it.calories * fCal),
+            protein_g: Math.round(it.protein_g * fPro),
+            carbs_g: Math.round(it.carbs_g * fCarb),
+            fat_g: Math.round(it.fat_g * fFat),
+          }));
+          return { ...m, title: patch.title, total: patch.total, items: scaledItems };
         })
       );
-      const { error } = await supabase
-        .from('meals')
-        .update({
-          title: patch.title,
-          calories: patch.total.calories,
-          protein_g: patch.total.protein_g,
-          carbs_g: patch.total.carbs_g,
-          fat_g: patch.total.fat_g,
-        })
-        .eq('id', id);
+      const update: Record<string, unknown> = {
+        title: patch.title,
+        calories: patch.total.calories,
+        protein_g: patch.total.protein_g,
+        carbs_g: patch.total.carbs_g,
+        fat_g: patch.total.fat_g,
+      };
+      if (scaledItems) update.items = scaledItems;
+      const { error } = await supabase.from('meals').update(update).eq('id', id);
       if (error && previous) {
         const prevMeal = previous;
         setMeals((prev) => prev.map((m) => (m.id === id ? prevMeal : m)));
@@ -517,7 +583,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       // this form (waterGoal, calorieBias) survive an optimistic body-stat save.
       setProfile({ ...(profile ?? {}), ...next });
       // Diet style is device-local (no DB column) — persist it separately.
-      if (next.diet) AsyncStorage.setItem(DIET_KEY, next.diet).catch(() => {});
+      if (next.diet) AsyncStorage.setItem(dietKey(user.id), next.diet).catch(() => {});
       const { error } = await supabase.from('profiles').upsert({
         user_id: user.id,
         sex: next.sex,
@@ -550,17 +616,29 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       });
       if (profile) setProfile({ ...profile, weightKg });
 
+      // Two independent writes → two independent rollbacks. A single
+      // all-or-nothing rollback desynced the client from whichever write
+      // actually landed on the server.
       const weightRes = await supabase
         .from('weights')
         .upsert({ user_id: user.id, day, weight_kg: weightKg }, { onConflict: 'user_id,day' });
-      const profileRes = profile
-        ? await supabase.from('profiles').update({ weight_kg: weightKg }).eq('user_id', user.id)
-        : { error: null };
-
-      if (weightRes.error || profileRes.error) {
+      if (weightRes.error) {
         setWeights(previousWeights);
         setProfile(previousProfile);
         throw new Error('Could not save your weight. Check your connection and try again.');
+      }
+      if (profile) {
+        const profileRes = await supabase
+          .from('profiles')
+          .update({ weight_kg: weightKg })
+          .eq('user_id', user.id);
+        if (profileRes.error) {
+          // The weight entry IS saved — only the profile mirror failed.
+          setProfile(previousProfile);
+          throw new Error(
+            'Weight saved, but your calorie targets could not update. Pull to refresh.'
+          );
+        }
       }
     },
     [user, weights, profile]
