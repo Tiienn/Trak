@@ -1,6 +1,7 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { supabase } from './supabase';
+import type { MealMemoryHint } from './meal-memory';
 import { FoodAnalysis } from './types';
 
 /** Resize + compress the photo, then return it as a base64 JPEG string. */
@@ -20,7 +21,7 @@ async function toBase64Jpeg(uri: string): Promise<string> {
 }
 
 function toNumber(v: unknown): number {
-  // GPT-4o sometimes returns numbers as strings (e.g. "520" or "30 g"); coerce them.
+  // Models sometimes return numbers as strings (e.g. "520" or "30 g"); coerce them.
   const n = typeof v === 'string' ? parseFloat(v) : v;
   return typeof n === 'number' && Number.isFinite(n) ? Math.round(n) : 0;
 }
@@ -47,10 +48,18 @@ export function normalizeFoodJson(parsed: any): FoodAnalysis {
     ? parsed.items.map((it: any) => ({
         name: String(it?.name ?? 'Item'),
         quantity: String(it?.quantity ?? ''),
+        grams: toNumber(it?.grams) || undefined,
         calories: toNumber(it?.calories),
         protein_g: toNumber(it?.protein_g),
         carbs_g: toNumber(it?.carbs_g),
         fat_g: toNumber(it?.fat_g),
+        nutritionSource: ['usda_fdc', 'open_food_facts', 'web', 'model'].includes(
+          it?.nutrition_source
+        )
+          ? it.nutrition_source
+          : undefined,
+        sourceId: it?.source_id ? String(it.source_id) : undefined,
+        sourceLabel: it?.source_label ? String(it.source_label) : undefined,
       }))
     : [];
 
@@ -66,6 +75,26 @@ export function normalizeFoodJson(parsed: any): FoodAnalysis {
 
   const t = parsed.total ?? {};
   const isFood = typeof parsed.isFood === 'boolean' ? parsed.isFood : items.length > 0;
+  const rawMeta = parsed.analysisMeta ?? parsed.pipeline;
+  const rawInputSource = rawMeta?.inputSource ?? rawMeta?.input_source;
+  const inputSource = ['text', 'photo', 'barcode', 'quick_log'].includes(rawInputSource)
+    ? rawInputSource
+    : undefined;
+  const analysisMeta = rawMeta
+    ? {
+        requestId: typeof rawMeta.requestId === 'string' ? rawMeta.requestId : undefined,
+        model: typeof rawMeta.model === 'string' ? rawMeta.model : undefined,
+        promptVersion:
+          typeof (rawMeta.promptVersion ?? rawMeta.prompt_version) === 'string'
+            ? (rawMeta.promptVersion ?? rawMeta.prompt_version)
+            : undefined,
+        pipelineVersion:
+          typeof (rawMeta.pipelineVersion ?? rawMeta.pipeline_version) === 'string'
+            ? (rawMeta.pipelineVersion ?? rawMeta.pipeline_version)
+            : undefined,
+        inputSource,
+      }
+    : undefined;
 
   return {
     isFood,
@@ -80,6 +109,7 @@ export function normalizeFoodJson(parsed: any): FoodAnalysis {
     confidence:
       typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0.5,
     notes: parsed.notes ? String(parsed.notes) : undefined,
+    analysisMeta,
   };
 }
 
@@ -111,15 +141,21 @@ export function applyCalorieBias(a: FoodAnalysis, biasPct: number): FoodAnalysis
 }
 
 /**
- * Sends a food photo to the Trak edge function (which calls GPT-4o server-side)
+ * Sends a food photo to the Trak edge function (which calls Gemini server-side)
  * and returns a structured nutrition estimate. Throws a friendly Error on failure.
  * `biasPct` nudges the estimate to match the user's calibration.
  */
-export async function analyzeFood(uri: string, biasPct = 0): Promise<FoodAnalysis> {
+export async function analyzeFood(
+  uri: string,
+  biasPct = 0,
+  mealMemory: MealMemoryHint[] = [],
+  signal?: AbortSignal,
+): Promise<FoodAnalysis> {
   const base64 = await toBase64Jpeg(uri);
 
   const { data, error } = await supabase.functions.invoke('analyze-food', {
-    body: { imageBase64: base64 },
+    body: { imageBase64: base64, mealMemory: mealMemory.slice(0, 8) },
+    signal,
   });
 
   if (error) {
@@ -140,6 +176,11 @@ export async function analyzeFood(uri: string, biasPct = 0): Promise<FoodAnalysi
   } catch {
     throw new Error('Could not read the AI answer. Please try another photo.');
   }
+  if (data?.meta && typeof data.meta === 'object') {
+    parsed.analysisMeta = { ...(parsed.pipeline ?? {}), ...data.meta };
+  }
 
-  return applyCalorieBias(normalizeFoodJson(parsed), biasPct);
+  const normalized = normalizeFoodJson(parsed);
+  normalized.analysisMeta = { ...normalized.analysisMeta, inputSource: 'photo' };
+  return applyCalorieBias(normalized, biasPct);
 }

@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
@@ -15,6 +15,7 @@ import { FlagIcon, ShareIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   EMPTY_STATS,
+  foodsForDeck,
   loadGameStats,
   METRICS,
   randomFood,
@@ -72,15 +73,20 @@ export default function HigherLowerScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
 
+  const { deck, foods } = useLocalSearchParams<{ deck?: string; foods?: string }>();
+  const foodPool = useMemo(
+    () => foodsForDeck(deck, foods ? foods.split(',').filter(Boolean) : undefined),
+    [deck, foods]
+  );
+
   const [metric, setMetric] = useState<MetricKey>('calories');
-  const [known, setKnown] = useState<Ingredient>(() => randomFood());
-  const [mystery, setMystery] = useState<Ingredient>(() => randomFood());
+  const [known, setKnown] = useState<Ingredient>(() => randomFood(undefined, 'calories', foodPool));
+  const [mystery, setMystery] = useState<Ingredient>(() => randomFood(known, 'calories', foodPool));
   const [phase, setPhase] = useState<Phase>('guess');
   const [run, setRun] = useState(0);
+  const [correctFoodIds, setCorrectFoodIds] = useState<string[]>([]);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const metricInfo = METRICS.find((m) => m.key === metric)!;
   const fmt = (n: number) => `${n} ${metricInfo.unit}`;
 
@@ -88,17 +94,29 @@ export default function HigherLowerScreen() {
   const canSwipe = useSharedValue(1);
 
   useEffect(() => {
-    setMystery(randomFood(known));
     loadGameStats().then(setStats);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    canSwipe.value = phase === 'guess' ? 1 : 0;
+    canSwipe.set(phase === 'guess' ? 1 : 0);
   }, [phase, canSwipe]);
+
+  // Keep the reveal visible briefly, then advance. The effect cleanup cancels
+  // the transition when the player changes nutrient or leaves the screen.
+  useEffect(() => {
+    if (phase !== 'reveal') return;
+    const timeout = setTimeout(() => {
+      if (lastCorrect) {
+        const nextKnown = mystery;
+        setKnown(nextKnown);
+        setMystery(randomFood(nextKnown, metric, foodPool));
+        setPhase('guess');
+      } else {
+        setPhase('over');
+      }
+    }, 1100);
+    return () => clearTimeout(timeout);
+  }, [phase, lastCorrect, mystery, metric, foodPool]);
 
   function answer(saidMore: boolean) {
     if (phase !== 'guess') return;
@@ -109,69 +127,62 @@ export default function HigherLowerScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       const nextRun = run + 1;
       setRun(nextRun);
-      timer.current = setTimeout(() => {
-        const nextKnown = mystery;
-        setKnown(nextKnown);
-        setMystery(randomFood(nextKnown, metric));
-        setPhase('guess');
-      }, 1100);
+      setCorrectFoodIds((ids) => (ids.includes(mystery.id) ? ids : [...ids, mystery.id]));
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       // Record IMMEDIATELY — recording inside the reveal timer meant leaving
       // the screen (or switching metric) during the 1.1s reveal silently
       // discarded the run, including personal bests.
-      recordHigherLower(run, stats).then(setStats).catch(() => {});
-      timer.current = setTimeout(() => {
-        setPhase('over');
-      }, 1100);
+      recordHigherLower(run, stats, correctFoodIds).then(setStats).catch(() => {});
     }
   }
 
   // Switching the compared nutrient starts a fresh pairing at run 0.
   function pickMetric(m: MetricKey) {
     if (m === metric) return;
-    if (timer.current) clearTimeout(timer.current);
     Haptics.selectionAsync().catch(() => {});
-    const a = randomFood(undefined, m);
+    const a = randomFood(undefined, m, foodPool);
     setMetric(m);
     setKnown(a);
-    setMystery(randomFood(a, m));
+    setMystery(randomFood(a, m, foodPool));
     setRun(0);
-    translateX.value = 0;
+    setCorrectFoodIds([]);
+    translateX.set(0);
     setPhase('guess');
   }
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
       'worklet';
-      if (canSwipe.value) translateX.value = e.translationX;
+      if (canSwipe.get()) translateX.set(e.translationX);
     })
     .onEnd((e) => {
       'worklet';
-      if (canSwipe.value && e.translationX > SWIPE_THRESHOLD) {
+      if (canSwipe.get() && e.translationX > SWIPE_THRESHOLD) {
         runOnJS(answer)(true);
-      } else if (canSwipe.value && e.translationX < -SWIPE_THRESHOLD) {
+      } else if (canSwipe.get() && e.translationX < -SWIPE_THRESHOLD) {
         runOnJS(answer)(false);
       }
-      translateX.value = withSpring(0, { damping: 18, stiffness: 180 });
+      translateX.set(withSpring(0, { damping: 18, stiffness: 180 }));
     });
 
   const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { rotateZ: `${translateX.value / 24}deg` }],
+    transform: [{ translateX: translateX.get() }, { rotateZ: `${translateX.get() / 24}deg` }],
   }));
   const moreHint = useAnimatedStyle(() => ({
-    opacity: Math.max(0, Math.min(1, translateX.value / SWIPE_THRESHOLD)),
+    opacity: Math.max(0, Math.min(1, translateX.get() / SWIPE_THRESHOLD)),
   }));
   const fewerHint = useAnimatedStyle(() => ({
-    opacity: Math.max(0, Math.min(1, -translateX.value / SWIPE_THRESHOLD)),
+    opacity: Math.max(0, Math.min(1, -translateX.get() / SWIPE_THRESHOLD)),
   }));
 
   function playAgain() {
-    const a = randomFood(undefined, metric);
+    const a = randomFood(undefined, metric, foodPool);
     setKnown(a);
-    setMystery(randomFood(a, metric));
+    setMystery(randomFood(a, metric, foodPool));
     setRun(0);
-    translateX.value = 0;
+    setCorrectFoodIds([]);
+    translateX.set(0);
     setPhase('guess');
   }
 

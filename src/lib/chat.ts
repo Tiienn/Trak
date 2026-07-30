@@ -14,17 +14,24 @@ export type TrakReply =
   | { kind: 'meal'; reply: string; analysis: FoodAnalysis };
 
 /**
- * Sends the conversation to the trak-chat edge function (GPT-4o server-side).
+ * Sends the conversation to the trak-chat edge function (Gemini server-side).
  * `history` should be the recent turns, oldest first, ending with the user's
  * newest message. Throws a friendly Error on failure.
  */
 export async function askTrak(
   history: ChatTurn[],
-  context: { targets: FoodTotals; eaten: FoodTotals; week?: string },
+  context: {
+    targets: FoodTotals;
+    eaten: FoodTotals;
+    exercise?: { burned: number; credited: number };
+    week?: string;
+  },
   biasPct = 0,
+  signal?: AbortSignal,
 ): Promise<TrakReply> {
   const { data, error } = await supabase.functions.invoke('trak-chat', {
     body: { messages: history.slice(-10), context },
+    signal,
   });
 
   if (error) {
@@ -45,11 +52,15 @@ export async function askTrak(
   } catch {
     throw new Error('Could not read the answer. Please try again.');
   }
+  if (data?.meta && typeof data.meta === 'object') {
+    parsed.analysisMeta = { ...(parsed.pipeline ?? {}), ...data.meta };
+  }
 
   const reply = String(parsed?.reply ?? '').trim();
 
   if (parsed?.kind === 'meal') {
     const analysis = applyCalorieBias(normalizeFoodJson({ ...parsed, isFood: true }), biasPct);
+    analysis.analysisMeta = { ...analysis.analysisMeta, inputSource: 'text' };
     return {
       kind: 'meal',
       reply: reply || `About ${analysis.total.calories} calories.`,

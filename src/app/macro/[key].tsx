@@ -104,8 +104,8 @@ export default function MacroDetailScreen() {
     : 'calories';
   const cfg = CONFIG[key];
 
-  const { todayMeals, todayTotals, targets, burnedToday } = useMeals();
-  const target = key === 'calories' ? targets.calories + burnedToday : targets[cfg.totalsKey];
+  const { todayMeals, todayTotals, targets, calorieBudget } = useMeals();
+  const target = key === 'calories' ? calorieBudget : targets[cfg.totalsKey];
   const consumed = todayTotals[cfg.totalsKey];
   const pct = target > 0 ? Math.min(1, consumed / target) : 0;
 

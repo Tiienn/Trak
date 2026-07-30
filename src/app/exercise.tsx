@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing } from '@/constants/theme';
+import { EXERCISE_CALORIE_CREDIT_PERCENT } from '@/lib/exercise';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
@@ -36,20 +37,23 @@ function formatTime(ms: number): string {
 export default function ExerciseScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { todayExercises, burnedToday, addExercise, removeExercise } = useMeals();
+  const { todayExercises, burnedToday, exerciseCreditToday, addExercise, removeExercise } =
+    useMeals();
 
   const [name, setName] = useState('');
   const [kcal, setKcal] = useState('');
+  const [duration, setDuration] = useState('30');
   const [saving, setSaving] = useState(false);
 
-  async function log(nameArg: string, kcalArg: number) {
-    if (!nameArg.trim() || !(kcalArg > 0) || saving) return;
+  async function log(nameArg: string, kcalArg: number, durationArg = 30) {
+    if (!nameArg.trim() || !(kcalArg > 0) || !(durationArg > 0) || saving) return;
     setSaving(true);
     try {
-      await addExercise(nameArg.trim(), kcalArg);
+      await addExercise(nameArg.trim(), kcalArg, durationArg);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setName('');
       setKcal('');
+      setDuration('30');
     } catch (e: any) {
       Alert.alert('Not saved', e?.message ?? 'Please try again.');
     } finally {
@@ -57,7 +61,8 @@ export default function ExerciseScreen() {
     }
   }
 
-  const customValid = name.trim().length > 0 && parseInt(kcal, 10) > 0;
+  const customValid =
+    name.trim().length > 0 && parseInt(kcal, 10) > 0 && parseInt(duration, 10) > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -69,7 +74,8 @@ export default function ExerciseScreen() {
           </Pressable>
         </View>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Burned calories add back to today&apos;s budget.
+          {EXERCISE_CALORIE_CREDIT_PERCENT}% of logged calories are added to today&apos;s budget to
+          avoid double-counting your usual activity.
         </Text>
 
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -78,7 +84,7 @@ export default function ExerciseScreen() {
             <View style={[styles.totalCard, { backgroundColor: colors.backgroundElement }]}>
               <Text style={[styles.totalValue, { color: Brand.greenDark }]}>+{burnedToday}</Text>
               <Text style={[styles.totalLabel, { color: colors.textSecondary }]}>
-                kcal burned today
+                kcal burned · +{exerciseCreditToday} budget credit
               </Text>
             </View>
 
@@ -123,10 +129,23 @@ export default function ExerciseScreen() {
                   maxLength={4}
                 />
               </View>
+              <View style={[styles.durationBox, { backgroundColor: colors.backgroundElement }]}>
+                <TextInput
+                  style={[styles.kcalInput, { color: colors.text }]}
+                  keyboardType="number-pad"
+                  value={duration}
+                  onChangeText={setDuration}
+                  placeholder="min"
+                  placeholderTextColor={colors.textSecondary}
+                  maxLength={4}
+                  accessibilityLabel="Workout duration in minutes"
+                />
+                <Text style={[styles.inputUnit, { color: colors.textSecondary }]}>min</Text>
+              </View>
             </View>
             <Pressable
               style={[styles.addBtn, { opacity: customValid && !saving ? 1 : 0.4 }]}
-              onPress={() => log(name, parseInt(kcal, 10))}
+              onPress={() => log(name, parseInt(kcal, 10), parseInt(duration, 10))}
               disabled={!customValid || saving}>
               {saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.addText}>Add workout</Text>}
             </Pressable>
@@ -151,7 +170,7 @@ export default function ExerciseScreen() {
                           {e.name}
                         </Text>
                         <Text style={[styles.listTime, { color: colors.textSecondary }]}>
-                          {formatTime(e.createdAt)}
+                          {formatTime(e.createdAt)} · {e.durationMinutes} min
                         </Text>
                       </View>
                       <Text style={[styles.listKcal, { color: Brand.greenDark }]}>+{e.caloriesBurned}</Text>
@@ -208,7 +227,9 @@ const styles = StyleSheet.create({
   customRow: { flexDirection: 'row', gap: Spacing.two },
   nameInput: { flex: 1, borderRadius: 14, paddingHorizontal: Spacing.three, fontSize: 16, fontWeight: '600', paddingVertical: Spacing.three },
   kcalBox: { width: 96, borderRadius: 14, paddingHorizontal: Spacing.three, justifyContent: 'center' },
+  durationBox: { width: 82, borderRadius: 14, paddingHorizontal: Spacing.two, justifyContent: 'center' },
   kcalInput: { fontSize: 16, fontWeight: '700', paddingVertical: Spacing.three, textAlign: 'center' },
+  inputUnit: { fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: -10, marginBottom: 5 },
   addBtn: {
     backgroundColor: Brand.green,
     borderRadius: 14,

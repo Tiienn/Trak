@@ -1,10 +1,18 @@
 export type FoodItem = {
   name: string;
   quantity: string;
+  /** Estimated edible portion used for database scaling. */
+  grams?: number;
   calories: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  /** Where the final nutrient values came from. */
+  nutritionSource?: 'usda_fdc' | 'open_food_facts' | 'web' | 'model';
+  /** Provider-specific record ID, such as an FDC ID or barcode. */
+  sourceId?: string;
+  /** Human-readable matched record or fallback label. */
+  sourceLabel?: string;
 };
 
 export type FoodTotals = {
@@ -13,6 +21,8 @@ export type FoodTotals = {
   carbs_g: number;
   fat_g: number;
 };
+
+export type MealInputSource = 'text' | 'photo' | 'barcode' | 'quick_log';
 
 export type FoodAnalysis = {
   /** false when the photo has no recognizable food. */
@@ -25,6 +35,15 @@ export type FoodAnalysis = {
   confidence: number;
   /** One short sentence about assumptions the AI made. */
   notes?: string;
+  /** Non-sensitive version metadata used to attribute later corrections. */
+  analysisMeta?: {
+    requestId?: string;
+    model?: string;
+    promptVersion?: string;
+    pipelineVersion?: string;
+    /** How this meal entered Trak; used for per-user meal memory. */
+    inputSource?: MealInputSource;
+  };
 };
 
 export type Sex = 'male' | 'female';
@@ -57,7 +76,7 @@ export type WeightEntry = {
   weightKg: number;
 };
 
-/** A logged workout that adds calories back to the daily budget. */
+/** A logged workout; a conservative portion of its burn is credited to the daily budget. */
 export type ExerciseEntry = {
   id: string;
   /** Local calendar day, formatted YYYY-MM-DD. */
@@ -65,6 +84,8 @@ export type ExerciseEntry = {
   createdAt: number;
   name: string;
   caloriesBurned: number;
+  /** User-entered workout duration. Older rows default to 30 minutes. */
+  durationMinutes: number;
 };
 
 /** A reusable meal template the user can re-log with one tap. */
@@ -91,4 +112,6 @@ export type LoggedMeal = {
   notes?: string;
   /** Local URI of the scanned photo, if available. */
   photoUri?: string;
+  /** Model/data-pipeline provenance captured when this meal was estimated. */
+  analysisMeta?: FoodAnalysis['analysisMeta'];
 };

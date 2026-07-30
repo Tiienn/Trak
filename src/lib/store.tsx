@@ -11,7 +11,13 @@ import {
 import { AppState } from 'react-native';
 
 import { useAuth } from './auth';
-import { writeMealToHealth } from './health';
+import { calorieBudgetForDay, creditedExerciseCalories } from './exercise';
+import {
+  removeExerciseFromHealth,
+  removeMealFromHealth,
+  writeExerciseToHealth,
+  writeMealToHealth,
+} from './health';
 import { computeTargets } from './nutrition';
 import { supabase } from './supabase';
 import { syncWidget } from './widget-sync';
@@ -130,6 +136,7 @@ function rowToExercise(r: any): ExerciseEntry {
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
     name: r.name,
     caloriesBurned: r.calories_burned ?? 0,
+    durationMinutes: Math.max(1, Number(r.duration_minutes) || 30),
   };
 }
 
@@ -183,6 +190,7 @@ function rowToMeal(r: any): LoggedMeal {
     confidence: Number(r.confidence),
     notes: r.notes ?? undefined,
     photoUri: r.photo_uri ?? undefined,
+    analysisMeta: r.analysis_meta ?? undefined,
   };
 }
 
@@ -194,6 +202,8 @@ type MealsContextValue = {
   /** Silent re-fetch for pull-to-refresh (never blanks the screen). */
   refresh: () => Promise<void>;
   meals: LoggedMeal[];
+  /** All workouts for the signed-in user, newest first. */
+  exercises: ExerciseEntry[];
   /** Weight history, oldest first. */
   weights: WeightEntry[];
   /** Most recent logged weight in kg, or null if none. */
@@ -214,8 +224,12 @@ type MealsContextValue = {
   todayExercises: ExerciseEntry[];
   /** Total calories burned via exercise today. */
   burnedToday: number;
+  /** Conservative portion of today's exercise burn added to the food budget. */
+  exerciseCreditToday: number;
+  /** Today's base calorie target plus exercise credit. */
+  calorieBudget: number;
   /** Log a workout for today. */
-  addExercise: (name: string, caloriesBurned: number) => Promise<void>;
+  addExercise: (name: string, caloriesBurned: number, durationMinutes?: number) => Promise<void>;
   /** Remove a logged workout. */
   removeExercise: (id: string) => Promise<void>;
   profile: UserProfile | null;
@@ -281,7 +295,6 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || !loaded) return;
     let active = true;
-    setWaterToday(0);
     supabase
       .from('water')
       .select('glasses')
@@ -289,7 +302,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       .eq('day', today)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (active && !error && data) setWaterToday(data.glasses ?? 0);
+        if (active) setWaterToday(error || !data ? 0 : (data.glasses ?? 0));
       });
     return () => {
       active = false;
@@ -303,19 +316,26 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     if (!user) {
-      setMeals([]);
-      setSavedMeals([]);
-      setWeights([]);
-      setWaterToday(0);
-      setExercises([]);
-      setProfile(null);
-      setLoadError(false);
-      setLoaded(true);
-      return;
+      Promise.resolve().then(() => {
+        if (!active) return;
+        setMeals([]);
+        setSavedMeals([]);
+        setWeights([]);
+        setWaterToday(0);
+        setExercises([]);
+        setProfile(null);
+        setLoadError(false);
+        setLoaded(true);
+      });
+      return () => {
+        active = false;
+      };
     }
-    setLoaded(false);
-    setLoadError(false);
     (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setLoaded(false);
+      setLoadError(false);
       try {
         const [profileRes, mealRes, weightRes, waterRes, exerciseRes, savedRes] =
           await Promise.all([
@@ -437,6 +457,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           confidence: analysis.confidence,
           notes: analysis.notes ?? null,
           photo_uri: photoUri ?? null,
+          analysis_meta: analysis.analysisMeta ?? null,
         })
         .select()
         .single();
@@ -445,9 +466,10 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         // result screen instead of silently losing the meal.
         throw new Error('Could not save your meal. Check your connection and try again.');
       }
-      setMeals((prev) => [rowToMeal(data), ...prev]);
+      const meal = rowToMeal(data);
+      setMeals((prev) => [meal, ...prev]);
       // Best-effort mirror to Android Health Connect (no-op unless enabled).
-      writeMealToHealth(analysis.title, analysis.total, Date.now());
+      writeMealToHealth(meal.id, meal.title, meal.total, meal.createdAt);
     },
     [user]
   );
@@ -503,6 +525,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         items: meal.items,
         total: meal.total,
         confidence: 1,
+        analysisMeta: { inputSource: 'quick_log' },
       });
     },
     [addMeal]
@@ -528,6 +551,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       });
       throw new Error('Could not remove the meal. Check your connection and try again.');
     }
+    if (!error) removeMealFromHealth(id);
   }, []);
 
   // Edit a logged meal's title and/or totals (to correct an AI estimate).
@@ -571,8 +595,40 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         setMeals((prev) => prev.map((m) => (m.id === id ? prevMeal : m)));
         throw new Error('Could not save your changes. Check your connection and try again.');
       }
+      // A successful user correction is valuable evaluation ground truth.
+      // Store only before/after totals and version metadata—never photos,
+      // meal names, chat text, or profile fields. Failure is non-blocking so a
+      // missing/new migration never makes the user's edit appear unsuccessful.
+      if (!error && user && previous) {
+        const before = previous.total;
+        const calorieDeltaPct =
+          before.calories > 0
+            ? ((patch.total.calories - before.calories) / before.calories) * 100
+            : null;
+        supabase
+          .from('meal_corrections')
+          .insert({
+            user_id: user.id,
+            meal_id: id,
+            before_totals: before,
+            after_totals: patch.total,
+            calorie_delta_pct: calorieDeltaPct,
+            analysis_meta: previous.analysisMeta ?? null,
+          })
+          .then(() => {});
+
+        // Re-inserting with the same client ID and a higher version updates
+        // the existing Health Connect record instead of creating a duplicate.
+        writeMealToHealth(
+          previous.id,
+          patch.title,
+          patch.total,
+          previous.createdAt,
+          Date.now()
+        );
+      }
     },
-    []
+    [user]
   );
 
   const saveProfile = useCallback(
@@ -662,10 +718,11 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     [user, waterToday]
   );
 
-  // Log a workout for today (adds its calories back to today's budget).
+  // Log a workout for today. A conservative portion is credited to the budget.
   const addExercise = useCallback(
-    async (name: string, caloriesBurned: number) => {
+    async (name: string, caloriesBurned: number, durationMinutes = 30) => {
       if (!user) return;
+      const safeDuration = Math.max(1, Math.min(24 * 60, Math.round(durationMinutes)));
       const { data, error } = await supabase
         .from('exercises')
         .insert({
@@ -673,13 +730,17 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           day: dayKey(),
           name,
           calories_burned: Math.max(0, Math.round(caloriesBurned)),
+          duration_minutes: safeDuration,
         })
         .select()
         .single();
       if (error || !data) {
         throw new Error('Could not save your workout. Check your connection and try again.');
       }
-      setExercises((prev) => [rowToExercise(data), ...prev]);
+      const exercise = rowToExercise(data);
+      setExercises((prev) => [exercise, ...prev]);
+      // Best-effort mirror to Android Health Connect (no-op unless enabled).
+      writeExerciseToHealth(exercise);
     },
     [user]
   );
@@ -696,6 +757,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       setExercises((prev) => [back, ...prev]);
       throw new Error('Could not remove the workout. Check your connection and try again.');
     }
+    if (!error) removeExerciseFromHealth(id);
   }, []);
 
   // Change the daily water goal (persisted on the profile).
@@ -740,12 +802,15 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     const todayMeals = meals.filter((m) => m.date === today);
     const todayExercises = exercises.filter((e) => e.date === today);
     const burnedToday = todayExercises.reduce((a, e) => a + e.caloriesBurned, 0);
+    const targets = profile ? computeTargets(profile) : DEFAULT_TARGETS;
+    const exerciseCreditToday = creditedExerciseCalories(burnedToday);
     return {
       loaded,
       loadError,
       retryLoad,
       refresh,
       meals,
+      exercises,
       weights,
       latestWeight: weights.length > 0 ? weights[weights.length - 1].weightKg : null,
       waterToday,
@@ -756,11 +821,13 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       setCalorieBias,
       todayExercises,
       burnedToday,
+      exerciseCreditToday,
+      calorieBudget: calorieBudgetForDay(targets.calories, burnedToday),
       addExercise,
       removeExercise,
       profile,
       hasProfile: profile !== null,
-      targets: profile ? computeTargets(profile) : DEFAULT_TARGETS,
+      targets,
       todayMeals,
       todayTotals: sumTotals(todayMeals),
       streak: computeStreak(meals),
@@ -779,7 +846,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
 
   // Keep the Android home-screen widget in sync with today's numbers.
   const eaten = Math.round(value.todayTotals.calories);
-  const budget = Math.round(value.targets.calories) + value.burnedToday;
+  const budget = value.calorieBudget;
   useEffect(() => {
     if (!loaded) return;
     syncWidget({

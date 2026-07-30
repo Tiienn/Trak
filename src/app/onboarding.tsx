@@ -166,7 +166,7 @@ export default function OnboardingScreen() {
     return { age: ageN, weightKg, heightCm: hCm };
   }
 
-  function buildProfile(): UserProfile | null {
+  function buildProfile(createdAt: number): UserProfile | null {
     const stats = parseStats();
     if (!stats || !goal || !sex || !activity) return null;
     return {
@@ -177,7 +177,7 @@ export default function OnboardingScreen() {
       age: stats.age,
       heightCm: stats.heightCm,
       weightKg: stats.weightKg,
-      createdAt: Date.now(),
+      createdAt,
     };
   }
 
@@ -201,7 +201,7 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
 
   async function finish() {
-    const profile = buildProfile();
+    const profile = buildProfile(Date.now());
     if (!profile || saving) return;
     setSaving(true);
     try {
@@ -213,7 +213,7 @@ export default function OnboardingScreen() {
     }
   }
 
-  const completeProfile = buildProfile();
+  const completeProfile = buildProfile(0);
   const preview = completeProfile ? computeTargets(completeProfile) : null;
 
   return (

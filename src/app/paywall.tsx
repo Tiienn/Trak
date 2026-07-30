@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,14 +24,14 @@ import {
   purchasePro,
   purchasesConfigured,
   restorePro,
-  usePro,
+  useSubscription,
 } from '@/lib/purchases';
 
 type IconCmp = (props: { size?: number; color?: string }) => React.JSX.Element;
 const PERKS: [IconCmp, string][] = [
-  [HeartIcon, 'Support Trak’s development'],
-  [SparklesIcon, 'Help fund better AI food recognition'],
-  [MedalIcon, 'Pro supporter badge'],
+  [SparklesIcon, 'AI meal scans and nutrition estimates'],
+  [HeartIcon, 'Unlimited Chat and Ask coaching'],
+  [MedalIcon, 'Insights, tracking tools, and all games'],
 ];
 
 function labelFor(
@@ -54,7 +56,7 @@ function labelFor(
 export default function PaywallScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const isPro = usePro();
+  const { isPro, hasAccess, refresh } = useSubscription();
 
   const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
   const [selected, setSelected] = useState(0);
@@ -85,9 +87,10 @@ export default function PaywallScreen() {
     try {
       const ok = await purchasePro(packages[selected]);
       if (ok) {
+        await refresh();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        Alert.alert('Thank you!', 'You are now a Trak Pro supporter.', [
-          { text: 'Done', onPress: () => router.back() },
+        Alert.alert('Welcome to Trak Pro', 'Your subscription is active.', [
+          { text: 'Done', onPress: () => router.replace('/(tabs)') },
         ]);
       }
     } catch (e: any) {
@@ -104,11 +107,12 @@ export default function PaywallScreen() {
     setBusy(true);
     try {
       const ok = await restorePro();
+      if (ok) await refresh();
       Alert.alert(
         ok ? 'Restored' : 'Nothing to restore',
-        ok ? 'Welcome back, Pro supporter.' : 'No previous purchase was found for this account.'
+        ok ? 'Your Trak Pro access is active again.' : 'No previous purchase was found for this account.'
       );
-      if (ok) router.back();
+      if (ok) router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Restore failed', e?.message ?? 'Please try again.');
     } finally {
@@ -120,9 +124,11 @@ export default function PaywallScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe}>
-        <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={12}>
-          <Text style={[styles.closeTxt, { color: colors.textSecondary }]}>✕</Text>
-        </Pressable>
+        {hasAccess && (
+          <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={12}>
+            <Text style={[styles.closeTxt, { color: colors.textSecondary }]}>✕</Text>
+          </Pressable>
+        )}
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.logoWrap}>
@@ -130,7 +136,7 @@ export default function PaywallScreen() {
           </View>
           <Text style={[styles.title, { color: colors.text }]}>Trak Pro</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Trak is free to use. Pro is for people who want to support it.
+            Fast AI food logging, personal guidance, and deeper progress tracking.
           </Text>
 
           <View style={[styles.perks, { backgroundColor: colors.backgroundElement }]}>
@@ -148,7 +154,7 @@ export default function PaywallScreen() {
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
               <HeartIcon size={20} color={Brand.green} />
               <Text style={[styles.proBoxText, { color: colors.text }]}>
-                You’re a Pro supporter — thank you!
+                Your Trak Pro subscription is active.
               </Text>
             </View>
           ) : packages === null ? (
@@ -158,7 +164,7 @@ export default function PaywallScreen() {
               <Text style={[styles.proBoxText, { color: colors.textSecondary }]}>
                 {purchasesConfigured
                   ? 'Subscriptions aren’t available right now. Please try again later.'
-                  : 'The store isn’t connected yet — subscriptions will appear here once Google Play setup is complete.'}
+                  : 'Subscriptions aren’t available in this build yet.'}
               </Text>
             </View>
           ) : (
@@ -195,22 +201,51 @@ export default function PaywallScreen() {
                 {busy ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.ctaText}>Become a supporter</Text>
+                  <Text style={styles.ctaText}>Continue with Trak Pro</Text>
                 )}
               </Pressable>
             </>
           )}
 
-          <Pressable style={styles.restore} onPress={onRestore} disabled={busy}>
-            <Text style={[styles.restoreText, { color: colors.textSecondary }]}>
-              Restore purchases
-            </Text>
-          </Pressable>
+          {purchasesConfigured && (
+            <>
+              <Pressable style={styles.restore} onPress={onRestore} disabled={busy}>
+                <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Restore purchases</Text>
+              </Pressable>
 
-          <Text style={[styles.fine, { color: colors.textSecondary }]}>
-            Billed through Google Play. Renews automatically until cancelled — cancel anytime in
-            Play Store → Subscriptions.
-          </Text>
+              <Text style={[styles.fine, { color: colors.textSecondary }]}>
+                {Platform.OS === 'ios'
+                  ? 'Any eligible trial and the exact renewal price are shown by Apple before purchase. Renews automatically until cancelled.'
+                  : 'Any eligible trial and the exact renewal price are shown by Google Play before purchase. Renews automatically until cancelled.'}
+              </Text>
+            </>
+          )}
+
+          {!hasAccess && (
+            <Pressable style={styles.restore} onPress={() => router.push('/profile')}>
+              <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Account settings</Text>
+            </Pressable>
+          )}
+
+          <View style={styles.legalRow}>
+            <Pressable
+              onPress={() =>
+                Linking.openURL(
+                  'https://tqhgdnmzhuczuyyrmvzx.supabase.co/functions/v1/privacy'
+                )
+              }>
+              <Text style={[styles.legalLink, { color: colors.textSecondary }]}>Privacy Policy</Text>
+            </Pressable>
+            <Text style={[styles.legalDot, { color: colors.textSecondary }]}>·</Text>
+            <Pressable
+              onPress={() =>
+                Linking.openURL(
+                  'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
+                )
+              }>
+              <Text style={[styles.legalLink, { color: colors.textSecondary }]}>Terms of Use</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -224,7 +259,15 @@ const styles = StyleSheet.create({
   closeTxt: { fontSize: 20, fontWeight: '700' },
   scroll: { alignItems: 'center', paddingBottom: Spacing.six },
   logoWrap: { marginTop: Spacing.two },
-  title: { fontSize: 34, fontWeight: '800', marginTop: Spacing.three },
+  legalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: Spacing.two },
+  legalLink: { fontSize: 12, textDecorationLine: 'underline' },
+  legalDot: { fontSize: 12 },
+  title: {
+    fontFamily: 'LeagueSpartan_800ExtraBold',
+    fontSize: 34,
+    letterSpacing: -1,
+    marginTop: Spacing.three,
+  },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: Spacing.two, lineHeight: 21 },
 
   perks: {

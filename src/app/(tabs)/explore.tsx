@@ -6,8 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAppScheme, useThemeMode, type ThemeMode } from '@/lib/theme';
 import { useAuth } from '@/lib/auth';
-import { enableHealthSync, healthAvailable, healthSyncEnabled } from '@/lib/health';
-import { usePro } from '@/lib/purchases';
+import {
+  disableHealthSync,
+  enableHealthSync,
+  healthAvailable,
+  healthSyncEnabled,
+  openHealthSettings,
+} from '@/lib/health';
+import { useSubscription } from '@/lib/purchases';
 import { useMeals } from '@/lib/store';
 
 type HealthState = 'hidden' | 'off' | 'on';
@@ -67,7 +73,7 @@ function InsightsCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-/** Tappable card that opens the full day-by-day meal history. */
+/** Tappable card that opens the full day-by-day meal and workout history. */
 function HistoryCard({ colors }: { colors: ThemeColors }) {
   return (
     <Pressable
@@ -79,7 +85,7 @@ function HistoryCard({ colors }: { colors: ThemeColors }) {
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>History</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          Every meal you’ve logged, by day.
+          Every meal and workout you’ve logged, by day.
         </Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
@@ -108,7 +114,7 @@ function AchievementsCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-/** Tappable card that opens the meal-reminders settings screen. */
+/** Tappable card that opens the reminders settings screen. */
 function RemindersCard({ colors }: { colors: ThemeColors }) {
   return (
     <Pressable
@@ -120,7 +126,7 @@ function RemindersCard({ colors }: { colors: ThemeColors }) {
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Reminders</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          Daily nudges to log your meals.
+          Daily nudges for meals, water, and weigh-ins.
         </Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
@@ -128,9 +134,10 @@ function RemindersCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-/** Small card offering to mirror logged meals into Android Health Connect. */
+/** Small card offering to mirror logged meals and workouts into Health Connect. */
 function HealthCard({ colors }: { colors: ThemeColors }) {
   const [state, setState] = useState<HealthState>('hidden');
+  const [healthBusy, setHealthBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -152,17 +159,53 @@ function HealthCard({ colors }: { colors: ThemeColors }) {
         <Text style={[styles.healthTitle, { color: colors.text }]}>Health Connect</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
           {state === 'on'
-            ? 'New meals sync automatically.'
-            : 'Mirror your meals into Android Health.'}
+            ? 'New meals and workouts sync automatically.'
+            : 'Mirror meals and workouts into Android Health.'}
         </Text>
       </View>
       {state === 'on' ? (
-        <Text style={styles.healthOn}>✓ On</Text>
+        <Pressable
+          style={[styles.healthBtn, healthBusy && { opacity: 0.55 }]}
+          disabled={healthBusy}
+          onPress={() =>
+            Alert.alert(
+              'Disconnect Health Connect?',
+              'Trak will stop syncing new meals and workouts. Records already written stay in Health Connect unless you delete them there.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Disconnect',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setHealthBusy(true);
+                    const ok = await disableHealthSync();
+                    setHealthBusy(false);
+                    setState(ok ? 'off' : 'on');
+                    if (!ok) {
+                      Alert.alert(
+                        'Open Health Connect',
+                        'Trak could not revoke access automatically. Remove Trak under App permissions in Health Connect.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Open settings', onPress: openHealthSettings },
+                        ]
+                      );
+                    }
+                  },
+                },
+              ]
+            )
+          }>
+          <Text style={styles.healthBtnText}>Disconnect</Text>
+        </Pressable>
       ) : (
         <Pressable
-          style={styles.healthBtn}
+          style={[styles.healthBtn, healthBusy && { opacity: 0.55 }]}
+          disabled={healthBusy}
           onPress={async () => {
+            setHealthBusy(true);
             const ok = await enableHealthSync().catch(() => false);
+            setHealthBusy(false);
             setState(ok ? 'on' : 'off');
             if (!ok) {
               Alert.alert('Health Connect', 'Permission was not granted.');
@@ -175,22 +218,29 @@ function HealthCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-/** Supporter card — Trak stays free; Pro exists to support development. */
+/** Subscription status and management entry point. */
 function ProCard({ colors }: { colors: ThemeColors }) {
-  const isPro = usePro();
+  const { isPro, testerAccess } = useSubscription();
+  const hasProAccess = isPro || testerAccess;
   return (
     <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Trak Pro</Text>
         <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          {isPro ? 'You’re a supporter — thank you!' : 'Enjoying Trak? Support its development.'}
+          {testerAccess && !isPro
+            ? 'Full access is enabled for this testing build.'
+            : isPro
+              ? 'Your subscription is active.'
+              : 'Unlock AI logging, coaching, insights, and games.'}
         </Text>
       </View>
-      {isPro ? (
-        <Text style={styles.healthOn}>✓ Pro</Text>
+      {hasProAccess ? (
+        <Pressable style={styles.healthBtn} onPress={() => router.push('/paywall')}>
+          <Text style={styles.healthBtnText}>{testerAccess && !isPro ? 'Tester' : 'Manage'}</Text>
+        </Pressable>
       ) : (
         <Pressable style={styles.healthBtn} onPress={() => router.push('/paywall')}>
-          <Text style={styles.healthBtnText}>Support</Text>
+          <Text style={styles.healthBtnText}>View plans</Text>
         </Pressable>
       )}
     </View>
@@ -279,7 +329,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     marginBottom: Spacing.three,
   },
-  title: { fontSize: 30, fontWeight: '800' },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   signOut: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
 
   scroll: { paddingBottom: 100 },

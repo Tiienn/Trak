@@ -1,4 +1,4 @@
-import { FoodTotals } from './types';
+import type { FoodTotals } from './types';
 
 /**
  * The Trak Score — a daily 0–100 read on how today's choices support the
@@ -66,7 +66,7 @@ export function computeScore(input: {
   parts.push({
     key: 'calories',
     label: 'Calorie budget',
-    hint: 'Stay within your daily budget (small overshoots earn half).',
+    hint: `Stay within today's ${Math.round(calorieBudget).toLocaleString()} kcal budget (small overshoots earn half).`,
     earned: calPoints,
     max: 10,
   });

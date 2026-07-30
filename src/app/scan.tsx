@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,9 +17,11 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BarcodeIcon } from '@/components/icons';
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { loadGameStats, recordScanGuess } from '@/lib/game';
+import { photoMealMemory } from '@/lib/meal-memory';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { FoodAnalysis } from '@/lib/types';
@@ -34,7 +36,7 @@ export default function ScanScreen() {
   const colors = Colors[scheme];
   const [permission, requestPermission] = useCameraPermissions();
   const insets = useSafeAreaInsets();
-  const { addMeal, calorieBias } = useMeals();
+  const { addMeal, calorieBias, meals } = useMeals();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -44,6 +46,16 @@ export default function ScanScreen() {
   // Guess-before-you-scan: an optional quick guess made while the AI thinks.
   const [guess, setGuess] = useState<number | null>(null);
   const guessRef = useRef<number | null>(null);
+  // In-flight analysis request, so leaving the analyzing state can cancel it.
+  const abortRef = useRef<AbortController | null>(null);
+
+  /** Cancel the in-flight analysis (if any). A cancel is never an error. */
+  function cancelAnalysis() {
+    abortRef.current?.abort();
+  }
+
+  // Unmounting (back gesture, navigation, etc.) must not leave a request alive.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   function pickGuess(v: number) {
     guessRef.current = v;
@@ -87,8 +99,11 @@ export default function ScanScreen() {
     setPhase('analyzing');
     guessRef.current = null;
     setGuess(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const result = await analyzeFood(uri, calorieBias);
+      const result = await analyzeFood(uri, calorieBias, photoMealMemory(meals), controller.signal);
+      if (controller.signal.aborted) return;
       setAnalysis(result);
       setPhase('result');
       // Score the quick guess (if one was made in time) as a game round.
@@ -100,8 +115,13 @@ export default function ScanScreen() {
           .catch(() => {});
       }
     } catch (e: any) {
-      setErrorMsg(e?.message ?? 'Something went wrong. Please try again.');
-      setPhase('error');
+      // A user-initiated cancel is not an error — don't show the error sheet.
+      if (!controller.signal.aborted) {
+        setErrorMsg(e?.message ?? 'Something went wrong. Please try again.');
+        setPhase('error');
+      }
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
     }
   }
 
@@ -130,6 +150,7 @@ export default function ScanScreen() {
   }
 
   function reset() {
+    cancelAnalysis();
     setAnalysis(null);
     setPhotoUri(null);
     setErrorMsg('');
@@ -162,7 +183,12 @@ export default function ScanScreen() {
         <Pressable style={styles.linkBtn} onPress={onPickFromGallery}>
           <Text style={styles.linkText}>Or choose a photo instead</Text>
         </Pressable>
-        <Pressable style={styles.linkBtn} onPress={() => router.back()}>
+        <Pressable
+          style={styles.linkBtn}
+          onPress={() => {
+            cancelAnalysis();
+            router.back();
+          }}>
           <Text style={styles.linkTextMuted}>Close</Text>
         </Pressable>
       </SafeAreaView>
@@ -183,7 +209,13 @@ export default function ScanScreen() {
 
       {/* Close button */}
       <SafeAreaView style={styles.topBar}>
-        <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={12}>
+        <Pressable
+          style={styles.closeBtn}
+          onPress={() => {
+            cancelAnalysis();
+            router.back();
+          }}
+          hitSlop={12}>
           <Text style={styles.closeBtnText}>✕</Text>
         </Pressable>
       </SafeAreaView>
@@ -199,7 +231,14 @@ export default function ScanScreen() {
             <Pressable style={styles.shutter} onPress={onCapture}>
               <View style={styles.shutterInner} />
             </Pressable>
-            <View style={styles.controlSpacer} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scan a barcode"
+              style={styles.galleryBtn}
+              onPress={() => router.push('/barcode')}>
+              <BarcodeIcon size={20} color="#ffffff" />
+              <Text style={styles.galleryBtnText}>Scan</Text>
+            </Pressable>
           </View>
         </SafeAreaView>
       )}
@@ -416,13 +455,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 28,
   },
-  controlSpacer: { width: 90 },
   galleryBtn: {
     width: 90,
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   galleryBtnText: { color: '#ffffff', fontWeight: '700' },
   shutter: {

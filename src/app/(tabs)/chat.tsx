@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,27 +17,39 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
-import { RingMark } from '@/components/logo';
+import { RingMark, TrakWordmark } from '@/components/logo';
 import { askTrak, type ChatTurn } from '@/lib/chat';
+import { calorieBudgetForDay, caloriesBurnedForDay, creditedExerciseCalories } from '@/lib/exercise';
+import { dailyMealSuggestions, type DailyMealSuggestion } from '@/lib/meal-memory';
 import { sumTotals, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
-import { FoodAnalysis, LoggedMeal } from '@/lib/types';
+import type { ExerciseEntry, FoodAnalysis, LoggedMeal } from '@/lib/types';
 
 /**
  * A compact "last 7 days" digest the assistant can reason about for trend
  * questions — one line per day, newest first.
  */
-function weekSummary(meals: LoggedMeal[]): string {
+function weekSummary(
+  meals: LoggedMeal[],
+  exercises: ExerciseEntry[],
+  baseCalorieTarget: number
+): string {
   const byDay = new Map<string, LoggedMeal[]>();
   for (const m of meals) {
     if (!byDay.has(m.date)) byDay.set(m.date, []);
     byDay.get(m.date)!.push(m);
   }
-  return [...byDay.entries()]
+  const dates = new Set([...byDay.keys(), ...exercises.map((exercise) => exercise.date)]);
+  return [...dates]
+    .sort((a, b) => b.localeCompare(a))
     .slice(0, 7)
-    .map(([date, dayMeals]) => {
+    .map((date) => {
+      const dayMeals = byDay.get(date) ?? [];
       const t = sumTotals(dayMeals);
-      return `${date}: ${t.calories} kcal, ${t.protein_g}p ${t.carbs_g}c ${t.fat_g}f (${dayMeals.length} meals)`;
+      const burned = caloriesBurnedForDay(exercises, date);
+      const credit = creditedExerciseCalories(burned);
+      const budget = calorieBudgetForDay(baseCalorieTarget, burned);
+      return `${date}: ate ${t.calories}/${budget} kcal, ${t.protein_g}p ${t.carbs_g}c ${t.fat_g}f (${dayMeals.length} meals); exercise ${burned} kcal burned, ${credit} credited`;
     })
     .join('\n');
 }
@@ -54,23 +66,36 @@ type UiMessage = {
   isError?: boolean;
 };
 
-/** Quick logging examples shown on a fresh, empty Chat. */
-const CHAT_GROUPS: { heading: string; items: string[] }[] = [
-  {
-    heading: 'LOG BY TEXT',
-    items: ['1 big mac, 1 fries, 1 coke zero', '2 eggs and a slice of toast'],
-  },
-];
+type SuggestionGroup = {
+  id: 'dailyMeals' | 'forYou' | 'diveDeeper';
+  heading: string;
+  helper?: string;
+  items: DailyMealSuggestion[];
+};
 
 /** Grouped insight prompts for the Ask panel — always available, tap to send. */
-const ASK_GROUPS: { heading: string; items: string[] }[] = [
+const ASK_GROUPS: SuggestionGroup[] = [
   {
-    heading: 'FOR YOU',
-    items: ['How am I doing today?', 'What should I focus on tomorrow?'],
+    id: 'forYou',
+    heading: 'For you',
+    items: [
+      'How am I doing today?',
+      'What should I focus on tomorrow?',
+      'What can I eat with my calories left?',
+      'Am I on track for protein?',
+      'How balanced is today?',
+    ].map((label) => ({ label, prompt: label })),
   },
   {
-    heading: 'DIVE DEEPER',
-    items: ['Any trends in my last 7 days?', 'Is my protein spread evenly across meals?'],
+    id: 'diveDeeper',
+    heading: 'Dive deeper',
+    items: [
+      'Any trends in my last 7 days?',
+      'Is my protein spread evenly across meals?',
+      'Which meals are most calorie-dense?',
+      'How consistent have I been?',
+      'What changed this week?',
+    ].map((label) => ({ label, prompt: label })),
   },
 ];
 
@@ -142,7 +167,17 @@ type Mode = 'chat' | 'ask';
 export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { targets, todayTotals, addMeal, calorieBias, meals } = useMeals();
+  const {
+    targets,
+    todayTotals,
+    addMeal,
+    calorieBias,
+    meals,
+    exercises,
+    burnedToday,
+    exerciseCreditToday,
+    calorieBudget,
+  } = useMeals();
   const params = useLocalSearchParams<{ mode?: string; t?: string }>();
 
   // Chat and Ask are two independent conversations with their own histories.
@@ -153,19 +188,43 @@ export default function ChatScreen() {
   const [thinking, setThinking] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('chat');
+  const [expandedSections, setExpandedSections] = useState({
+    dailyMeals: true,
+    forYou: true,
+    diveDeeper: false,
+  });
   const listRef = useRef<FlatList<UiMessage>>(null);
   // Synchronous re-entry guard: `thinking` state commits async, so a fast
   // double-tap could start two sends. A ref flips immediately.
   const sendingRef = useRef(false);
+  // Aborts the in-flight request when the user taps the send button (now a
+  // stop button) while Trak is thinking.
+  const abortRef = useRef<AbortController | null>(null);
 
   const messages = mode === 'chat' ? chatMessages : askMessages;
   const setMessages = mode === 'chat' ? setChatMessages : setAskMessages;
+  const chatGroups = useMemo<SuggestionGroup[]>(
+    () => [
+      {
+        id: 'dailyMeals',
+        heading: 'Daily meals',
+        helper: 'Your most logged meals appear first',
+        items: dailyMealSuggestions(meals),
+      },
+    ],
+    [meals],
+  );
+  const suggestionGroups = mode === 'ask' ? ASK_GROUPS : chatGroups;
 
-  // Jumping here from the Home coaching card opens straight into Ask mode,
-  // even if Chat is already mounted (tabs stay alive in the background). The
-  // nonce param makes repeat taps re-fire this despite an unchanged mode value.
+  function toggleSection(id: SuggestionGroup['id']) {
+    setExpandedSections((current) => ({ ...current, [id]: !current[id] }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
+
+  // Home coaching cards can target either conversation even when this tab is
+  // already mounted in the background. The nonce makes repeat taps re-fire.
   useEffect(() => {
-    if (params.mode === 'ask') setMode('ask');
+    if (params.mode === 'chat' || params.mode === 'ask') setMode(params.mode);
   }, [params.mode, params.t]);
 
   // Restore both conversations once per app launch, then keep them saved.
@@ -203,6 +262,8 @@ export default function ChatScreen() {
     // stored history loads would be overwritten (deleted) by the late restore.
     if (!trimmed || thinking || sendingRef.current || !hydrated) return;
     sendingRef.current = true;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const userMsg: UiMessage = { id: makeId(), role: 'user', content: trimmed };
     const base = [...messages, userMsg];
@@ -215,8 +276,14 @@ export default function ChatScreen() {
       const history: ChatTurn[] = base.map((m) => ({ role: m.role, content: m.content }));
       const reply = await askTrak(
         history,
-        { targets, eaten: todayTotals, week: weekSummary(meals) },
-        calorieBias
+        {
+          targets: { ...targets, calories: calorieBudget },
+          eaten: todayTotals,
+          exercise: { burned: burnedToday, credited: exerciseCreditToday },
+          week: weekSummary(meals, exercises, targets.calories),
+        },
+        calorieBias,
+        controller.signal
       );
       setMessages((prev) => [
         ...prev,
@@ -228,19 +295,30 @@ export default function ChatScreen() {
         },
       ]);
     } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: makeId(),
-          role: 'assistant',
-          content: (e as Error).message ?? 'Something went wrong. Please try again.',
-          isError: true,
-        },
-      ]);
+      // A user-initiated cancel isn't an error: leave their message in place
+      // and show nothing, matching how chat apps handle "stop".
+      if (!controller.signal.aborted) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId(),
+            role: 'assistant',
+            content: (e as Error).message ?? 'Something went wrong. Please try again.',
+            isError: true,
+          },
+        ]);
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       sendingRef.current = false;
       setThinking(false);
     }
+  }
+
+  /** Cancel the in-flight request. The user's message stays in the thread. */
+  function stop() {
+    abortRef.current?.abort();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }
 
   async function handleAdd(msg: UiMessage) {
@@ -273,7 +351,7 @@ export default function ChatScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.headerRow}>
           <RingMark size={30} />
-          <Text style={[styles.title, { color: colors.text }]}>Trak</Text>
+          <TrakWordmark color={colors.text} size={28} />
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.backgroundElement }]}>
@@ -299,21 +377,62 @@ export default function ChatScreen() {
           {/* Suggestions stay pinned above the thread — the conversation
               scrolls in its own area and can never cover them. */}
           <View style={styles.pinned}>
-            {(mode === 'ask' ? ASK_GROUPS : CHAT_GROUPS).map((group) => (
-              <View key={group.heading} style={styles.suggestionGroup}>
-                <Text style={[styles.suggestionHeading, { color: colors.textSecondary }]}>
-                  {group.heading}
-                </Text>
-                <View style={styles.suggestionGrid}>
-                  {group.items.map((s) => (
-                    <Pressable
-                      key={s}
-                      style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
-                      onPress={() => send(s)}>
-                      <Text style={[styles.suggestionText, { color: colors.text }]}>{s}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+            {suggestionGroups.map((group) => (
+              <View key={group.id} style={styles.suggestionGroup}>
+                <Pressable
+                  style={styles.suggestionHeader}
+                  onPress={() => toggleSection(group.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${group.heading}, ${expandedSections[group.id] ? 'collapse' : 'expand'}`}
+                  accessibilityState={{ expanded: expandedSections[group.id] }}>
+                  <View style={styles.suggestionHeadingBlock}>
+                    <Text style={[styles.suggestionHeading, { color: colors.text }]}>
+                      {group.heading}
+                    </Text>
+                    {group.helper ? (
+                      <Text style={[styles.suggestionHelper, { color: colors.textSecondary }]}>
+                        {group.helper}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View
+                    style={[
+                      styles.expandButton,
+                      { backgroundColor: colors.backgroundElement },
+                    ]}>
+                    <Text style={[styles.expandButtonText, { color: colors.text }]}>
+                      {expandedSections[group.id] ? '−' : '+'}
+                    </Text>
+                  </View>
+                </Pressable>
+                {expandedSections[group.id] ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.suggestionRail}
+                    accessibilityLabel={`${group.heading} suggestions`}>
+                    {group.items.map((item) => (
+                      <Pressable
+                        key={item.label}
+                        style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
+                        onPress={() => send(item.prompt)}>
+                        <Text
+                          style={[styles.suggestionText, { color: colors.text }]}
+                          numberOfLines={3}>
+                          {item.label}
+                        </Text>
+                        {item.logCount ? (
+                          <View style={styles.memoryBadge}>
+                            <View style={styles.memoryDot} />
+                            <Text style={[styles.memoryText, { color: colors.textSecondary }]}>
+                              Logged {item.logCount}×
+                            </Text>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                ) : null}
               </View>
             ))}
           </View>
@@ -398,11 +517,18 @@ export default function ChatScreen() {
               // send guard already prevents double submissions.
               multiline={false}
             />
+            {/* While Trak is thinking the button becomes a stop control that
+                cancels the request; otherwise it sends the typed message. */}
             <Pressable
-              style={[styles.sendBtn, (!input.trim() || thinking) && { opacity: 0.4 }]}
-              onPress={() => send(input)}
-              disabled={!input.trim() || thinking}>
-              <Text style={styles.sendText}>↑</Text>
+              style={[styles.sendBtn, !thinking && !input.trim() && { opacity: 0.4 }]}
+              onPress={() => (thinking ? stop() : send(input))}
+              disabled={!thinking && !input.trim()}
+              accessibilityLabel={thinking ? 'Stop' : 'Send'}>
+              {thinking ? (
+                <View style={styles.stopSquare} />
+              ) : (
+                <Text style={styles.sendText}>↑</Text>
+              )}
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -422,7 +548,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
-  title: { fontSize: 27, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
 
   modeSwitch: {
     flexDirection: 'row',
@@ -441,17 +566,38 @@ const styles = StyleSheet.create({
   emptyBody: { fontSize: 14, textAlign: 'center', maxWidth: 300, lineHeight: 20 },
   pinned: { paddingTop: Spacing.two, paddingBottom: Spacing.two, gap: Spacing.two },
   suggestionGroup: { alignSelf: 'stretch', gap: Spacing.two },
-  suggestionHeading: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
-  suggestionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  suggestionHeader: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  suggestionHeadingBlock: { flex: 1, gap: 2 },
+  suggestionHeading: { fontSize: 15, fontWeight: '800' },
+  suggestionHelper: { fontSize: 11.5, lineHeight: 15 },
+  expandButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandButtonText: { fontSize: 20, lineHeight: 22, fontWeight: '500' },
+  suggestionRail: { gap: Spacing.two, paddingRight: Spacing.four },
   suggestion: {
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    flexBasis: '47%',
-    flexGrow: 1,
-    justifyContent: 'center',
+    width: 186,
+    minHeight: 76,
+    justifyContent: 'space-between',
+    gap: Spacing.two,
   },
   suggestionText: { fontSize: 13.5, fontWeight: '600', lineHeight: 19 },
+  memoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  memoryDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Brand.green },
+  memoryText: { fontSize: 11, fontWeight: '600' },
 
   listContent: { paddingVertical: Spacing.two, gap: Spacing.two },
   bubble: { maxWidth: '85%', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14 },
@@ -508,4 +654,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendText: { color: '#ffffff', fontSize: 18, fontWeight: '800' },
+  stopSquare: { width: 13, height: 13, borderRadius: 3, backgroundColor: '#ffffff' },
 });

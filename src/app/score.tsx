@@ -3,6 +3,7 @@ import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
+import { EXERCISE_CALORIE_CREDIT_PERCENT } from '@/lib/exercise';
 import { computeScore, scoreCaption, type ScorePart } from '@/lib/score';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -28,13 +29,13 @@ function PartRow({ part, colors }: { part: ScorePart; colors: ThemeColors }) {
 export default function ScoreScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { todayTotals, targets, burnedToday, todayMeals, waterToday, waterGoal, streak } =
+  const { todayTotals, targets, calorieBudget, todayMeals, waterToday, waterGoal, streak } =
     useMeals();
 
   const score = computeScore({
     totals: todayTotals,
     targets,
-    calorieBudget: targets.calories + burnedToday,
+    calorieBudget,
     mealsLogged: todayMeals.length,
     waterToday,
     waterGoal,
@@ -68,7 +69,8 @@ export default function ScoreScreen() {
 
           <Text style={[styles.footnote, { color: colors.textSecondary }]}>
             The score resets each morning and climbs as you log meals, hit protein, stay inside
-            your calorie budget, drink water, and keep your streak alive.
+            your calorie budget, drink water, and keep your streak alive. Logged workouts add{' '}
+            {EXERCISE_CALORIE_CREDIT_PERCENT}% of estimated burn to that budget.
           </Text>
         </ScrollView>
       </SafeAreaView>

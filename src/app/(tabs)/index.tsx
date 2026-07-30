@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { Redirect, router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -22,7 +23,8 @@ import {
   ScaleIcon,
   SparklesIcon,
 } from '@/components/icons';
-import { RingMark } from '@/components/logo';
+import { useSupplements } from '@/lib/supplements';
+import { RingMark, TrakWordmark } from '@/components/logo';
 import {
   Brand,
   Colors,
@@ -176,35 +178,40 @@ function pickTip(input: {
   caloriePct: number;
   waterPct: number;
   streak: number;
-}): { title: string; body: string } {
+}): { title: string; body: string; destination: 'chat' | 'ask' } {
   const { mealsLogged, proteinPct, caloriePct, waterPct, streak } = input;
   if (mealsLogged === 0) {
     return {
       title: 'Start the day',
       body: 'Log your first meal — a quick photo scan or a one-line message to Trak is enough.',
+      destination: 'chat',
     };
   }
   if (proteinPct < 0.5 && caloriePct > 0.5) {
     return {
       title: 'Protein is lagging',
       body: 'Your calories are ahead of your protein. Lean on eggs, yogurt, or tuna next meal.',
+      destination: 'ask',
     };
   }
   if (waterPct < 0.5) {
     return {
       title: 'Hydration check',
       body: 'You’re behind on water — a glass now beats a litre at night.',
+      destination: 'ask',
     };
   }
   if (streak >= 3) {
     return {
       title: `Day ${streak} streak`,
       body: 'Consistency is doing the heavy lifting. One more log keeps it alive.',
+      destination: 'ask',
     };
   }
   return {
     title: 'Looking steady',
     body: 'No gaps right now — ask Trak about your trends or what to eat next.',
+    destination: 'ask',
   };
 }
 
@@ -213,7 +220,7 @@ function CoachCard({
   tip,
   colors,
 }: {
-  tip: { title: string; body: string };
+  tip: { title: string; body: string; destination: 'chat' | 'ask' };
   colors: ThemeColors;
 }) {
   return (
@@ -222,10 +229,11 @@ function CoachCard({
         styles.tipCard,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
       ]}
-      // The nonce forces the chat screen's mode effect to re-fire — a bare
-      // {mode:'ask'} is referentially identical on the 2nd tap and gets ignored.
       onPress={() =>
-        router.push({ pathname: '/chat', params: { mode: 'ask', t: String(Date.now()) } })
+        router.push({
+          pathname: '/chat',
+          params: { mode: tip.destination, t: String(Date.now()) },
+        })
       }>
       <View style={[styles.tipIcon, { backgroundColor: colors.greenTint }]}>
         <SparklesIcon size={18} color={Brand.greenDark} />
@@ -353,6 +361,84 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+/* ---------------------------- Supplements card --------------------------- */
+
+/** Round tick you check off once a day — green fill when taken, outline when not. */
+function CheckCircle({ checked, colors }: { checked: boolean; colors: ThemeColors }) {
+  return (
+    <View
+      style={[
+        styles.checkCircle,
+        checked
+          ? { backgroundColor: Brand.green, borderColor: Brand.green }
+          : { borderColor: colors.backgroundSelected },
+      ]}>
+      {checked ? <Text style={styles.checkGlyph}>✓</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * Home glance at today's supplements — tap a row to check it off without
+ * leaving the dashboard; the header opens the full management screen.
+ * Mirrors WaterCard's visual weight so the two habit cards feel like a set.
+ */
+function SupplementsCard({ colors }: { colors: ThemeColors }) {
+  const { loaded, supplements, checkedToday, takenCount, streak, toggleTaken } = useSupplements();
+
+  // Nothing to show until state settles — avoids a flash of the empty prompt.
+  if (!loaded) return null;
+
+  async function tap(id: string) {
+    try {
+      await toggleTaken(id);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Not saved', e?.message ?? 'Please try again.');
+    }
+  }
+
+  return (
+    <View style={[styles.suppCard, { backgroundColor: colors.backgroundElement }]}>
+      <Pressable style={styles.suppHeader} onPress={() => router.push('/supplements')} hitSlop={6}>
+        <Text style={[styles.suppTitle, { color: colors.text }]}>Supplements</Text>
+        <View style={styles.suppHeaderRight}>
+          {streak > 0 ? (
+            <Text style={[styles.suppStreak, { color: Brand.greenDark }]}>{streak}-day streak</Text>
+          ) : null}
+          <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+        </View>
+      </Pressable>
+
+      {supplements.length === 0 ? (
+        <Pressable onPress={() => router.push('/supplements')} hitSlop={6}>
+          <Text style={[styles.suppAddLine, { color: colors.textSecondary }]}>
+            Add your vitamins and supplements ›
+          </Text>
+        </Pressable>
+      ) : (
+        <>
+          <View style={styles.suppList}>
+            {supplements.slice(0, 6).map((s) => (
+              <Pressable key={s.id} style={styles.suppRow} onPress={() => tap(s.id)} hitSlop={4}>
+                <Text style={[styles.suppName, { color: colors.text }]} numberOfLines={1}>
+                  {s.name}
+                </Text>
+                <CheckCircle checked={!!checkedToday[s.id]} colors={colors} />
+              </Pressable>
+            ))}
+          </View>
+          {supplements.length > 0 ? (
+            <Text style={[styles.suppCaption, { color: colors.textSecondary }]}>
+              {takenCount} of {supplements.length} taken
+            </Text>
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
 function MealRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
   return (
     <Pressable
@@ -393,6 +479,8 @@ export default function HomeScreen() {
     weights,
     latestWeight,
     burnedToday,
+    exerciseCreditToday,
+    calorieBudget,
     loaded,
     loadError,
     retryLoad,
@@ -406,8 +494,6 @@ export default function HomeScreen() {
     waterGoal,
   } = useMeals();
   const hasQuickAdd = recentMeals.length > 0 || savedMeals.length > 0;
-  // Exercise adds calories back to the day's budget.
-  const calorieBudget = targets.calories + burnedToday;
   const weightChange =
     weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
   const [refreshing, setRefreshing] = useState(false);
@@ -480,7 +566,7 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <View style={styles.logoRow}>
               <RingMark size={30} />
-              <Text style={[styles.wordmark, { color: colors.text }]}>Trak</Text>
+              <TrakWordmark color={colors.text} size={28} />
             </View>
             {streak > 0 ? (
               <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
@@ -568,7 +654,7 @@ export default function HomeScreen() {
             ) : (
               <Text style={[styles.leftNote, { color: colors.textSecondary }]}>
                 {caloriesLeft.toLocaleString()} kcal left
-                {burnedToday > 0 ? ` · +${burnedToday} from exercise` : ''}
+                {exerciseCreditToday > 0 ? ` · +${exerciseCreditToday} exercise credit` : ''}
               </Text>
             )}
           </View>
@@ -587,7 +673,9 @@ export default function HomeScreen() {
                   {Math.round(latestWeight * 10) / 10} kg
                 </Text>
               ) : (
-                <Text style={[styles.weightValue, { color: colors.textSecondary }]}>Log it</Text>
+                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
+                  Log it
+                </Text>
               )}
             </View>
             {weightChange != null && weightChange !== 0 ? (
@@ -608,15 +696,22 @@ export default function HomeScreen() {
             onPress={() => router.push('/exercise')}>
             <View style={styles.weightInfo}>
               <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Exercise</Text>
-              <Text style={[styles.weightValue, { color: burnedToday > 0 ? colors.text : colors.textSecondary }]}>
-                {burnedToday > 0 ? `+${burnedToday} kcal` : 'Log a workout'}
-              </Text>
+              {burnedToday > 0 ? (
+                <Text style={[styles.weightValue, { color: colors.text }]}>+{burnedToday} kcal</Text>
+              ) : (
+                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
+                  Log a workout
+                </Text>
+              )}
             </View>
             <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
           </Pressable>
 
           {/* Water */}
           <WaterCard colors={colors} />
+
+          {/* Supplements — daily check-off, sits alongside water as a habit card */}
+          <SupplementsCard colors={colors} />
 
           {/* Today's meals */}
           <View style={styles.mealsHeader}>
@@ -685,7 +780,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  wordmark: { fontSize: 27, fontFamily: Type.display, fontWeight: '700', letterSpacing: -0.5 },
   todayLabel: { fontSize: 15, fontWeight: '600' },
   streakPill: {
     flexDirection: 'row',
@@ -787,6 +881,8 @@ const styles = StyleSheet.create({
   weightInfo: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
   weightLabel: { fontSize: 14, fontWeight: '600' },
   weightValue: { fontSize: 20, fontWeight: '800' },
+  // Empty-state prompt, not a reading — matches the card's other secondary text (suppName).
+  weightPlaceholder: { fontSize: 15, fontWeight: '600' },
   weightChange: { fontSize: 14, fontWeight: '700' },
 
   waterCard: { borderRadius: 20, padding: Spacing.four, gap: Spacing.three },
@@ -806,6 +902,26 @@ const styles = StyleSheet.create({
   stepText: { fontSize: 18, fontWeight: '800' },
   goalValue: { fontSize: 15, fontWeight: '800', minWidth: 52, textAlign: 'center' },
   goalDone: { fontSize: 13, fontWeight: '700', marginLeft: 2 },
+  suppCard: { borderRadius: 20, padding: Spacing.four, gap: Spacing.three },
+  suppHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  suppTitle: { fontSize: 16, fontWeight: '700' },
+  suppHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  suppStreak: { fontSize: 13, fontWeight: '700' },
+  suppAddLine: { fontSize: 14, fontWeight: '600' },
+  suppList: { gap: Spacing.two },
+  suppRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
+  suppName: { flex: 1, fontSize: 15, fontWeight: '600' },
+  suppCaption: { fontSize: 12, fontWeight: '600' },
+  checkCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkGlyph: { color: '#ffffff', fontSize: 15, fontWeight: '800', lineHeight: 17 },
+
   sectionTitle: { fontSize: 19, fontFamily: Type.display, fontWeight: '700' },
   mealsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   quickAddPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },

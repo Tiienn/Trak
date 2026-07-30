@@ -2,13 +2,18 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Line, Rect } from 'react-native-svg';
+import Svg, { G, Line, Rect } from 'react-native-svg';
 
 import { TrendUpIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import {
+  calorieBudgetForDay,
+  caloriesBurnedForDay,
+  EXERCISE_CALORIE_CREDIT_PERCENT,
+} from '@/lib/exercise';
 import { dayKey, sumTotals, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
-import { LoggedMeal } from '@/lib/types';
+import type { ExerciseEntry, LoggedMeal } from '@/lib/types';
 
 type DayStat = {
   date: string;
@@ -17,10 +22,16 @@ type DayStat = {
   protein: number;
   carbs: number;
   fat: number;
+  burned: number;
+  budget: number;
 };
 
 /** Build stats for the last 7 calendar days, oldest first. */
-function lastSevenDays(meals: LoggedMeal[]): DayStat[] {
+function lastSevenDays(
+  meals: LoggedMeal[],
+  exercises: ExerciseEntry[],
+  baseCalorieTarget: number
+): DayStat[] {
   const byDay: Record<string, LoggedMeal[]> = {};
   for (const m of meals) (byDay[m.date] ??= []).push(m);
   const out: DayStat[] = [];
@@ -30,6 +41,7 @@ function lastSevenDays(meals: LoggedMeal[]): DayStat[] {
     d.setDate(d.getDate() - i);
     const key = dayKey(d);
     const totals = sumTotals(byDay[key] ?? []);
+    const burned = caloriesBurnedForDay(exercises, key);
     out.push({
       date: key,
       label: d.toLocaleDateString([], { weekday: 'narrow' }),
@@ -37,21 +49,15 @@ function lastSevenDays(meals: LoggedMeal[]): DayStat[] {
       protein: totals.protein_g,
       carbs: totals.carbs_g,
       fat: totals.fat_g,
+      burned,
+      budget: calorieBudgetForDay(baseCalorieTarget, burned),
     });
   }
   return out;
 }
 
-/** 7-bar calorie chart with the target as a dashed reference line. */
-function CalorieBars({
-  stats,
-  target,
-  colors,
-}: {
-  stats: DayStat[];
-  target: number;
-  colors: ThemeColors;
-}) {
+/** 7-bar calorie chart with each day's exercise-adjusted budget marker. */
+function CalorieBars({ stats, colors }: { stats: DayStat[]; colors: ThemeColors }) {
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
@@ -59,7 +65,7 @@ function CalorieBars({
   const top = 8;
   const bottom = 22;
   const innerH = H - top - bottom;
-  const max = Math.max(target, ...stats.map((s) => s.calories), 1) * 1.1;
+  const max = Math.max(...stats.flatMap((stat) => [stat.calories, stat.budget]), 1) * 1.1;
   const barW = width > 0 ? (width / stats.length) * 0.5 : 0;
   const slot = width / stats.length;
   const yFor = (v: number) => top + (1 - v / max) * innerH;
@@ -68,32 +74,32 @@ function CalorieBars({
     <View onLayout={onLayout}>
       {width > 0 ? (
         <Svg width={width} height={H}>
-          {/* target reference line */}
-          <Line
-            x1={0}
-            y1={yFor(target)}
-            x2={width}
-            y2={yFor(target)}
-            stroke={colors.textSecondary}
-            strokeWidth={1}
-            strokeDasharray="4 4"
-            opacity={0.5}
-          />
           {stats.map((s, i) => {
             const h = (s.calories / max) * innerH;
-            const over = s.calories > target;
+            const over = s.calories > s.budget;
             const cx = slot * i + slot / 2;
             return (
-              <Rect
-                key={s.date}
-                x={cx - barW / 2}
-                y={top + innerH - h}
-                width={barW}
-                height={Math.max(h, s.calories > 0 ? 2 : 0)}
-                rx={4}
-                fill={over ? Brand.over : Brand.green}
-                opacity={s.calories > 0 ? 1 : 0.15}
-              />
+              <G key={s.date}>
+                <Rect
+                  x={cx - barW / 2}
+                  y={top + innerH - h}
+                  width={barW}
+                  height={Math.max(h, s.calories > 0 ? 2 : 0)}
+                  rx={4}
+                  fill={over ? Brand.over : Brand.green}
+                  opacity={s.calories > 0 ? 1 : 0.15}
+                />
+                <Line
+                  x1={cx - slot * 0.36}
+                  y1={yFor(s.budget)}
+                  x2={cx + slot * 0.36}
+                  y2={yFor(s.budget)}
+                  stroke={colors.textSecondary}
+                  strokeWidth={1}
+                  strokeDasharray="3 2"
+                  opacity={0.65}
+                />
+              </G>
             );
           })}
         </Svg>
@@ -123,19 +129,22 @@ function Stat({ value, label, colors }: { value: string; label: string; colors: 
 export default function InsightsScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { meals, targets } = useMeals();
+  const { meals, exercises, targets } = useMeals();
 
-  const stats = lastSevenDays(meals);
+  const stats = lastSevenDays(meals, exercises, targets.calories);
   const loggedDays = stats.filter((s) => s.calories > 0);
+  const exerciseDays = stats.filter((s) => s.burned > 0);
   const avgCalories = loggedDays.length
     ? Math.round(loggedDays.reduce((a, s) => a + s.calories, 0) / loggedDays.length)
     : 0;
   // "On target" = within 15% of the daily calorie goal.
-  const onTarget = loggedDays.filter(
-    (s) => Math.abs(s.calories - targets.calories) <= targets.calories * 0.15
-  ).length;
+  const onTarget = loggedDays.filter((s) => Math.abs(s.calories - s.budget) <= s.budget * 0.15)
+    .length;
   const avgProtein = loggedDays.length
     ? Math.round(loggedDays.reduce((a, s) => a + s.protein, 0) / loggedDays.length)
+    : 0;
+  const avgBurned = exerciseDays.length
+    ? Math.round(exerciseDays.reduce((total, stat) => total + stat.burned, 0) / exerciseDays.length)
     : 0;
 
   return (
@@ -150,7 +159,7 @@ export default function InsightsScreen() {
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Last 7 days</Text>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {loggedDays.length === 0 ? (
+          {loggedDays.length === 0 && exerciseDays.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
               <TrendUpIcon size={30} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
@@ -161,9 +170,10 @@ export default function InsightsScreen() {
             <>
               <View style={[styles.chartCard, { backgroundColor: colors.backgroundElement }]}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Calories per day</Text>
-                <CalorieBars stats={stats} target={targets.calories} colors={colors} />
+                <CalorieBars stats={stats} colors={colors} />
                 <Text style={[styles.legend, { color: colors.textSecondary }]}>
-                  Dashed line = your {targets.calories.toLocaleString()} kcal target
+                  Dashed markers = each day&apos;s budget, including{' '}
+                  {EXERCISE_CALORIE_CREDIT_PERCENT}% exercise credit
                 </Text>
               </View>
 
@@ -174,6 +184,10 @@ export default function InsightsScreen() {
               <View style={styles.statRow}>
                 <Stat value={`${avgProtein} g`} label="avg protein" colors={colors} />
                 <Stat value={`${loggedDays.length}/7`} label="days logged" colors={colors} />
+              </View>
+              <View style={styles.statRow}>
+                <Stat value={`${avgBurned}`} label="avg workout kcal" colors={colors} />
+                <Stat value={`${exerciseDays.length}/7`} label="days exercised" colors={colors} />
               </View>
             </>
           )}

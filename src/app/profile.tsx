@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { deleteAccount } from '@/lib/account';
 import { computeTargets, DIETS } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -120,6 +121,8 @@ export default function ProfileScreen() {
   const [heightIn, setHeightIn] = useState('');
   const [weight, setWeight] = useState(profile ? String(Math.round(profile.weightKg)) : '');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
 
   // Switching units CONVERTS the field values — reinterpreting "80" (kg) as
   // 80 lb silently corrupted body stats and wrecked calorie targets.
@@ -176,7 +179,7 @@ export default function ProfileScreen() {
       ? computeTargets({ ...stats, goal, sex, activity, diet, createdAt: 0 })
       : null;
 
-  async function save() {
+  async function save(createdAt: number) {
     if (!stats || !goal || !sex || !activity || saving) return;
     setSaving(true);
     const next: UserProfile = {
@@ -187,7 +190,7 @@ export default function ProfileScreen() {
       age: stats.age,
       heightCm: stats.heightCm,
       weightKg: stats.weightKg,
-      createdAt: profile?.createdAt ?? Date.now(),
+      createdAt: profile?.createdAt ?? createdAt,
     };
     try {
       await saveProfile(next);
@@ -196,6 +199,49 @@ export default function ProfileScreen() {
       Alert.alert('Not saved', e?.message ?? 'Could not save your profile. Please try again.');
       setSaving(false);
     }
+  }
+
+  async function runDelete() {
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      // signOut cleared the session; close this modal so the underlying auth
+      // gate (in (tabs)/index) can redirect to /auth instead of being covered.
+      // dismissAll returns void, so an `??` fallback would ALWAYS also fire
+      // back() — branch explicitly instead.
+      if (router.dismissAll) {
+        router.dismissAll();
+      } else {
+        router.back();
+      }
+    } catch (e: any) {
+      // Nothing local was touched — the user can retry.
+      deletingRef.current = false;
+      setDeleting(false);
+      Alert.alert('Could not delete account', e?.message ?? 'Please try again.');
+    }
+  }
+
+  function confirmDelete() {
+    if (deletingRef.current) return;
+    Alert.alert(
+      'Delete your account?',
+      'This permanently erases your account, meals, weight and water history, supplements, and preferences. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('Are you absolutely sure?', 'Your data cannot be recovered after this.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete forever', style: 'destructive', onPress: runDelete },
+            ]),
+        },
+      ]
+    );
   }
 
   return (
@@ -427,11 +473,29 @@ export default function ProfileScreen() {
                 </View>
               </Section>
             ) : null}
+
+            <Section title="DANGER ZONE" colors={colors}>
+              <Pressable
+                onPress={confirmDelete}
+                disabled={deleting}
+                style={[styles.dangerCard, { backgroundColor: colors.backgroundElement }]}>
+                {deleting ? (
+                  <ActivityIndicator color="#EF4444" />
+                ) : (
+                  <>
+                    <Text style={styles.dangerTitle}>Delete account</Text>
+                    <Text style={[styles.dangerSub, { color: colors.textSecondary }]}>
+                      Permanently erase your account and all data.
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </Section>
           </ScrollView>
 
           <Pressable
             style={[styles.saveBtn, { opacity: canSave && !saving ? 1 : 0.4 }]}
-            onPress={save}
+            onPress={() => save(Date.now())}
             disabled={!canSave || saving}>
             {saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.saveBtnText}>Save changes</Text>}
           </Pressable>
@@ -508,6 +572,10 @@ const styles = StyleSheet.create({
   biasValueWrap: { alignItems: 'center' },
   biasValue: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
   biasSub: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+
+  dangerCard: { borderRadius: 16, padding: Spacing.four, gap: 4, minHeight: 62, justifyContent: 'center' },
+  dangerTitle: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
+  dangerSub: { fontSize: 13 },
 
   saveBtn: {
     backgroundColor: Brand.green,

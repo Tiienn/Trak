@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-/** A daily meal-logging reminder (device-local, not synced). */
+/** A daily habit reminder (device-local, not synced). */
 export type Reminder = {
   id: string;
   label: string;
@@ -11,16 +11,39 @@ export type Reminder = {
   hour: number; // 0-23
   minute: number; // 0-59
   enabled: boolean;
+  /** Display grouping on the reminders screen (e.g. Meals, Hydration). */
+  category: string;
 };
 
 const STORAGE_KEY = 'trak.reminders.v1';
 const CHANNEL_ID = 'meal-reminders';
 
+/**
+ * Built-in reminders, grouped by category and off by default so the app never
+ * notifies without the user opting in. Covers the core habits Trak tracks:
+ * meals, water, and progress. Custom reminders the user adds sit under their
+ * own category.
+ */
 export const DEFAULT_REMINDERS: Reminder[] = [
-  { id: 'breakfast', label: 'Breakfast', message: 'What did you have for breakfast?', hour: 8, minute: 0, enabled: false },
-  { id: 'lunch', label: 'Lunch', message: 'Time to log your lunch 🍽️', hour: 12, minute: 30, enabled: false },
-  { id: 'dinner', label: 'Dinner', message: 'Don’t forget to log dinner.', hour: 18, minute: 30, enabled: false },
+  { id: 'breakfast', label: 'Breakfast', message: 'What did you have for breakfast?', hour: 8, minute: 0, enabled: false, category: 'Meals' },
+  { id: 'lunch', label: 'Lunch', message: 'Time to log your lunch.', hour: 12, minute: 30, enabled: false, category: 'Meals' },
+  { id: 'dinner', label: 'Dinner', message: 'Don’t forget to log dinner.', hour: 18, minute: 30, enabled: false, category: 'Meals' },
+
+  { id: 'water-morning', label: 'Morning water', message: 'Start the day with a glass of water.', hour: 10, minute: 0, enabled: false, category: 'Hydration' },
+  { id: 'water-afternoon', label: 'Afternoon water', message: 'Hydration check — grab some water.', hour: 15, minute: 0, enabled: false, category: 'Hydration' },
+  { id: 'water-evening', label: 'Evening water', message: 'One more glass before the day winds down.', hour: 20, minute: 0, enabled: false, category: 'Hydration' },
+
+  { id: 'supplements', label: 'Supplements', message: 'Time to take your supplements.', hour: 9, minute: 0, enabled: false, category: 'Supplements' },
+
+  { id: 'weigh-in', label: 'Weigh-in', message: 'Step on the scale and log today’s weight.', hour: 7, minute: 30, enabled: false, category: 'Progress' },
+  { id: 'daily-wrap', label: 'Daily wrap-up', message: 'Anything left to log before bed?', hour: 21, minute: 0, enabled: false, category: 'Progress' },
 ];
+
+/** Category to fall back to for a stored reminder that predates categories. */
+const DEFAULT_CATEGORY = new Map(DEFAULT_REMINDERS.map((r) => [r.id, r.category]));
+function categoryForId(id: string): string {
+  return DEFAULT_CATEGORY.get(id) ?? 'Custom';
+}
 
 // Show reminders as a banner even when the app is in the foreground.
 Notifications.setNotificationHandler({
@@ -40,14 +63,23 @@ export async function loadReminders(): Promise<Reminder[]> {
     const stored = JSON.parse(raw);
     // Trust the stored list as-is so custom added/removed reminders persist.
     if (Array.isArray(stored) && stored.length) {
-      return stored.map((r: any) => ({
+      const list: Reminder[] = stored.map((r: any) => ({
         id: String(r.id),
         label: String(r.label ?? 'Reminder'),
         message: String(r.message ?? 'Time to log your meal.'),
         hour: Number.isFinite(r.hour) ? r.hour : 12,
         minute: Number.isFinite(r.minute) ? r.minute : 0,
         enabled: !!r.enabled,
+        category: String(r.category ?? categoryForId(String(r.id))),
       }));
+      // Surface built-in reminders added in a newer version (e.g. hydration) on
+      // devices that saved their list before those existed. Appended disabled,
+      // and only when absent, so the user's own entries and toggles are intact.
+      const have = new Set(list.map((r) => r.id));
+      for (const d of DEFAULT_REMINDERS) {
+        if (!have.has(d.id)) list.push({ ...d });
+      }
+      return list;
     }
     return DEFAULT_REMINDERS;
   } catch {
@@ -66,6 +98,7 @@ export function makeReminder(hour = 9, minute = 0): Reminder {
     hour,
     minute,
     enabled: true,
+    category: 'Custom',
   };
 }
 

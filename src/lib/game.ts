@@ -147,12 +147,186 @@ export const CATEGORIES: IngredientCategory[] = [
       { id: 'ice-cream', name: 'Ice cream', emoji: '🍨', portion: '1 scoop', calories: 140, protein_g: 2, carbs_g: 17, fat_g: 7 },
     ],
   },
+  {
+    key: 'plant-protein',
+    label: 'Plant protein',
+    emoji: '🫘',
+    items: [
+      { id: 'lentils', name: 'Lentils', emoji: '🫘', portion: '1 cup cooked', calories: 230, protein_g: 18, carbs_g: 40, fat_g: 1 },
+      { id: 'chickpeas', name: 'Chickpeas', emoji: '🫘', portion: '1 cup cooked', calories: 270, protein_g: 15, carbs_g: 45, fat_g: 4 },
+      { id: 'black-beans', name: 'Black beans', emoji: '🫘', portion: '1 cup cooked', calories: 225, protein_g: 15, carbs_g: 41, fat_g: 1 },
+      { id: 'kidney-beans', name: 'Kidney beans', emoji: '🫘', portion: '1 cup cooked', calories: 225, protein_g: 15, carbs_g: 40, fat_g: 1 },
+      { id: 'tempeh', name: 'Tempeh', emoji: '🌱', portion: '100 g', calories: 195, protein_g: 20, carbs_g: 8, fat_g: 11 },
+      { id: 'edamame', name: 'Edamame', emoji: '🫛', portion: '1 cup', calories: 190, protein_g: 18, carbs_g: 14, fat_g: 8 },
+      { id: 'hummus', name: 'Hummus', emoji: '🥣', portion: '1/4 cup', calories: 165, protein_g: 5, carbs_g: 14, fat_g: 10 },
+      { id: 'falafel', name: 'Falafel', emoji: '🧆', portion: '3 pieces', calories: 250, protein_g: 10, carbs_g: 28, fat_g: 12 },
+    ],
+  },
+  {
+    key: 'breakfast',
+    label: 'Breakfast',
+    emoji: '🥞',
+    items: [
+      { id: 'granola', name: 'Granola', emoji: '🥣', portion: '1/2 cup', calories: 220, protein_g: 5, carbs_g: 36, fat_g: 7 },
+      { id: 'bagel', name: 'Bagel', emoji: '🥯', portion: '1 medium', calories: 280, protein_g: 10, carbs_g: 56, fat_g: 2 },
+      { id: 'pancakes', name: 'Pancakes', emoji: '🥞', portion: '2 medium', calories: 350, protein_g: 8, carbs_g: 52, fat_g: 12 },
+      { id: 'breakfast-cereal', name: 'Breakfast cereal', emoji: '🥣', portion: '1 bowl with milk', calories: 240, protein_g: 8, carbs_g: 43, fat_g: 5 },
+      { id: 'yogurt-parfait', name: 'Yogurt parfait', emoji: '🍓', portion: '1 cup', calories: 260, protein_g: 14, carbs_g: 42, fat_g: 5 },
+      { id: 'avocado-toast', name: 'Avocado toast', emoji: '🥑', portion: '1 slice', calories: 260, protein_g: 7, carbs_g: 29, fat_g: 14 },
+      { id: 'croissant', name: 'Croissant', emoji: '🥐', portion: '1 medium', calories: 230, protein_g: 5, carbs_g: 26, fat_g: 12 },
+      { id: 'breakfast-sandwich', name: 'Breakfast sandwich', emoji: '🥪', portion: '1 sandwich', calories: 430, protein_g: 22, carbs_g: 34, fat_g: 23 },
+    ],
+  },
+  {
+    key: 'world-meals',
+    label: 'World meals',
+    emoji: '🍽️',
+    items: [
+      { id: 'chicken-curry', name: 'Chicken curry', emoji: '🍛', portion: '1 bowl', calories: 420, protein_g: 32, carbs_g: 24, fat_g: 22 },
+      { id: 'biryani', name: 'Biryani', emoji: '🍛', portion: '1 plate', calories: 550, protein_g: 24, carbs_g: 72, fat_g: 18 },
+      { id: 'sushi-roll', name: 'Sushi roll', emoji: '🍣', portion: '8 pieces', calories: 330, protein_g: 14, carbs_g: 52, fat_g: 8 },
+      { id: 'ramen-bowl', name: 'Ramen bowl', emoji: '🍜', portion: '1 bowl', calories: 500, protein_g: 22, carbs_g: 66, fat_g: 18 },
+      { id: 'tacos', name: 'Tacos', emoji: '🌮', portion: '3 tacos', calories: 480, protein_g: 24, carbs_g: 48, fat_g: 22 },
+      { id: 'burrito-bowl', name: 'Burrito bowl', emoji: '🥙', portion: '1 bowl', calories: 620, protein_g: 32, carbs_g: 78, fat_g: 22 },
+      { id: 'pad-thai', name: 'Pad Thai', emoji: '🍜', portion: '1 plate', calories: 650, protein_g: 24, carbs_g: 88, fat_g: 22 },
+      { id: 'couscous-bowl', name: 'Couscous bowl', emoji: '🥣', portion: '1 bowl', calories: 430, protein_g: 16, carbs_g: 68, fat_g: 12 },
+      { id: 'poke-bowl', name: 'Poke bowl', emoji: '🥗', portion: '1 bowl', calories: 520, protein_g: 30, carbs_g: 65, fat_g: 16 },
+      { id: 'dholl-puri', name: 'Dholl puri', emoji: '🫓', portion: '2 filled flatbreads', calories: 430, protein_g: 16, carbs_g: 72, fat_g: 9 },
+      { id: 'shakshuka', name: 'Shakshuka', emoji: '🍳', portion: '1 skillet serving', calories: 330, protein_g: 18, carbs_g: 22, fat_g: 20 },
+      { id: 'lasagna', name: 'Lasagna', emoji: '🍝', portion: '1 slice', calories: 450, protein_g: 26, carbs_g: 38, fat_g: 22 },
+    ],
+  },
+  {
+    key: 'desserts',
+    label: 'Desserts',
+    emoji: '🍰',
+    items: [
+      { id: 'cheesecake', name: 'Cheesecake', emoji: '🍰', portion: '1 slice', calories: 400, protein_g: 7, carbs_g: 32, fat_g: 28 },
+      { id: 'brownie', name: 'Brownie', emoji: '🍫', portion: '1 square', calories: 240, protein_g: 3, carbs_g: 36, fat_g: 10 },
+      { id: 'muffin', name: 'Muffin', emoji: '🧁', portion: '1 medium', calories: 340, protein_g: 5, carbs_g: 48, fat_g: 14 },
+      { id: 'custard', name: 'Custard', emoji: '🍮', portion: '1/2 cup', calories: 170, protein_g: 5, carbs_g: 24, fat_g: 6 },
+      { id: 'rice-pudding', name: 'Rice pudding', emoji: '🍚', portion: '1 cup', calories: 300, protein_g: 8, carbs_g: 54, fat_g: 6 },
+      { id: 'mochi', name: 'Mochi', emoji: '🍡', portion: '2 pieces', calories: 190, protein_g: 2, carbs_g: 40, fat_g: 3 },
+      { id: 'churros', name: 'Churros', emoji: '🥨', portion: '3 pieces', calories: 350, protein_g: 5, carbs_g: 46, fat_g: 17 },
+      { id: 'fruit-sorbet', name: 'Fruit sorbet', emoji: '🍧', portion: '1 cup', calories: 220, protein_g: 1, carbs_g: 52, fat_g: 0 },
+    ],
+  },
 ];
 
 /** Flat id → ingredient lookup. */
 export const INGREDIENT_BY_ID: Record<string, Ingredient> = Object.fromEntries(
   CATEGORIES.flatMap((c) => c.items).map((i) => [i.id, i])
 );
+
+export const ALL_INGREDIENTS = CATEGORIES.flatMap((category) => category.items);
+
+export type DeckGroup = 'food' | 'meal' | 'cuisine';
+
+export type GameDeck = {
+  key: string;
+  group: DeckGroup;
+  label: string;
+  description: string;
+};
+
+export const GAME_DECKS: GameDeck[] = [
+  { key: 'personal', group: 'food', label: 'From your recent meals', description: 'A varied deck shaped by foods you log.' },
+  { key: 'everyday', group: 'food', label: 'Everyday meals', description: 'Staples, produce, dairy, and mixed plates.' },
+  { key: 'restaurant', group: 'food', label: 'Restaurant & takeaway', description: 'Common meals when eating out.' },
+  { key: 'drinks-snacks', group: 'food', label: 'Drinks & snacks', description: 'Small portions with a wide calorie range.' },
+  { key: 'protein-foods', group: 'food', label: 'Protein foods', description: 'Animal, plant, and dairy protein.' },
+  { key: 'sauces-extras', group: 'food', label: 'Sauces & extras', description: 'The add-ons that are easy to overlook.' },
+  { key: 'breakfast-meal', group: 'meal', label: 'Breakfast', description: 'Morning meals and drinks.' },
+  { key: 'lunch-dinner', group: 'meal', label: 'Lunch & dinner', description: 'Complete meals from around the world.' },
+  { key: 'light-meals', group: 'meal', label: 'Light meals', description: 'Salads, soups, fruit, and smaller plates.' },
+  { key: 'snack-time', group: 'meal', label: 'Snack time', description: 'Sweet, savoury, and drink choices.' },
+  { key: 'global-basics', group: 'cuisine', label: 'Global basics', description: 'Familiar foods across regions.' },
+  { key: 'mediterranean', group: 'cuisine', label: 'Mediterranean', description: 'Grains, seafood, vegetables, and olive oil.' },
+  { key: 'south-asian', group: 'cuisine', label: 'South Asian', description: 'Rice, lentils, flatbreads, and curries.' },
+  { key: 'east-asian', group: 'cuisine', label: 'East Asian', description: 'Rice, noodles, tofu, seafood, and soups.' },
+  { key: 'african-indian-ocean', group: 'cuisine', label: 'African & Indian Ocean', description: 'Staples and mixed meals from the region.' },
+  { key: 'middle-eastern', group: 'cuisine', label: 'Middle Eastern', description: 'Legumes, grains, sauces, and grilled foods.' },
+  { key: 'latin-american', group: 'cuisine', label: 'Latin American', description: 'Tortillas, beans, rice, and mixed bowls.' },
+];
+
+const idsForCategories = (...keys: string[]) =>
+  CATEGORIES.filter((category) => keys.includes(category.key)).flatMap((category) =>
+    category.items.map((food) => food.id)
+  );
+
+export const GLOBAL_STARTER_IDS = [
+  'rice', 'pasta', 'chicken-breast', 'salmon', 'tofu', 'lentils', 'broccoli', 'banana',
+  'greek-yogurt', 'olive-oil', 'latte', 'burger', 'chicken-curry', 'sushi-roll', 'tacos',
+  'couscous-bowl', 'hummus', 'fruit-sorbet',
+];
+
+const DECK_IDS: Record<string, string[]> = {
+  personal: GLOBAL_STARTER_IDS,
+  everyday: idsForCategories('carbs', 'protein', 'veggies', 'fruits', 'dairy', 'plant-protein', 'breakfast', 'world-meals'),
+  restaurant: [
+    ...idsForCategories('world-meals', 'snacks'),
+    'fried-rice', 'instant-noodles', 'fries', 'boba', 'latte', 'beer', 'cheesecake', 'brownie',
+  ],
+  'drinks-snacks': idsForCategories('drinks', 'snacks', 'desserts', 'fruits'),
+  'protein-foods': idsForCategories('protein', 'plant-protein', 'dairy'),
+  'sauces-extras': [...idsForCategories('fats'), 'hummus'],
+  'breakfast-meal': [
+    ...idsForCategories('breakfast'),
+    'oats', 'bread', 'eggs', 'milk', 'greek-yogurt', 'banana', 'berries', 'orange-juice', 'latte',
+  ],
+  'lunch-dinner': idsForCategories('carbs', 'protein', 'veggies', 'plant-protein', 'world-meals'),
+  'light-meals': ['salad', 'spinach', 'tomato', 'mushrooms', 'white-fish', 'shrimp', 'tofu', 'hummus', 'greek-yogurt', 'apple', 'orange', 'berries', 'couscous-bowl', 'poke-bowl', 'shakshuka'],
+  'snack-time': idsForCategories('fruits', 'drinks', 'desserts'),
+  'global-basics': GLOBAL_STARTER_IDS,
+  mediterranean: ['pasta', 'baguette', 'salmon', 'white-fish', 'shrimp', 'tomato', 'spinach', 'salad', 'olive-oil', 'greek-yogurt', 'cheese', 'hummus', 'falafel', 'couscous-bowl', 'shakshuka'],
+  'south-asian': ['rice', 'lentils', 'chickpeas', 'tofu', 'mango', 'yogurt-parfait', 'chicken-curry', 'biryani', 'dholl-puri', 'honey'],
+  'east-asian': ['rice', 'fried-rice', 'noodles', 'instant-noodles', 'tofu', 'tempeh', 'edamame', 'soy-sauce', 'salmon', 'shrimp', 'sushi-roll', 'ramen-bowl', 'pad-thai', 'poke-bowl', 'mochi'],
+  'african-indian-ocean': ['rice', 'sweet-potato', 'lentils', 'chickpeas', 'kidney-beans', 'white-fish', 'tuna', 'mango', 'chicken-curry', 'biryani', 'dholl-puri', 'couscous-bowl'],
+  'middle-eastern': ['rice', 'chickpeas', 'lentils', 'hummus', 'falafel', 'olive-oil', 'greek-yogurt', 'couscous-bowl', 'shakshuka'],
+  'latin-american': ['rice', 'tortilla', 'corn', 'black-beans', 'kidney-beans', 'avocado', 'tomato', 'ground-beef', 'tacos', 'burrito-bowl'],
+};
+
+export function decksForGroup(group: DeckGroup): GameDeck[] {
+  return GAME_DECKS.filter((deck) => deck.group === group);
+}
+
+export function foodsForDeck(deckKey?: string, customIds?: string[]): Ingredient[] {
+  const ids = deckKey === 'personal' && customIds?.length ? customIds : DECK_IDS[deckKey ?? ''] ?? [];
+  const foods = ids.map((id) => INGREDIENT_BY_ID[id]).filter((food): food is Ingredient => Boolean(food));
+  return foods.length >= 2 ? Array.from(new Map(foods.map((food) => [food.id, food])).values()) : ALL_INGREDIENTS;
+}
+
+export function categoriesForFoods(foods: Ingredient[]): IngredientCategory[] {
+  const allowed = new Set(foods.map((food) => food.id));
+  return CATEGORIES.map((category) => ({
+    ...category,
+    items: category.items.filter((food) => allowed.has(food.id)),
+  })).filter((category) => category.items.length > 0);
+}
+
+function normalizeFoodName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** Build a small personalized deck from recent camera, barcode, and chat meal names. */
+export function personalizedFoodIds(names: string[], limit = 18): string[] {
+  const matched: string[] = [];
+  for (const rawName of names) {
+    const name = normalizeFoodName(rawName);
+    if (!name) continue;
+    const food = ALL_INGREDIENTS.find((candidate) => {
+      const candidateName = normalizeFoodName(candidate.name);
+      return name.includes(candidateName) || candidateName.includes(name);
+    });
+    if (food && !matched.includes(food.id)) matched.push(food.id);
+    if (matched.length >= limit) break;
+  }
+  for (const id of GLOBAL_STARTER_IDS) {
+    if (!matched.includes(id)) matched.push(id);
+    if (matched.length >= limit) break;
+  }
+  return matched;
+}
 
 export type Challenge = {
   targetCalories: number;
@@ -249,6 +423,11 @@ export type GameStats = {
   /** Scan guesses: how many made, and the summed |error %| for an average. */
   guessCount: number;
   guessErrSum: number;
+  /** Portion game accuracy. */
+  portionRounds: number;
+  portionCorrect: number;
+  /** Per-food learning progress; two successful encounters counts as mastered. */
+  foodMastery: Record<string, number>;
 };
 
 const STATS_KEY = 'trak.game.v1';
@@ -263,12 +442,23 @@ export const EMPTY_STATS: GameStats = {
   hlRounds: 0,
   guessCount: 0,
   guessErrSum: 0,
+  portionRounds: 0,
+  portionCorrect: 0,
+  foodMastery: {},
 };
 
 export async function loadGameStats(): Promise<GameStats> {
   try {
     const raw = await AsyncStorage.getItem(STATS_KEY);
-    if (raw) return { ...EMPTY_STATS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...EMPTY_STATS,
+        ...parsed,
+        foodMastery:
+          parsed.foodMastery && typeof parsed.foodMastery === 'object' ? parsed.foodMastery : {},
+      };
+    }
   } catch {
     // Fall through to fresh stats.
   }
@@ -285,7 +475,8 @@ function yesterdayKey(): string {
 export async function recordRound(
   result: RoundResult,
   isDaily: boolean,
-  stats: GameStats
+  stats: GameStats,
+  foodIds: string[] = []
 ): Promise<GameStats> {
   const today = dayKey();
   const next: GameStats = {
@@ -294,6 +485,8 @@ export async function recordRound(
     threeStar: stats.threeStar + (result.stars === 3 ? 1 : 0),
     bestDiffPct:
       stats.bestDiffPct === null ? result.diffPct : Math.min(stats.bestDiffPct, result.diffPct),
+    foodMastery:
+      result.stars >= 2 ? addFoodMastery(stats.foodMastery, foodIds) : stats.foodMastery,
   };
   // The daily streak counts the first completion of each day's challenge.
   if (isDaily && stats.lastDailyDay !== today) {
@@ -308,6 +501,16 @@ export async function recordRound(
   return next;
 }
 
+function addFoodMastery(current: Record<string, number>, foodIds: string[]): Record<string, number> {
+  const next = { ...current };
+  for (const id of new Set(foodIds)) next[id] = Math.min(3, (next[id] ?? 0) + 1);
+  return next;
+}
+
+export function masteredFoodCount(foods: Ingredient[], stats: GameStats): number {
+  return foods.filter((food) => (stats.foodMastery[food.id] ?? 0) >= 2).length;
+}
+
 async function saveStats(next: GameStats): Promise<GameStats> {
   try {
     await AsyncStorage.setItem(STATS_KEY, JSON.stringify(next));
@@ -318,11 +521,30 @@ async function saveStats(next: GameStats): Promise<GameStats> {
 }
 
 /** Record a finished Higher-or-Lower run. */
-export async function recordHigherLower(run: number, stats: GameStats): Promise<GameStats> {
+export async function recordHigherLower(
+  run: number,
+  stats: GameStats,
+  correctFoodIds: string[] = []
+): Promise<GameStats> {
   return saveStats({
     ...stats,
     hlRounds: stats.hlRounds + run,
     hlBest: Math.max(stats.hlBest, run),
+    foodMastery: addFoodMastery(stats.foodMastery, correctFoodIds),
+  });
+}
+
+/** Record one answer in the portion-estimation game. */
+export async function recordPortionGuess(
+  correct: boolean,
+  foodId: string,
+  stats: GameStats
+): Promise<GameStats> {
+  return saveStats({
+    ...stats,
+    portionRounds: stats.portionRounds + 1,
+    portionCorrect: stats.portionCorrect + (correct ? 1 : 0),
+    foodMastery: correct ? addFoodMastery(stats.foodMastery, [foodId]) : stats.foodMastery,
   });
 }
 
@@ -336,11 +558,12 @@ export async function recordScanGuess(errPct: number, stats: GameStats): Promise
 }
 
 /** The nutrient Higher-or-Lower compares in a given round. */
-export type MetricKey = 'calories' | 'protein_g' | 'fat_g';
+export type MetricKey = 'calories' | 'protein_g' | 'carbs_g' | 'fat_g';
 
 export const METRICS: { key: MetricKey; label: string; unit: string }[] = [
   { key: 'calories', label: 'Calories', unit: 'kcal' },
   { key: 'protein_g', label: 'Protein', unit: 'g' },
+  { key: 'carbs_g', label: 'Carbs', unit: 'g' },
   { key: 'fat_g', label: 'Fat', unit: 'g' },
 ];
 
@@ -349,11 +572,16 @@ export const METRICS: { key: MetricKey; label: string; unit: string }[] = [
  * result has a different id AND a different value for `metric` (so there's
  * always a right answer for the nutrient being compared).
  */
-export function randomFood(differentFrom?: Ingredient, metric: MetricKey = 'calories'): Ingredient {
-  const all = CATEGORIES.flatMap((c) => c.items);
-  for (;;) {
-    const i = all[Math.floor(Math.random() * all.length)];
+export function randomFood(
+  differentFrom?: Ingredient,
+  metric: MetricKey = 'calories',
+  pool: Ingredient[] = ALL_INGREDIENTS
+): Ingredient {
+  const choices = pool.length >= 2 ? pool : ALL_INGREDIENTS;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const i = choices[Math.floor(Math.random() * choices.length)];
     if (!differentFrom) return i;
     if (i.id !== differentFrom.id && i[metric] !== differentFrom[metric]) return i;
   }
+  return choices.find((food) => food.id !== differentFrom?.id) ?? choices[0];
 }

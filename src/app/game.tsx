@@ -5,11 +5,12 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FlameIcon, PlateIcon, ShareIcon } from '@/components/icons';
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { Brand, Colors, Spacing } from '@/constants/theme';
 import {
-  CATEGORIES,
+  categoriesForFoods,
   dailyChallenge,
   EMPTY_STATS,
+  foodsForDeck,
   INGREDIENT_BY_ID,
   loadGameStats,
   plateTotals,
@@ -38,13 +39,18 @@ export default function GameScreen() {
   const colors = Colors[scheme];
 
   // `?mode=free` starts a random round instead of today's daily challenge.
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const { mode, deck, foods } = useLocalSearchParams<{ mode?: string; deck?: string; foods?: string }>();
+  const foodPool = useMemo(
+    () => foodsForDeck(deck, foods ? foods.split(',').filter(Boolean) : undefined),
+    [deck, foods]
+  );
+  const availableCategories = useMemo(() => categoriesForFoods(foodPool), [foodPool]);
   const [isDaily, setIsDaily] = useState(mode !== 'free');
   const [challenge, setChallenge] = useState<Challenge>(() =>
     mode === 'free' ? randomChallenge() : dailyChallenge()
   );
   const [plate, setPlate] = useState<Record<string, number>>({});
-  const [category, setCategory] = useState(CATEGORIES[0].key);
+  const [category, setCategory] = useState(availableCategories[0].key);
   const [phase, setPhase] = useState<Phase>('build');
   const [result, setResult] = useState<RoundResult | null>(null);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
@@ -55,7 +61,8 @@ export default function GameScreen() {
 
   const totals = useMemo(() => plateTotals(plate), [plate]);
   const plateIds = Object.keys(plate).filter((id) => plate[id] > 0);
-  const activeCategory = CATEGORIES.find((c) => c.key === category) ?? CATEGORIES[0];
+  const activeCategory =
+    availableCategories.find((item) => item.key === category) ?? availableCategories[0];
   const dailyDoneToday = stats.lastDailyDay !== null && stats.lastDailyDay === challengeDay();
 
   function challengeDay(): string {
@@ -84,7 +91,7 @@ export default function GameScreen() {
     Haptics.notificationAsync(
       r.stars >= 2 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
     ).catch(() => {});
-    setStats(await recordRound(r, isDaily, stats));
+    setStats(await recordRound(r, isDaily, stats, plateIds));
   }
 
   function playAgain() {
@@ -187,7 +194,7 @@ export default function GameScreen() {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.catRow}>
-                {CATEGORIES.map((c) => (
+                {availableCategories.map((c) => (
                   <Pressable
                     key={c.key}
                     onPress={() => setCategory(c.key)}
