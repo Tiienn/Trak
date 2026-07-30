@@ -353,6 +353,28 @@ export function DumbbellIcon({ size = 22, color = '#ffffff' }: { size?: number; 
   );
 }
 
+/** Capsule pill split into two halves — supplements / meds. */
+export function PillIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* A fully-rounded (rx = half-height) capsule tilted 45° so it reads as a
+          pill rather than a bar; the divider across its waist shows the join. */}
+      <Rect
+        x={3}
+        y={8}
+        width={18}
+        height={8}
+        rx={4}
+        transform="rotate(45 12 12)"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path d="M12 8v8" transform="rotate(45 12 12)" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Game controller — playing Trak's games. */
 export function GamepadIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
   return (

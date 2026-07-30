@@ -1,15 +1,15 @@
 import { LeagueSpartan_700Bold } from '@expo-google-fonts/league-spartan/700Bold';
 import { LeagueSpartan_800ExtraBold } from '@expo-google-fonts/league-spartan/800ExtraBold';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect } from 'react';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider } from '@/lib/auth';
-import { PurchasesProvider, useSubscription } from '@/lib/purchases';
+import { PurchasesProvider } from '@/lib/purchases';
 import { bootstrapReminders } from '@/lib/reminders';
-import { MealsProvider, useMeals } from '@/lib/store';
+import { MealsProvider } from '@/lib/store';
 import { SupplementsProvider } from '@/lib/supplements';
 import { ThemeModeProvider, useAppScheme } from '@/lib/theme';
 
@@ -101,25 +101,6 @@ function ThemedNavigator() {
   );
 }
 
-function SubscriptionGate({ children }: { children: ReactNode }) {
-  const segments = useSegments() as string[];
-  const { loaded, hasProfile } = useMeals();
-  const { hasAccess, loading } = useSubscription();
-  const root = segments[0];
-
-  useEffect(() => {
-    if (!loaded || !hasProfile || loading || hasAccess) return;
-    // Authentication, onboarding, purchase restoration, and account deletion
-    // must remain reachable even without an active subscription.
-    if (root === 'auth' || root === 'onboarding' || root === 'paywall' || root === 'profile') {
-      return;
-    }
-    router.replace('/paywall');
-  }, [hasAccess, hasProfile, loaded, loading, root]);
-
-  return children;
-}
-
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     LeagueSpartan_700Bold,
@@ -138,10 +119,11 @@ export default function RootLayout() {
       <AuthProvider>
         <PurchasesProvider>
           <MealsProvider>
+            {/* No app-wide subscription gate: everything except the AI
+                features (photo scan, Chat/Ask) is free forever. Those two
+                screens gate themselves via useSubscription().hasAccess. */}
             <SupplementsProvider>
-              <SubscriptionGate>
-                <ThemedNavigator />
-              </SubscriptionGate>
+              <ThemedNavigator />
             </SupplementsProvider>
           </MealsProvider>
         </PurchasesProvider>

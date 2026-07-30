@@ -61,6 +61,8 @@ export type ThemeColors = {
 /** Display face for hero numbers and screen titles — warm editorial serif. */
 export const Type = {
   display: Platform.select({ ios: 'Georgia', default: 'serif' }) as string,
+  /** Editorial serif used by the Trak wordmark and display headings. */
+  brand: Platform.select({ ios: 'Georgia', default: 'serif' }) as string,
 } as const;
 
 export const Fonts = Platform.select({

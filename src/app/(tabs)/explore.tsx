@@ -220,19 +220,22 @@ function HealthCard({ colors }: { colors: ThemeColors }) {
 
 /** Subscription status and management entry point. */
 function ProCard({ colors }: { colors: ThemeColors }) {
-  const { isPro, testerAccess } = useSubscription();
+  const { isPro, testerAccess, inTrial, trialDaysLeft } = useSubscription();
   const hasProAccess = isPro || testerAccess;
+  // Name only what a subscription actually unlocks. Insights, games, and the
+  // rest are free, and implying otherwise invites refund requests.
+  const body = testerAccess && !isPro
+    ? 'Full access is enabled for this testing build.'
+    : isPro
+      ? 'Your subscription is active.'
+      : inTrial
+        ? `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left in your free trial.`
+        : 'Subscribe to unlock AI photo scan and Chat.';
   return (
     <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Trak Pro</Text>
-        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          {testerAccess && !isPro
-            ? 'Full access is enabled for this testing build.'
-            : isPro
-              ? 'Your subscription is active.'
-              : 'Unlock AI logging, coaching, insights, and games.'}
-        </Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>{body}</Text>
       </View>
       {hasProAccess ? (
         <Pressable style={styles.healthBtn} onPress={() => router.push('/paywall')}>

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import { RingMark, TrakWordmark } from '@/components/logo';
 import { askTrak, type ChatTurn } from '@/lib/chat';
 import { calorieBudgetForDay, caloriesBurnedForDay, creditedExerciseCalories } from '@/lib/exercise';
 import { dailyMealSuggestions, type DailyMealSuggestion } from '@/lib/meal-memory';
+import { useSubscription } from '@/lib/purchases';
 import { sumTotals, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import type { ExerciseEntry, FoodAnalysis, LoggedMeal } from '@/lib/types';
@@ -178,6 +179,9 @@ export default function ChatScreen() {
     exerciseCreditToday,
     calorieBudget,
   } = useMeals();
+  // Chat and Ask both call the model, so they're gated. History stays readable
+  // either way — locking someone out of what they already wrote is hostile.
+  const { hasAccess } = useSubscription();
   const params = useLocalSearchParams<{ mode?: string; t?: string }>();
 
   // Chat and Ask are two independent conversations with their own histories.
@@ -256,7 +260,16 @@ export default function ChatScreen() {
     );
   }, [askMessages, hydrated]);
 
+  /** Every locked entry point lands here instead of silently doing nothing. */
+  function openPaywall() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    router.push('/paywall');
+  }
+
   async function send(text: string) {
+    // Belt-and-braces: the UI already routes locked taps to the paywall, but
+    // this is the one place a request can start, so it checks too.
+    if (!hasAccess) return;
     const trimmed = text.trim();
     // The hydrated gate closes a cold-start race: a message sent before the
     // stored history loads would be overwritten (deleted) by the late restore.
@@ -415,7 +428,7 @@ export default function ChatScreen() {
                       <Pressable
                         key={item.label}
                         style={[styles.suggestion, { backgroundColor: colors.backgroundElement }]}
-                        onPress={() => send(item.prompt)}>
+                        onPress={() => (hasAccess ? send(item.prompt) : openPaywall())}>
                         <Text
                           style={[styles.suggestionText, { color: colors.text }]}
                           numberOfLines={3}>
@@ -501,11 +514,28 @@ export default function ChatScreen() {
             />
           )}
 
+          {!hasAccess ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Trial ended. See plans."
+              style={[styles.lockedBar, { backgroundColor: colors.backgroundElement }]}
+              onPress={openPaywall}>
+              <Text style={[styles.lockedBarText, { color: colors.textSecondary }]}>
+                Your free trial has ended. Chat and Ask need Pro.
+              </Text>
+              <Text style={styles.lockedBarCta}>See plans</Text>
+            </Pressable>
+          ) : null}
+
           <View style={[styles.inputRow, { backgroundColor: colors.backgroundElement }]}>
             <TextInput
               style={[styles.input, { color: colors.text }]}
               placeholder={
-                mode === 'chat' ? 'e.g. 1 big mac, 1 fries, 1 coke zero' : 'Ask about your day…'
+                !hasAccess
+                  ? 'Chat is paused'
+                  : mode === 'chat'
+                    ? 'e.g. 1 big mac, 1 fries, 1 coke zero'
+                    : 'Ask about your day…'
               }
               placeholderTextColor={colors.textSecondary}
               value={input}
@@ -514,20 +544,32 @@ export default function ChatScreen() {
               returnKeyType="send"
               // Kept editable while thinking: flipping `editable` blurs the
               // input on Android, closing the keyboard after every send. The
-              // send guard already prevents double submissions.
+              // send guard already prevents double submissions. `hasAccess`
+              // doesn't flip mid-conversation, so gating on it is safe.
+              editable={hasAccess}
               multiline={false}
             />
-            {/* While Trak is thinking the button becomes a stop control that
-                cancels the request; otherwise it sends the typed message. */}
+            {/* Locked: the button routes to the paywall. Otherwise, while Trak
+                is thinking it becomes a stop control that cancels the request;
+                the rest of the time it sends the typed message. */}
             <Pressable
-              style={[styles.sendBtn, !thinking && !input.trim() && { opacity: 0.4 }]}
-              onPress={() => (thinking ? stop() : send(input))}
-              disabled={!thinking && !input.trim()}
-              accessibilityLabel={thinking ? 'Stop' : 'Send'}>
-              {thinking ? (
+              style={[
+                styles.sendBtn,
+                hasAccess && !thinking && !input.trim() && { opacity: 0.4 },
+                !hasAccess && { backgroundColor: colors.backgroundSelected },
+              ]}
+              onPress={() => {
+                if (!hasAccess) return openPaywall();
+                return thinking ? stop() : send(input);
+              }}
+              disabled={hasAccess && !thinking && !input.trim()}
+              accessibilityLabel={!hasAccess ? 'See plans' : thinking ? 'Stop' : 'Send'}>
+              {hasAccess && thinking ? (
                 <View style={styles.stopSquare} />
               ) : (
-                <Text style={styles.sendText}>↑</Text>
+                <Text style={[styles.sendText, !hasAccess && { color: colors.textSecondary }]}>
+                  ↑
+                </Text>
               )}
             </Pressable>
           </View>
@@ -633,6 +675,19 @@ const styles = StyleSheet.create({
   addedBtn: { backgroundColor: 'transparent' },
   addText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   addedText: { color: Brand.green, fontSize: 14, fontWeight: '700' },
+
+  lockedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: Spacing.two,
+  },
+  lockedBarText: { flex: 1, fontSize: 12.5, lineHeight: 17 },
+  lockedBarCta: { color: Brand.green, fontSize: 13, fontWeight: '800' },
 
   inputRow: {
     flexDirection: 'row',

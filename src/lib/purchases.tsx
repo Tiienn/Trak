@@ -16,13 +16,19 @@ import Purchases, {
 } from 'react-native-purchases';
 
 import { useAuth } from './auth';
+import { useMeals } from './store';
 
 /**
  * Trak Pro via RevenueCat.
  *
- * Production access requires the `pro` entitlement. Development builds and
- * builds made with EXPO_PUBLIC_TESTER_ACCESS=true bypass the paywall so store
- * review and closed-test cohorts can exercise every feature.
+ * Only the AI features (photo scan, Chat/Ask) are paid — they're the ones that
+ * cost real money per use. Everything else (barcode, quick-add, water, weight,
+ * exercise, history, insights, games) is free forever.
+ *
+ * Access to the AI features comes from any of three places: the `pro`
+ * entitlement, an unexpired 7-day trial that starts at account creation, or a
+ * tester build (dev, or EXPO_PUBLIC_TESTER_ACCESS=true) so store review and
+ * closed-test cohorts can exercise every feature.
  */
 
 const apiKey =
@@ -48,15 +54,53 @@ function customerHasPro(info: CustomerInfo): boolean {
   return info.entitlements.active.pro != null;
 }
 
+/** Free trial length, counted from account creation. */
+export const TRIAL_DAYS = 7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type TrialState = { inTrial: boolean; trialDaysLeft: number };
+
+/**
+ * Pure trial math off the account-creation timestamp.
+ *
+ * The anchor is `profiles.created_at` from the server, so the trial survives a
+ * reinstall and matches across devices — nothing about it is stored locally.
+ *
+ * A null `createdAt` (profile still loading, or not created yet) fails OPEN:
+ * treating an unknown anchor as "expired" would flash a paywall at a paying or
+ * trialling user on every cold start, which is far worse than a few seconds of
+ * free AI for someone whose trial has actually run out. The real entitlement
+ * check lands a moment later and closes the gate.
+ */
+export function trialStateFrom(createdAt: number | null): TrialState {
+  if (createdAt == null) return { inTrial: true, trialDaysLeft: TRIAL_DAYS };
+  const msLeft = createdAt + TRIAL_DAYS * DAY_MS - Date.now();
+  if (msLeft <= 0) return { inTrial: false, trialDaysLeft: 0 };
+  return { inTrial: true, trialDaysLeft: Math.ceil(msLeft / DAY_MS) };
+}
+
 type SubscriptionContextValue = {
+  /** Real paid entitlement, or a store-managed trial tracked by RevenueCat. */
   isPro: boolean;
+  /** Within the TRIAL_DAYS window from account creation. */
+  inTrial: boolean;
+  /** Whole days remaining (rounded up), 0 once the trial has expired. */
+  trialDaysLeft: number;
+  /** Gates the AI features only — never the rest of the app. */
   hasAccess: boolean;
   loading: boolean;
   testerAccess: boolean;
   refresh: () => Promise<boolean>;
 };
 
-const SubscriptionContext = createContext<SubscriptionContextValue | null>(null);
+/** What the provider itself can know without reading the meals store. */
+type PurchasesState = Pick<
+  SubscriptionContextValue,
+  'isPro' | 'loading' | 'testerAccess' | 'refresh'
+>;
+
+const SubscriptionContext = createContext<PurchasesState | null>(null);
 
 export function PurchasesProvider({ children }: { children: ReactNode }) {
   const { user, authLoading } = useAuth();
@@ -123,10 +167,9 @@ export function PurchasesProvider({ children }: { children: ReactNode }) {
     return active;
   }, []);
 
-  const value = useMemo<SubscriptionContextValue>(
+  const value = useMemo<PurchasesState>(
     () => ({
       isPro,
-      hasAccess: isPro || testerAccessEnabled,
       loading:
         authLoading ||
         (purchasesConfigured && resolvedUserId !== (user?.id ?? null)),
@@ -139,10 +182,23 @@ export function PurchasesProvider({ children }: { children: ReactNode }) {
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
 }
 
+/**
+ * The trial anchor lives in the meals store, but `MealsProvider` is mounted
+ * *inside* `PurchasesProvider` — so the provider can't read it. Combining the
+ * two here keeps the nesting untouched and keeps `purchases.tsx` free of any
+ * import cycle (store.tsx does not import this module).
+ */
 export function useSubscription(): SubscriptionContextValue {
   const context = useContext(SubscriptionContext);
   if (!context) throw new Error('useSubscription must be used inside PurchasesProvider');
-  return context;
+  const { profile } = useMeals();
+  const { inTrial, trialDaysLeft } = trialStateFrom(profile?.createdAt ?? null);
+  return {
+    ...context,
+    inTrial,
+    trialDaysLeft,
+    hasAccess: context.isPro || inTrial || context.testerAccess,
+  };
 }
 
 /** Backward-compatible convenience hook for existing Pro UI. */

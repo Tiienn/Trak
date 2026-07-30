@@ -22,6 +22,7 @@ import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { loadGameStats, recordScanGuess } from '@/lib/game';
 import { photoMealMemory } from '@/lib/meal-memory';
+import { useSubscription } from '@/lib/purchases';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { FoodAnalysis } from '@/lib/types';
@@ -37,6 +38,7 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const insets = useSafeAreaInsets();
   const { addMeal, calorieBias, meals } = useMeals();
+  const { hasAccess } = useSubscription();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -157,6 +159,44 @@ export default function ScanScreen() {
     guessRef.current = null;
     setGuess(null);
     setPhase('camera');
+  }
+
+  // AI photo scan is the paid feature. Show the lock INSTEAD of the camera —
+  // letting someone frame and shoot a meal only to be blocked afterwards
+  // wastes their time (and asks for a camera permission we won't use).
+  if (!hasAccess) {
+    return (
+      <View style={styles.black}>
+        <SafeAreaView style={styles.topBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            style={styles.closeBtn}
+            onPress={() => router.back()}
+            hitSlop={12}>
+            <Text style={styles.closeBtnText}>✕</Text>
+          </Pressable>
+        </SafeAreaView>
+        <View style={styles.lockedWrap}>
+          <Text style={styles.lockedTitle}>AI scan is a Pro feature</Text>
+          <Text style={styles.lockedBody}>
+            Your free trial has ended. Barcode and quick-add logging are still free.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.primaryBtn}
+            onPress={() => router.push('/paywall')}>
+            <Text style={styles.primaryBtnText}>See plans</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.linkBtn}
+            onPress={() => router.push('/barcode')}>
+            <Text style={styles.linkText}>Scan a barcode instead</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
   }
 
   // Permission status still loading
@@ -432,6 +472,18 @@ const styles = StyleSheet.create({
   },
   permTitle: { color: '#ffffff', fontSize: 24, fontWeight: '800' },
   permBody: { color: '#B0B4BA', fontSize: 15, textAlign: 'center', marginBottom: 8 },
+
+  // Locked state (no subscription / trial expired) — replaces the camera.
+  lockedWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  lockedTitle: { color: '#ffffff', fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  lockedBody: {
+    color: '#B0B4BA',
+    fontSize: 15,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 8,
+    maxWidth: 300,
+  },
 
   // Top bar
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16 },

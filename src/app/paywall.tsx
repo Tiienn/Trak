@@ -15,23 +15,41 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PurchasesPackage } from 'react-native-purchases';
 
-import { HeartIcon, MedalIcon, SparklesIcon } from '@/components/icons';
+import {
+  BarcodeIcon,
+  CameraIcon,
+  CheckIcon,
+  PlateIcon,
+  ScaleIcon,
+  SparklesIcon,
+  TrendUpIcon,
+} from '@/components/icons';
 import { RingMark } from '@/components/logo';
-import { Brand, Colors, Spacing } from '@/constants/theme';
+import { Brand, Colors, Spacing, Type } from '@/constants/theme';
 import { useAppScheme } from '@/lib/theme';
 import {
   getProPackages,
   purchasePro,
   purchasesConfigured,
   restorePro,
+  TRIAL_DAYS,
   useSubscription,
 } from '@/lib/purchases';
 
 type IconCmp = (props: { size?: number; color?: string }) => React.JSX.Element;
-const PERKS: [IconCmp, string][] = [
-  [SparklesIcon, 'AI meal scans and nutrition estimates'],
-  [HeartIcon, 'Unlimited Chat and Ask coaching'],
-  [MedalIcon, 'Insights, tracking tools, and all games'],
+
+/** What money actually buys — the two features that cost per use to run. */
+const PERKS: [IconCmp, string, string][] = [
+  [CameraIcon, 'AI photo scan', 'Snap a plate and get calories and macros back in seconds.'],
+  [SparklesIcon, 'Chat and Ask', 'Nutrition answers, meal ideas, and coaching whenever you want it.'],
+];
+
+/** Everything below stays free with or without a subscription. */
+const FREE: [IconCmp, string][] = [
+  [BarcodeIcon, 'Barcode scan and quick-add'],
+  [PlateIcon, 'Manual and text meal logging'],
+  [ScaleIcon, 'Water, weight, exercise, and supplements'],
+  [TrendUpIcon, 'History, insights, reminders, and games'],
 ];
 
 function labelFor(
@@ -53,10 +71,37 @@ function labelFor(
   return { title: price, sub: pkg.product.title };
 }
 
+/** Header copy differs per state — subscribed, mid-trial, or trial over. */
+function headerFor(isPro: boolean, inTrial: boolean, daysLeft: number) {
+  if (isPro) {
+    return {
+      eyebrow: 'Trak Pro',
+      title: 'Your subscription is active',
+      body: 'AI photo scan and Chat are unlocked on this account. Thank you for paying for the parts that cost real money to run.',
+    };
+  }
+  if (inTrial) {
+    const title =
+      daysLeft <= 0
+        ? 'Last day of your free trial'
+        : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your free trial`;
+    return {
+      eyebrow: 'Free trial',
+      title,
+      body: 'You have full access right now. Subscribe before the trial ends to keep AI photo scan and Chat without a break.',
+    };
+  }
+  return {
+    eyebrow: 'Trak Pro',
+    title: 'Unlock AI logging',
+    body: `Your ${TRIAL_DAYS}-day free trial has ended. A subscription brings back AI photo scan and Chat. Barcode scan, quick-add, and manual logging stay free forever.`,
+  };
+}
+
 export default function PaywallScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { isPro, hasAccess, refresh } = useSubscription();
+  const { isPro, inTrial, trialDaysLeft, hasAccess, refresh } = useSubscription();
 
   const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
   const [selected, setSelected] = useState(0);
@@ -80,6 +125,13 @@ export default function PaywallScreen() {
     };
   }, []);
 
+  // The free features never disappear, so this screen must always be escapable
+  // even when there's nothing in the history stack to go back to.
+  function onClose() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
+  }
+
   async function onSubscribe() {
     if (!packages || !packages[selected] || busy || busyRef.current) return;
     busyRef.current = true;
@@ -89,7 +141,7 @@ export default function PaywallScreen() {
       if (ok) {
         await refresh();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        Alert.alert('Welcome to Trak Pro', 'Your subscription is active.', [
+        Alert.alert('You’re all set', 'Your subscription is active. AI photo scan and Chat are unlocked.', [
           { text: 'Done', onPress: () => router.replace('/(tabs)') },
         ]);
       }
@@ -110,7 +162,9 @@ export default function PaywallScreen() {
       if (ok) await refresh();
       Alert.alert(
         ok ? 'Restored' : 'Nothing to restore',
-        ok ? 'Your Trak Pro access is active again.' : 'No previous purchase was found for this account.'
+        ok
+          ? 'Your subscription is active again.'
+          : 'No previous purchase was found for this account.'
       );
       if (ok) router.replace('/(tabs)');
     } catch (e: any) {
@@ -121,40 +175,60 @@ export default function PaywallScreen() {
     }
   }
 
+  const header = headerFor(isPro, inTrial, trialDaysLeft);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe}>
-        {hasAccess && (
-          <Pressable style={styles.closeBtn} onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.closeTxt, { color: colors.textSecondary }]}>✕</Text>
-          </Pressable>
-        )}
+        <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={12}>
+          <Text style={[styles.closeTxt, { color: colors.textSecondary }]}>✕</Text>
+        </Pressable>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.logoWrap}>
             <RingMark size={44} />
           </View>
-          <Text style={[styles.title, { color: colors.text }]}>Trak Pro</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Fast AI food logging, personal guidance, and deeper progress tracking.
+          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>
+            {header.eyebrow.toUpperCase()}
           </Text>
+          <Text style={[styles.title, { color: colors.text }]}>{header.title}</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{header.body}</Text>
 
-          <View style={[styles.perks, { backgroundColor: colors.backgroundElement }]}>
-            {PERKS.map(([Icon, text]) => (
-              <View key={text} style={styles.perkRow}>
+          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              {isPro ? 'Included in your subscription' : 'What a subscription unlocks'}
+            </Text>
+            {PERKS.map(([Icon, name, detail]) => (
+              <View key={name} style={styles.perkRow}>
                 <View style={[styles.perkIcon, { backgroundColor: colors.greenTint }]}>
                   <Icon size={18} color={Brand.green} />
                 </View>
-                <Text style={[styles.perkText, { color: colors.text }]}>{text}</Text>
+                <View style={styles.perkInfo}>
+                  <Text style={[styles.perkName, { color: colors.text }]}>{name}</Text>
+                  <Text style={[styles.perkDetail, { color: colors.textSecondary }]}>{detail}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Free forever, no subscription</Text>
+            {FREE.map(([Icon, text]) => (
+              <View key={text} style={styles.freeRow}>
+                <Icon size={16} color={colors.textSecondary} />
+                <Text style={[styles.freeText, { color: colors.text }]}>{text}</Text>
+                <CheckIcon size={14} color={Brand.green} />
               </View>
             ))}
           </View>
 
           {isPro ? (
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
-              <HeartIcon size={20} color={Brand.green} />
+              <CheckIcon size={18} color={Brand.green} />
               <Text style={[styles.proBoxText, { color: colors.text }]}>
-                Your Trak Pro subscription is active.
+                {Platform.OS === 'ios'
+                  ? 'Subscribed. Manage or cancel any time in Settings › Apple Account › Subscriptions.'
+                  : 'Subscribed. Manage or cancel any time in Play Store › Subscriptions.'}
               </Text>
             </View>
           ) : packages === null ? (
@@ -163,8 +237,8 @@ export default function PaywallScreen() {
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
               <Text style={[styles.proBoxText, { color: colors.textSecondary }]}>
                 {purchasesConfigured
-                  ? 'Subscriptions aren’t available right now. Please try again later.'
-                  : 'Subscriptions aren’t available in this build yet.'}
+                  ? 'Subscriptions aren’t available right now. Please try again later — the free features all still work.'
+                  : 'Subscriptions aren’t available in this build yet. The free features all still work.'}
               </Text>
             </View>
           ) : (
@@ -201,29 +275,44 @@ export default function PaywallScreen() {
                 {busy ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.ctaText}>Continue with Trak Pro</Text>
+                  <Text style={styles.ctaText}>
+                    {inTrial ? 'Keep full access' : 'Unlock AI features'}
+                  </Text>
                 )}
               </Pressable>
             </>
           )}
 
+          {!isPro && (
+            <Pressable style={styles.secondary} onPress={onClose}>
+              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+                {inTrial ? 'Not now' : 'Keep using the free features'}
+              </Text>
+            </Pressable>
+          )}
+
           {purchasesConfigured && (
             <>
-              <Pressable style={styles.restore} onPress={onRestore} disabled={busy}>
-                <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Restore purchases</Text>
+              <Pressable style={styles.secondary} onPress={onRestore} disabled={busy}>
+                <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+                  Restore purchases
+                </Text>
               </Pressable>
 
               <Text style={[styles.fine, { color: colors.textSecondary }]}>
+                {`Trak’s ${TRIAL_DAYS}-day free trial starts when you create your account and needs no payment details. `}
                 {Platform.OS === 'ios'
-                  ? 'Any eligible trial and the exact renewal price are shown by Apple before purchase. Renews automatically until cancelled.'
-                  : 'Any eligible trial and the exact renewal price are shown by Google Play before purchase. Renews automatically until cancelled.'}
+                  ? 'Any eligible store trial and the exact renewal price are shown by Apple before you confirm. Subscriptions renew automatically until cancelled; cancel any time in Settings › Apple Account › Subscriptions.'
+                  : 'Any eligible store trial and the exact renewal price are shown by Google Play before you confirm. Subscriptions renew automatically until cancelled; cancel any time in Play Store › Subscriptions.'}
               </Text>
             </>
           )}
 
           {!hasAccess && (
-            <Pressable style={styles.restore} onPress={() => router.push('/profile')}>
-              <Text style={[styles.restoreText, { color: colors.textSecondary }]}>Account settings</Text>
+            <Pressable style={styles.secondary} onPress={() => router.push('/profile')}>
+              <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
+                Account settings
+              </Text>
             </Pressable>
           )}
 
@@ -262,24 +351,44 @@ const styles = StyleSheet.create({
   legalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: Spacing.two },
   legalLink: { fontSize: 12, textDecorationLine: 'underline' },
   legalDot: { fontSize: 12 },
-  title: {
-    fontFamily: 'LeagueSpartan_800ExtraBold',
-    fontSize: 34,
-    letterSpacing: -1,
+
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.4,
     marginTop: Spacing.three,
+  },
+  title: {
+    fontFamily: Type.display,
+    fontSize: 30,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 36,
+    marginTop: Spacing.one,
   },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: Spacing.two, lineHeight: 21 },
 
-  perks: {
+  card: {
     alignSelf: 'stretch',
     borderRadius: 18,
     padding: Spacing.four,
     gap: Spacing.three,
     marginTop: Spacing.four,
   },
-  perkRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  perkIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  perkText: { fontSize: 15, fontWeight: '600', flex: 1 },
+  cardTitle: { fontSize: 17, fontFamily: Type.display, fontWeight: '700' },
+  perkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
+  perkIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  perkInfo: { flex: 1, gap: 2 },
+  perkName: { fontSize: 15, fontWeight: '700' },
+  perkDetail: { fontSize: 13, lineHeight: 18 },
+  freeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  freeText: { fontSize: 14, fontWeight: '600', flex: 1 },
 
   loader: { marginTop: Spacing.five },
 
@@ -293,7 +402,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.two,
   },
-  proBoxText: { fontSize: 15, textAlign: 'center', lineHeight: 21 },
+  proBoxText: { fontSize: 14, textAlign: 'center', lineHeight: 20, flexShrink: 1 },
 
   pkg: {
     alignSelf: 'stretch',
@@ -322,7 +431,7 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
 
-  restore: { paddingVertical: Spacing.three },
-  restoreText: { fontSize: 14, fontWeight: '600' },
+  secondary: { paddingVertical: Spacing.three },
+  secondaryText: { fontSize: 14, fontWeight: '600' },
   fine: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
 });
