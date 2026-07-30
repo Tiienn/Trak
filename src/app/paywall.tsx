@@ -24,7 +24,7 @@ import {
   SparklesIcon,
   TrendUpIcon,
 } from '@/components/icons';
-import { RingMark } from '@/components/logo';
+import { RingMark, TrakWordmark } from '@/components/logo';
 import { Brand, Colors, Spacing, Type } from '@/constants/theme';
 import { useAppScheme } from '@/lib/theme';
 import {
@@ -75,7 +75,6 @@ function labelFor(
 function headerFor(isPro: boolean, inTrial: boolean, daysLeft: number) {
   if (isPro) {
     return {
-      eyebrow: 'Trak Pro',
       title: 'Your subscription is active',
       body: 'AI photo scan and Chat are unlocked on this account. Thank you for paying for the parts that cost real money to run.',
     };
@@ -86,13 +85,11 @@ function headerFor(isPro: boolean, inTrial: boolean, daysLeft: number) {
         ? 'Last day of your free trial'
         : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your free trial`;
     return {
-      eyebrow: 'Free trial',
       title,
       body: 'You have full access right now. Subscribe before the trial ends to keep AI photo scan and Chat without a break.',
     };
   }
   return {
-    eyebrow: 'Trak Pro',
     title: 'Unlock AI logging',
     body: `Your ${TRIAL_DAYS}-day free trial has ended. A subscription brings back AI photo scan and Chat. Barcode scan, quick-add, and manual logging stay free forever.`,
   };
@@ -185,43 +182,18 @@ export default function PaywallScreen() {
         </Pressable>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.logoWrap}>
-            <RingMark size={44} />
+          {/* Same lockup as every tab header: ring + the editorial wordmark
+              face, so "Trak Pro" reads as the product, not a different brand. */}
+          <View style={styles.brandLockup}>
+            <RingMark size={30} />
+            <TrakWordmark color={colors.text} size={28} />
+            <Text style={[styles.brandSuffix, { color: Brand.green }]}>Pro</Text>
           </View>
-          <Text style={[styles.eyebrow, { color: colors.textSecondary }]}>
-            {header.eyebrow.toUpperCase()}
-          </Text>
           <Text style={[styles.title, { color: colors.text }]}>{header.title}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{header.body}</Text>
 
-          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>
-              {isPro ? 'Included in your subscription' : 'What a subscription unlocks'}
-            </Text>
-            {PERKS.map(([Icon, name, detail]) => (
-              <View key={name} style={styles.perkRow}>
-                <View style={[styles.perkIcon, { backgroundColor: colors.greenTint }]}>
-                  <Icon size={18} color={Brand.green} />
-                </View>
-                <View style={styles.perkInfo}>
-                  <Text style={[styles.perkName, { color: colors.text }]}>{name}</Text>
-                  <Text style={[styles.perkDetail, { color: colors.textSecondary }]}>{detail}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Free forever, no subscription</Text>
-            {FREE.map(([Icon, text]) => (
-              <View key={text} style={styles.freeRow}>
-                <Icon size={16} color={colors.textSecondary} />
-                <Text style={[styles.freeText, { color: colors.text }]}>{text}</Text>
-                <CheckIcon size={14} color={Brand.green} />
-              </View>
-            ))}
-          </View>
-
+          {/* Plans sit directly under the headline: the price is the decision,
+              and burying it under explainer cards pushed it off-screen. */}
           {isPro ? (
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
               <CheckIcon size={18} color={Brand.green} />
@@ -291,6 +263,36 @@ export default function PaywallScreen() {
             </Pressable>
           )}
 
+          {/* Detail below the fold — it reassures after the price, and the
+              free list is what stops the change reading as a bait-and-switch. */}
+          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>
+              {isPro ? 'Included in your subscription' : 'What a subscription unlocks'}
+            </Text>
+            {PERKS.map(([Icon, name, detail]) => (
+              <View key={name} style={styles.perkRow}>
+                <View style={[styles.perkIcon, { backgroundColor: colors.greenTint }]}>
+                  <Icon size={18} color={Brand.green} />
+                </View>
+                <View style={styles.perkInfo}>
+                  <Text style={[styles.perkName, { color: colors.text }]}>{name}</Text>
+                  <Text style={[styles.perkDetail, { color: colors.textSecondary }]}>{detail}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Free forever, no subscription</Text>
+            {FREE.map(([Icon, text]) => (
+              <View key={text} style={styles.freeRow}>
+                <Icon size={16} color={colors.textSecondary} />
+                <Text style={[styles.freeText, { color: colors.text }]}>{text}</Text>
+                <CheckIcon size={14} color={Brand.green} />
+              </View>
+            ))}
+          </View>
+
           {purchasesConfigured && (
             <>
               <Pressable style={styles.secondary} onPress={onRestore} disabled={busy}>
@@ -347,23 +349,31 @@ const styles = StyleSheet.create({
   closeBtn: { alignSelf: 'flex-end', padding: Spacing.two },
   closeTxt: { fontSize: 20, fontWeight: '700' },
   scroll: { alignItems: 'center', paddingBottom: Spacing.six },
-  logoWrap: { marginTop: Spacing.two },
   legalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: Spacing.two },
   legalLink: { fontSize: 12, textDecorationLine: 'underline' },
   legalDot: { fontSize: 12 },
 
-  eyebrow: {
-    fontSize: 12,
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  // "Pro" rides alongside the wordmark in the same editorial face, a size down
+  // so the Trak mark still leads.
+  brandSuffix: {
+    fontFamily: Type.brand,
     fontWeight: '700',
-    letterSpacing: 1.4,
-    marginTop: Spacing.three,
+    fontSize: 24,
+    letterSpacing: -0.6,
   },
   title: {
     fontFamily: Type.display,
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
-    lineHeight: 36,
+    lineHeight: 32,
     marginTop: Spacing.one,
   },
   subtitle: { fontSize: 15, textAlign: 'center', marginTop: Spacing.two, lineHeight: 21 },
