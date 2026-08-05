@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
 import { RingMark, TrakWordmark } from '@/components/logo';
 import { askTrak, type ChatTurn } from '@/lib/chat';
+import { chatMealContext } from '@/lib/chat-context';
 import { calorieBudgetForDay, caloriesBurnedForDay, creditedExerciseCalories } from '@/lib/exercise';
 import { dailyMealSuggestions, type DailyMealSuggestion } from '@/lib/meal-memory';
 import { useSubscription } from '@/lib/purchases';
@@ -93,7 +94,7 @@ const ASK_GROUPS: SuggestionGroup[] = [
     items: [
       'Any trends in my last 7 days?',
       'Is my protein spread evenly across meals?',
-      'Which meals are most calorie-dense?',
+      'Which meals have the most calories?',
       'How consistent have I been?',
       'What changed this week?',
     ].map((label) => ({ label, prompt: label })),
@@ -178,6 +179,7 @@ export default function ChatScreen() {
     burnedToday,
     exerciseCreditToday,
     calorieBudget,
+    todayMeals,
   } = useMeals();
   // Chat and Ask both call the model, so they're gated. History stays readable
   // either way — locking someone out of what they already wrote is hostile.
@@ -293,6 +295,7 @@ export default function ChatScreen() {
           targets: { ...targets, calories: calorieBudget },
           eaten: todayTotals,
           exercise: { burned: burnedToday, credited: exerciseCreditToday },
+          meals: chatMealContext(todayMeals),
           week: weekSummary(meals, exercises, targets.calories),
         },
         calorieBias,

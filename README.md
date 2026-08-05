@@ -1,6 +1,9 @@
-# Welcome to your Expo app 👋
+# Trak
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Trak is an international calorie and nutrition tracker built with Expo and
+React Native. It supports meal-photo analysis, barcode scanning, conversational
+logging, exercise and Health Connect integration, progress scoring, nutrition
+games, reminders, supplements, and RevenueCat subscriptions.
 
 ## Get started
 
@@ -10,47 +13,87 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Create `.env` from `.env.example` and provide the public Supabase and
+   RevenueCat SDK values.
+
+3. Start the app
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+Native integrations such as Health Connect, RevenueCat, Apple authentication,
+and Android widgets require a development build; Expo Go cannot load them.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Useful commands:
 
 ```bash
-npm run reset-project
+npm run ios
+npm run android
+npm run lint
+npm test
+npx tsc --noEmit
+npx expo-doctor
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Nutrition AI
 
-### Other setup steps
+Gemini identifies foods and estimates edible grams. Supabase Edge Functions
+then resolve nutrients through USDA FoodData Central for generic foods, Open
+Food Facts for branded/barcoded products, web references as a fallback, and
+finally the model estimate when no grounded match passes validation.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Each result carries model, prompt, pipeline, and nutrition-source provenance.
+Meal photos and chat text are not written to AI telemetry.
 
-## Learn more
+## Google sign-in
 
-To learn more about developing your project with Expo, look at the following resources:
+The app uses Supabase's browser-based Google OAuth flow and returns to the
+installed app through `trak://auth/callback`.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+One-time dashboard setup:
 
-## Join the community
+1. In Google Auth Platform, create a **Web application** OAuth client and add
+   `https://<your-project-ref>.supabase.co/auth/v1/callback` as an authorized
+   redirect URI.
+2. In Supabase **Authentication → Sign In / Providers → Google**, enable Google
+   and paste that client ID and client secret.
+3. In Supabase **Authentication → URL Configuration**, add
+   `trak://auth/callback` to **Additional Redirect URLs**.
 
-Join our community of developers creating universal apps.
+The Google client secret belongs only in Supabase. Never add it to `.env` or
+ship it inside the app.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Production Edge Function secrets:
+
+- `GEMINI_API_KEY` — required.
+- `FDC_API_KEY` — recommended before public launch. The closed test falls back
+  to USDA's rate-limited `DEMO_KEY`.
+- `EXA_API_KEY` — optional final nutrition fallback.
+- `AI_TELEMETRY_SALT` — used for stable pseudonymous reliability identifiers.
+
+## Nutrition evaluations
+
+Validate the seed dataset and scorer:
+
+```bash
+npm run test:eval
+npm run eval:nutrition
+```
+
+Score exported model results:
+
+```bash
+npm run eval:nutrition -- --results /absolute/path/results.json --strict
+```
+
+The seed suite covers authoritative USDA portions, Mauritian dish recognition,
+non-food behavior, and medical/minor safety. Mauritian numeric ground truth is
+left pending until recipes are weighed and reviewed locally.
+
+## Release builds
+
+`eas.json` contains development, preview, tester, and production profiles.
+Production iOS submission uses the ignored credential under `credentials/ios`;
+never commit signing keys or `.env` files. Generated store-listing graphics are
+written to the ignored `store-assets` directory.

@@ -1,6 +1,7 @@
 import { applyCalorieBias, extractError, normalizeFoodJson } from './analyzeFood';
 import { supabase } from './supabase';
 import { FoodAnalysis, FoodTotals } from './types';
+import type { ChatMealContext } from './chat-context';
 
 /** One bubble in the conversation (what we also send back as history). */
 export type ChatTurn = {
@@ -24,6 +25,7 @@ export async function askTrak(
     targets: FoodTotals;
     eaten: FoodTotals;
     exercise?: { burned: number; credited: number };
+    meals?: ChatMealContext[];
     week?: string;
   },
   biasPct = 0,

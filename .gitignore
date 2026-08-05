@@ -25,6 +25,8 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.apk
+*.aab
 
 # macOS
 .DS_Store
@@ -48,3 +50,11 @@ supabase/.temp/
 
 # Release signing (NEVER commit)
 credentials/
+credentials.json
+
+# Generated store-listing graphics
+/store-assets
+
+# Local design/QA output and editor launch state
+/artifacts/
+/.claude/launch.json

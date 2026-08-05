@@ -9,3 +9,14 @@ verify_jwt = true
 
 [functions.analyze-food]
 verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+# Public page for the app stores' account-deletion URL — intentionally no auth.
+[functions.deletion-info]
+verify_jwt = false
+
+# Public privacy policy page for the app stores — intentionally no auth.
+[functions.privacy]
+verify_jwt = false

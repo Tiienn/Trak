@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 18.8.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "simulator": true }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": { "simulator": true }
+    },
+    "testing": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_TESTER_ACCESS": "true"
+      }
+    },
+    "production": {
+      "autoIncrement": false,
+      "environment": "production",
+      "android": {
+        "credentialsSource": "remote",
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "credentialsSource": "local"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6794951547",
+        "ascApiKeyPath": "credentials/ios/AuthKey_W9ZXHZCBKF.p8",
+        "ascApiKeyId": "W9ZXHZCBKF",
+        "ascApiKeyIssuerId": "f2c7f4be-2fcf-4777-b263-a4f7da8b4e79"
+      },
+      "android": {
+        "track": "alpha",
+        "releaseStatus": "completed"
+      }
+    }
+  }
+}
