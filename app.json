@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trak",
     "slug": "trak",
-    "version": "1.1.10",
+    "version": "1.1.15",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trak",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tien.trak",
-      "buildNumber": "4",
+      "buildNumber": "8",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -18,7 +18,8 @@
     },
     "android": {
       "package": "com.tien.trak",
-      "versionCode": 14,
+      "versionCode": 24,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.health.WRITE_NUTRITION",
         "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
@@ -51,13 +52,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Trak uses your camera to scan meals and estimate calories."
+          "cameraPermission": "Trak uses your camera to scan meals and take optional Body Analysis progress photos."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Trak needs access to your photos so you can pick a meal to scan."
+          "photosPermission": "Trak needs photo access so you can choose a meal or Body Analysis progress photo."
         }
       ],
       "./plugins/with-health-connect-delegate.js",

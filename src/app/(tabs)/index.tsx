@@ -1,14 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Redirect, router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +27,7 @@ import {
 } from '@/components/icons';
 import { useSupplements } from '@/lib/supplements';
 import { RingMark, TrakWordmark } from '@/components/logo';
+import { ProfileAvatarButton } from '@/components/profile-avatar-button';
 import {
   Brand,
   Colors,
@@ -34,13 +37,137 @@ import {
   type ThemeColors,
 } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { computeScore, scoreCaption } from '@/lib/score';
-import { useMeals } from '@/lib/store';
+import { dailyHistoryFor } from '@/lib/history';
+import { scoreCaption } from '@/lib/score';
+import { dayKey, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { LoggedMeal } from '@/lib/types';
 
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function localDateFromKey(value: string): Date {
+  const [year, month, date] = value.split('-').map(Number);
+  return new Date(year, month - 1, date);
+}
+
+/* ------------------------------ Date ribbon ----------------------------- */
+
+type WeekDate = {
+  date: Date;
+  key: string;
+  weekday: string;
+  day: number;
+  isToday: boolean;
+  isFuture: boolean;
+};
+
+const HOME_TIMELINE_DAYS = 365;
+
+function homeTimelineDates(today = new Date()): WeekDate[] {
+  const anchor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Array.from({ length: HOME_TIMELINE_DAYS + 1 }, (_, index) => {
+    const offset = index - (HOME_TIMELINE_DAYS - 1);
+    const date = new Date(anchor);
+    date.setDate(anchor.getDate() + offset);
+    return {
+      date,
+      key: dayKey(date),
+      weekday: date.toLocaleDateString([], { weekday: 'short' }),
+      day: date.getDate(),
+      isToday: offset === 0,
+      isFuture: offset > 0,
+    };
+  });
+}
+
+function WeekDateStrip({
+  colors,
+  selectedDate,
+  onSelectDate,
+}: {
+  colors: ThemeColors;
+  selectedDate: string;
+  onSelectDate: (date: string) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const dates = useMemo(() => homeTimelineDates(), []);
+  const itemWidth = (width - Spacing.four * 2) / 7;
+  const initialIndex = dates.length - 7;
+  const listRef = useRef<FlatList<WeekDate>>(null);
+
+  function openDay(item: WeekDate) {
+    if (item.isFuture) return;
+    void Haptics.selectionAsync();
+    onSelectDate(item.key);
+  }
+
+  return (
+    <View style={styles.dateStrip} accessibilityRole="tablist">
+      <FlatList
+        ref={listRef}
+        horizontal
+        data={dates}
+        keyExtractor={(item) => item.key}
+        initialScrollIndex={initialIndex}
+        getItemLayout={(_, index) => ({ length: itemWidth, offset: itemWidth * index, index })}
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={itemWidth}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        onScrollToIndexFailed={({ index }) => {
+          listRef.current?.scrollToOffset({ offset: itemWidth * index, animated: false });
+        }}
+        renderItem={({ item }) => (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityLabel={item.date.toLocaleDateString([], {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+            })}
+            accessibilityHint={item.isFuture ? 'Future date' : 'Shows this day on Home'}
+            accessibilityState={{ selected: item.key === selectedDate, disabled: item.isFuture }}
+            disabled={item.isFuture}
+            onPress={() => openDay(item)}
+            style={({ pressed }) => [
+              styles.dateItem,
+              { width: itemWidth },
+              item.key === selectedDate && {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.backgroundSelected,
+              },
+              pressed && !item.isFuture && { opacity: 0.65 },
+            ]}>
+            <Text
+              style={[
+                styles.dateWeekday,
+                { color: item.isFuture ? colors.textSecondary : colors.text },
+                item.key === selectedDate && styles.dateWeekdayToday,
+              ]}>
+              {item.weekday}
+            </Text>
+            <View
+              style={[
+                styles.dateCircle,
+                { borderColor: item.isFuture ? colors.backgroundSelected : colors.textSecondary },
+                item.key === selectedDate && { borderColor: Brand.green, borderStyle: 'solid' },
+              ]}>
+              <Text
+                style={[
+                  styles.dateNumber,
+                  { color: item.isFuture ? colors.textSecondary : colors.text },
+                  item.key === selectedDate && { color: Brand.greenDark },
+                ]}>
+                {item.day}
+              </Text>
+            </View>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
 }
 
 /* ------------------------------- Trak Score ------------------------------ */
@@ -54,10 +181,12 @@ function ScoreCard({
   value,
   caption,
   colors,
+  onPress,
 }: {
   value: number;
   caption: string;
   colors: ThemeColors;
+  onPress?: () => void;
 }) {
   const pct = Math.min(1, value / 100);
   return (
@@ -66,7 +195,8 @@ function ScoreCard({
         styles.scoreCard,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
       ]}
-      onPress={() => router.push('/score')}>
+      disabled={!onPress}
+      onPress={onPress}>
       <View style={styles.scoreRingWrap}>
         <Svg width={SCORE_SIZE} height={SCORE_SIZE}>
           <Circle
@@ -94,7 +224,9 @@ function ScoreCard({
           <Text style={[styles.scoreValue, { color: colors.text }]}>{value}</Text>
         </View>
         <View style={[styles.scoreBadge, { backgroundColor: colors.background }]}>
-          <Text style={[styles.scoreBadgeText, { color: colors.text }]}>Trak Score ›</Text>
+          <Text style={[styles.scoreBadgeText, { color: colors.text }]}>
+            {onPress ? 'Trak Score ›' : 'Trak Score'}
+          </Text>
         </View>
       </View>
       <Text style={[styles.scoreCaption, { color: colors.textSecondary }]}>{caption}</Text>
@@ -124,11 +256,11 @@ function MiniRing({
   pct: number;
   color: string;
   colors: ThemeColors;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   const clamped = Math.min(1, Math.max(0, pct));
   return (
-    <Pressable style={styles.miniWrap} onPress={onPress} hitSlop={4}>
+    <Pressable style={styles.miniWrap} disabled={!onPress} onPress={onPress} hitSlop={4}>
       <View style={styles.miniRing}>
         <Svg width={MINI_SIZE} height={MINI_SIZE}>
           <Circle
@@ -260,10 +392,20 @@ function litres(glasses: number): string {
 }
 
 /** Tap glasses to fill; tapping the current glass empties it back one. Toggle Glasses/Litres readout. */
-function WaterCard({ colors }: { colors: ThemeColors }) {
+function WaterCard({
+  colors,
+  selectedDate,
+  historicalWater,
+}: {
+  colors: ThemeColors;
+  selectedDate: string;
+  historicalWater: number;
+}) {
   const { waterToday, waterGoal, setWater, setWaterGoal } = useMeals();
   const [editingGoal, setEditingGoal] = useState(false);
   const [unit, setUnit] = useState<WaterUnit>('glasses');
+  const viewingToday = selectedDate === dayKey();
+  const displayedWater = viewingToday ? waterToday : historicalWater;
 
   useEffect(() => {
     AsyncStorage.getItem(WATER_UNIT_KEY).then((v) => {
@@ -279,8 +421,8 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
   const goalLabel = unit === 'litres' ? litres(waterGoal) : `${waterGoal}`;
   const countLabel =
     unit === 'litres'
-      ? `${litres(waterToday)} / ${litres(waterGoal)}`
-      : `${waterToday} / ${waterGoal} glasses`;
+      ? `${litres(displayedWater)} / ${litres(waterGoal)}`
+      : `${displayedWater} / ${waterGoal} glasses`;
 
   return (
     <View style={[styles.waterCard, { backgroundColor: colors.backgroundElement }]}>
@@ -308,7 +450,7 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
       </View>
 
       <View style={styles.waterReadout}>
-        {editingGoal ? (
+        {editingGoal && viewingToday ? (
           <View style={styles.goalStepper}>
             <Text style={[styles.goalPrefix, { color: colors.textSecondary }]}>Goal</Text>
             <Pressable
@@ -337,20 +479,23 @@ function WaterCard({ colors }: { colors: ThemeColors }) {
             </Pressable>
           </View>
         ) : (
-          <Pressable onPress={() => setEditingGoal(true)} hitSlop={8}>
-            <Text style={[styles.waterCount, { color: colors.textSecondary }]}>{countLabel} ✎</Text>
+          <Pressable disabled={!viewingToday} onPress={() => setEditingGoal(true)} hitSlop={8}>
+            <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
+              {countLabel}{viewingToday ? ' ✎' : ''}
+            </Text>
           </Pressable>
         )}
       </View>
 
       <View style={styles.glassRow}>
         {Array.from({ length: waterGoal }).map((_, i) => {
-          const filled = i < waterToday;
+          const filled = i < displayedWater;
           return (
             <Pressable
               key={i}
               hitSlop={4}
-              onPress={() => setWater(i + 1 === waterToday ? i : i + 1)}
+              disabled={!viewingToday}
+              onPress={() => setWater(i + 1 === displayedWater ? i : i + 1)}
               style={styles.glassTap}>
               <DropletIcon size={26} color={filled ? Brand.green : colors.backgroundSelected} filled />
             </Pressable>
@@ -383,8 +528,23 @@ function CheckCircle({ checked, colors }: { checked: boolean; colors: ThemeColor
  * leaving the dashboard; the header opens the full management screen.
  * Mirrors WaterCard's visual weight so the two habit cards feel like a set.
  */
-function SupplementsCard({ colors }: { colors: ThemeColors }) {
-  const { loaded, supplements, checkedToday, takenCount, streak, toggleTaken } = useSupplements();
+function SupplementsCard({ colors, selectedDate }: { colors: ThemeColors; selectedDate: string }) {
+  const { loaded, supplements, checks, checkedToday, takenCount, streak, toggleTaken } = useSupplements();
+  const viewingToday = selectedDate === dayKey();
+  const visibleSupplements = viewingToday
+    ? supplements
+    : supplements.filter((supplement) => {
+        const created = new Date(supplement.createdAt);
+        return Number.isNaN(created.getTime()) || dayKey(created) <= selectedDate;
+      });
+  const checkedForDay = viewingToday
+    ? checkedToday
+    : Object.fromEntries(
+        checks.filter((check) => check.day === selectedDate).map((check) => [check.supplementId, true])
+      );
+  const displayedTakenCount = viewingToday
+    ? takenCount
+    : visibleSupplements.filter((supplement) => checkedForDay[supplement.id]).length;
 
   // Nothing to show until state settles — avoids a flash of the empty prompt.
   if (!loaded) return null;
@@ -403,34 +563,39 @@ function SupplementsCard({ colors }: { colors: ThemeColors }) {
       <Pressable style={styles.suppHeader} onPress={() => router.push('/supplements')} hitSlop={6}>
         <Text style={[styles.suppTitle, { color: colors.text }]}>Supplements</Text>
         <View style={styles.suppHeaderRight}>
-          {streak > 0 ? (
+          {viewingToday && streak > 0 ? (
             <Text style={[styles.suppStreak, { color: Brand.greenDark }]}>{streak}-day streak</Text>
           ) : null}
           <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
         </View>
       </Pressable>
 
-      {supplements.length === 0 ? (
+      {visibleSupplements.length === 0 ? (
         <Pressable onPress={() => router.push('/supplements')} hitSlop={6}>
           <Text style={[styles.suppAddLine, { color: colors.textSecondary }]}>
-            Add your vitamins and supplements ›
+            {viewingToday ? 'Add your vitamins and supplements ›' : 'No supplements planned on this day'}
           </Text>
         </Pressable>
       ) : (
         <>
           <View style={styles.suppList}>
-            {supplements.slice(0, 6).map((s) => (
-              <Pressable key={s.id} style={styles.suppRow} onPress={() => tap(s.id)} hitSlop={4}>
+            {visibleSupplements.slice(0, 6).map((s) => (
+              <Pressable
+                key={s.id}
+                style={styles.suppRow}
+                disabled={!viewingToday}
+                onPress={() => tap(s.id)}
+                hitSlop={4}>
                 <Text style={[styles.suppName, { color: colors.text }]} numberOfLines={1}>
                   {s.name}
                 </Text>
-                <CheckCircle checked={!!checkedToday[s.id]} colors={colors} />
+                <CheckCircle checked={!!checkedForDay[s.id]} colors={colors} />
               </Pressable>
             ))}
           </View>
-          {supplements.length > 0 ? (
+          {visibleSupplements.length > 0 ? (
             <Text style={[styles.suppCaption, { color: colors.textSecondary }]}>
-              {takenCount} of {supplements.length} taken
+              {displayedTakenCount} of {visibleSupplements.length} taken
             </Text>
           ) : null}
         </>
@@ -473,30 +638,50 @@ export default function HomeScreen() {
   const colors = Colors[scheme];
   const { user, authLoading } = useAuth();
   const {
-    todayMeals,
-    todayTotals,
+    meals,
+    exercises,
     targets,
     weights,
-    latestWeight,
-    burnedToday,
-    exerciseCreditToday,
-    calorieBudget,
     loaded,
     loadError,
     retryLoad,
     refresh,
     hasProfile,
     profile,
-    streak,
     recentMeals,
     savedMeals,
-    waterToday,
+    waterHistory,
     waterGoal,
   } = useMeals();
-  const hasQuickAdd = recentMeals.length > 0 || savedMeals.length > 0;
-  const weightChange =
-    weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
+  const { supplements, checks } = useSupplements();
+  const today = dayKey();
+  const [selectedDate, setSelectedDate] = useState(today);
   const [refreshing, setRefreshing] = useState(false);
+
+  const selectedDay = useMemo(
+    () =>
+      dailyHistoryFor(selectedDate, {
+        meals,
+        exercises,
+        water: waterHistory,
+        supplements,
+        supplementChecks: checks,
+        targets,
+        waterGoal,
+      }),
+    [selectedDate, meals, exercises, waterHistory, supplements, checks, targets, waterGoal]
+  );
+  const viewingToday = selectedDate === today;
+  const hasQuickAdd = viewingToday && (recentMeals.length > 0 || savedMeals.length > 0);
+  const weightsThroughSelected = weights.filter((entry) => entry.date <= selectedDate);
+  const selectedWeight = weightsThroughSelected.at(-1)?.weightKg ?? null;
+  const weightChange =
+    weightsThroughSelected.length >= 2
+      ? weightsThroughSelected[weightsThroughSelected.length - 1].weightKg - weightsThroughSelected[0].weightKg
+      : null;
+  const selectedDateLabel = viewingToday
+    ? 'Today'
+    : localDateFromKey(selectedDate).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -534,24 +719,15 @@ export default function HomeScreen() {
   }
   if (!hasProfile) return <Redirect href="/onboarding" />;
 
-  const score = computeScore({
-    totals: todayTotals,
-    targets,
-    calorieBudget,
-    mealsLogged: todayMeals.length,
-    waterToday,
-    waterGoal,
-    streak,
-  });
   const tip = pickTip({
-    mealsLogged: todayMeals.length,
-    proteinPct: targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0,
-    caloriePct: calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0,
-    waterPct: waterGoal > 0 ? waterToday / waterGoal : 0,
-    streak,
+    mealsLogged: selectedDay.meals.length,
+    proteinPct: targets.protein_g > 0 ? selectedDay.totals.protein_g / targets.protein_g : 0,
+    caloriePct: selectedDay.calorieBudget > 0 ? selectedDay.totals.calories / selectedDay.calorieBudget : 0,
+    waterPct: waterGoal > 0 ? selectedDay.waterGlasses / waterGoal : 0,
+    streak: selectedDay.loggingStreak,
   });
-  const caloriesLeft = Math.max(0, calorieBudget - todayTotals.calories);
-  const caloriesOver = todayTotals.calories > calorieBudget;
+  const caloriesLeft = Math.max(0, selectedDay.calorieBudget - selectedDay.totals.calories);
+  const caloriesOver = selectedDay.totals.calories > selectedDay.calorieBudget;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -568,23 +744,34 @@ export default function HomeScreen() {
               <RingMark size={30} />
               <TrakWordmark color={colors.text} size={28} />
             </View>
-            {streak > 0 ? (
-              <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
-                <FlameIcon size={15} color={Brand.green} />
-                <Text style={[styles.streakText, { color: colors.text }]}>
-                  {streak} day{streak > 1 ? 's' : ''}
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today</Text>
-            )}
+            <View style={styles.headerActions}>
+              {viewingToday && selectedDay.loggingStreak > 0 ? (
+                <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
+                  <FlameIcon size={15} color={Brand.green} />
+                  <Text style={[styles.streakText, { color: colors.text }]}>
+                    {selectedDay.loggingStreak} day{selectedDay.loggingStreak > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>{selectedDateLabel}</Text>
+              )}
+              <ProfileAvatarButton colors={colors} />
+            </View>
           </View>
 
+          {/* The selected date controls every daily detail below without leaving Home. */}
+          <WeekDateStrip colors={colors} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
           {/* Trak Score hero */}
-          <ScoreCard value={score.value} caption={scoreCaption(score.value)} colors={colors} />
+          <ScoreCard
+            value={selectedDay.score}
+            caption={scoreCaption(selectedDay.score)}
+            colors={colors}
+            onPress={viewingToday ? () => router.push('/score') : undefined}
+          />
 
           {/* Daily coaching nudge — always visible, opens Chat's Ask panel */}
-          <CoachCard tip={tip} colors={colors} />
+          {viewingToday ? <CoachCard tip={tip} colors={colors} /> : null}
 
           {/* Goal + macro rings */}
           <View style={[styles.macroCard, { backgroundColor: colors.backgroundElement }]}>
@@ -611,111 +798,59 @@ export default function HomeScreen() {
 
             <View style={styles.miniRow}>
               <MiniRing
-                value={`${todayTotals.calories}`}
-                sub={`of ${calorieBudget.toLocaleString()}`}
+                value={`${Math.round(selectedDay.totals.calories)}`}
+                sub={`of ${Math.round(selectedDay.calorieBudget).toLocaleString()}`}
                 label="Calories"
-                pct={calorieBudget > 0 ? todayTotals.calories / calorieBudget : 0}
+                pct={selectedDay.calorieBudget > 0 ? selectedDay.totals.calories / selectedDay.calorieBudget : 0}
                 color={caloriesOver ? Brand.over : Brand.green}
                 colors={colors}
-                onPress={() => router.push('/macro/calories')}
+                onPress={viewingToday ? () => router.push('/macro/calories') : undefined}
               />
               <MiniRing
-                value={`${todayTotals.protein_g}g`}
+                value={`${Math.round(selectedDay.totals.protein_g)}g`}
                 sub={`of ${targets.protein_g}`}
                 label="Protein"
-                pct={targets.protein_g > 0 ? todayTotals.protein_g / targets.protein_g : 0}
+                pct={targets.protein_g > 0 ? selectedDay.totals.protein_g / targets.protein_g : 0}
                 color={MacroColors.protein}
                 colors={colors}
-                onPress={() => router.push('/macro/protein')}
+                onPress={viewingToday ? () => router.push('/macro/protein') : undefined}
               />
               <MiniRing
-                value={`${todayTotals.carbs_g}g`}
+                value={`${Math.round(selectedDay.totals.carbs_g)}g`}
                 sub={`of ${targets.carbs_g}`}
                 label="Carbs"
-                pct={targets.carbs_g > 0 ? todayTotals.carbs_g / targets.carbs_g : 0}
+                pct={targets.carbs_g > 0 ? selectedDay.totals.carbs_g / targets.carbs_g : 0}
                 color={MacroColors.carbs}
                 colors={colors}
-                onPress={() => router.push('/macro/carbs')}
+                onPress={viewingToday ? () => router.push('/macro/carbs') : undefined}
               />
               <MiniRing
-                value={`${todayTotals.fat_g}g`}
+                value={`${Math.round(selectedDay.totals.fat_g)}g`}
                 sub={`of ${targets.fat_g}`}
                 label="Fat"
-                pct={targets.fat_g > 0 ? todayTotals.fat_g / targets.fat_g : 0}
+                pct={targets.fat_g > 0 ? selectedDay.totals.fat_g / targets.fat_g : 0}
                 color={MacroColors.fat}
                 colors={colors}
-                onPress={() => router.push('/macro/fat')}
+                onPress={viewingToday ? () => router.push('/macro/fat') : undefined}
               />
             </View>
             {caloriesOver ? (
               <Text style={[styles.overNote, { color: Brand.over }]}>
-                {todayTotals.calories - calorieBudget} kcal over budget
+                {Math.round(selectedDay.totals.calories - selectedDay.calorieBudget)} kcal over budget
               </Text>
             ) : (
               <Text style={[styles.leftNote, { color: colors.textSecondary }]}>
                 {caloriesLeft.toLocaleString()} kcal left
-                {exerciseCreditToday > 0 ? ` · +${exerciseCreditToday} exercise credit` : ''}
+                {selectedDay.exerciseCredit > 0 ? ` · +${selectedDay.exerciseCredit} exercise credit` : ''}
               </Text>
             )}
           </View>
 
-          {/* Weight — quick glance + tap to log/track */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.weightCard,
-              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-            ]}
-            onPress={() => router.push('/weight')}>
-            <View style={styles.weightInfo}>
-              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Weight</Text>
-              {latestWeight != null ? (
-                <Text style={[styles.weightValue, { color: colors.text }]}>
-                  {Math.round(latestWeight * 10) / 10} kg
-                </Text>
-              ) : (
-                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
-                  Log it
-                </Text>
-              )}
-            </View>
-            {weightChange != null && weightChange !== 0 ? (
-              <Text style={[styles.weightChange, { color: Brand.greenDark }]}>
-                {weightChange > 0 ? '▲' : '▼'} {Math.abs(Math.round(weightChange * 10) / 10)} kg
-              </Text>
-            ) : (
-              <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-            )}
-          </Pressable>
-
-          {/* Exercise — quick glance + tap to log */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.weightCard,
-              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-            ]}
-            onPress={() => router.push('/exercise')}>
-            <View style={styles.weightInfo}>
-              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Exercise</Text>
-              {burnedToday > 0 ? (
-                <Text style={[styles.weightValue, { color: colors.text }]}>+{burnedToday} kcal</Text>
-              ) : (
-                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
-                  Log a workout
-                </Text>
-              )}
-            </View>
-            <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-          </Pressable>
-
-          {/* Water */}
-          <WaterCard colors={colors} />
-
-          {/* Supplements — daily check-off, sits alongside water as a habit card */}
-          <SupplementsCard colors={colors} />
-
-          {/* Today's meals */}
+          {/* Today's meals — primary daily log, before secondary progress cards. */}
           <View style={styles.mealsHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s meals</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              {viewingToday ? "Today's meals" : `${selectedDateLabel} meals`}
+            </Text>
             {hasQuickAdd ? (
               <Pressable
                 onPress={() => router.push('/quick-add')}
@@ -727,20 +862,83 @@ export default function HomeScreen() {
               </Pressable>
             ) : null}
           </View>
-          {todayMeals.length === 0 ? (
+          {selectedDay.meals.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
               <PlateIcon size={30} color={colors.textSecondary} />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                No meals logged yet.{'\n'}Tap “Scan a meal” to add your first one.
+                {viewingToday
+                  ? <>No meals logged yet.{'\n'}Tap “Scan a meal” to add your first one.</>
+                  : 'No meals logged on this day.'}
               </Text>
             </View>
           ) : (
             <View style={styles.mealsList}>
-              {todayMeals.map((meal) => (
+              {selectedDay.meals.map((meal) => (
                 <MealRow key={meal.id} meal={meal} colors={colors} />
               ))}
             </View>
           )}
+
+          {/* Weight — quick glance + tap to log/track */}
+          <Pressable
+            disabled={!viewingToday}
+            style={({ pressed }) => [
+              styles.weightCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/weight')}>
+            <View style={styles.weightInfo}>
+              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Weight</Text>
+              {selectedWeight != null ? (
+                <Text style={[styles.weightValue, { color: colors.text }]}>
+                  {Math.round(selectedWeight * 10) / 10} kg
+                </Text>
+              ) : (
+                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
+                  {viewingToday ? 'Log it' : 'No weight logged'}
+                </Text>
+              )}
+            </View>
+            {weightChange != null && weightChange !== 0 ? (
+              <Text style={[styles.weightChange, { color: Brand.greenDark }]}>
+                {weightChange > 0 ? '▲' : '▼'} {Math.abs(Math.round(weightChange * 10) / 10)} kg
+              </Text>
+            ) : viewingToday ? (
+              <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+            ) : null}
+          </Pressable>
+
+          {/* Exercise — quick glance + tap to log */}
+          <Pressable
+            disabled={!viewingToday}
+            style={({ pressed }) => [
+              styles.weightCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}
+            onPress={() => router.push('/exercise')}>
+            <View style={styles.weightInfo}>
+              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Exercise</Text>
+              {selectedDay.caloriesBurned > 0 ? (
+                <Text style={[styles.weightValue, { color: colors.text }]}>+{selectedDay.caloriesBurned} kcal</Text>
+              ) : (
+                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
+                  {viewingToday ? 'Log a workout' : 'No workout logged'}
+                </Text>
+              )}
+            </View>
+            {viewingToday ? <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text> : null}
+          </Pressable>
+
+          {/* Water */}
+          <WaterCard
+            key={selectedDate}
+            colors={colors}
+            selectedDate={selectedDate}
+            historicalWater={selectedDay.waterGlasses}
+          />
+
+          {/* Supplements — daily check-off, sits alongside water as a habit card */}
+          <SupplementsCard colors={colors} selectedDate={selectedDate} />
         </ScrollView>
 
         {/* Scan actions — a solid footer in normal flow, so it can never cover the list. */}
@@ -750,7 +948,10 @@ export default function HomeScreen() {
               styles.scanButton,
               { backgroundColor: pressed ? Brand.greenDark : Brand.green },
             ]}
-            onPress={() => router.push('/scan')}>
+            onPress={() => {
+              setSelectedDate(today);
+              router.push('/scan');
+            }}>
             <CameraIcon size={22} color="#ffffff" />
             <Text style={styles.scanButtonText}>Scan a meal</Text>
           </Pressable>
@@ -759,7 +960,10 @@ export default function HomeScreen() {
               styles.barcodeButton,
               { backgroundColor: colors.greenTint, opacity: pressed ? 0.7 : 1 },
             ]}
-            onPress={() => router.push('/barcode')}>
+            onPress={() => {
+              setSelectedDate(today);
+              router.push('/barcode');
+            }}>
             <BarcodeIcon size={22} color={Brand.greenDark} />
             <Text style={[styles.barcodeButtonText, { color: Brand.greenDark }]}>Barcode</Text>
           </Pressable>
@@ -780,6 +984,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.two,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   todayLabel: { fontSize: 15, fontWeight: '600' },
   streakPill: {
     flexDirection: 'row',
@@ -790,6 +995,32 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   streakText: { fontSize: 14, fontWeight: '700' },
+
+  /* Date ribbon */
+  dateStrip: {
+    height: 82,
+  },
+  dateItem: {
+    height: 82,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 22,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateWeekday: { fontSize: 11, fontWeight: '700' },
+  dateWeekdayToday: { fontWeight: '900' },
+  dateCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateNumber: { fontSize: 14, fontWeight: '800' },
 
   /* Trak Score */
   scoreCard: {
@@ -878,6 +1109,16 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
   },
+  bodyAnalysisCard: {
+    minHeight: 82,
+    borderRadius: 16,
+    padding: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  bodyAnalysisText: { flex: 1, gap: Spacing.one },
+  bodyAnalysisTitle: { fontSize: 15, lineHeight: 20, fontWeight: '700' },
   weightInfo: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
   weightLabel: { fontSize: 14, fontWeight: '600' },
   weightValue: { fontSize: 20, fontWeight: '800' },

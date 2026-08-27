@@ -17,10 +17,7 @@ import { supabase } from './supabase';
 export type Supplement = { id: string; name: string; createdAt: string };
 
 /** A single "taken" check-off: one supplement on one calendar day. */
-type Check = { supplementId: string; day: string };
-
-/** How far back we pull check history to compute the streak. */
-const STREAK_WINDOW_DAYS = 90;
+export type SupplementCheck = { supplementId: string; day: string };
 
 /** Longest allowed supplement name (kept in sync with the add/rename UI). */
 const MAX_NAME = 40;
@@ -30,6 +27,8 @@ export type SupplementsContextValue = {
   loaded: boolean;
   /** Active supplements, oldest first. Empty array when signed out. */
   supplements: Supplement[];
+  /** All loaded historical check-offs, used by History and personal records. */
+  checks: SupplementCheck[];
   /** supplement id -> true when checked today. */
   checkedToday: Record<string, boolean>;
   /** How many supplements are checked today. */
@@ -97,7 +96,7 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
   const [supplements, setSupplements] = useState<Supplement[]>([]);
   /** Raw check rows for the streak window; today's toggles mutate this too so
    * the streak reacts live without a refetch. */
-  const [checks, setChecks] = useState<Check[]>([]);
+  const [checks, setChecks] = useState<SupplementCheck[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [today, setToday] = useState(dayKey());
 
@@ -134,9 +133,6 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
       await Promise.resolve();
       if (!active) return;
       setLoaded(false);
-      const past = new Date();
-      past.setDate(past.getDate() - STREAK_WINDOW_DAYS);
-      const since = dayKey(past);
       const [supRes, checkRes] = await Promise.all([
         supabase
           .from('supplements')
@@ -147,7 +143,7 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
           .from('supplement_checks')
           .select('supplement_id, day')
           .eq('user_id', user.id)
-          .gte('day', since),
+          .order('day', { ascending: false }),
       ]);
       if (!active) return;
       // A missing table or error just means empty state — supplements are an
@@ -171,14 +167,11 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
   useEffect(() => {
     if (!user || !loaded) return;
     let active = true;
-    const past = new Date();
-    past.setDate(past.getDate() - STREAK_WINDOW_DAYS);
-    const since = dayKey(past);
     supabase
       .from('supplement_checks')
       .select('supplement_id, day')
       .eq('user_id', user.id)
-      .gte('day', since)
+      .order('day', { ascending: false })
       .then(({ data, error }) => {
         if (active && !error && data) {
           setChecks(data.map((r: any) => ({ supplementId: r.supplement_id, day: r.day })));
@@ -234,7 +227,7 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
     // can restore them if the server rejects the delete.
     let removed: Supplement | undefined;
     let at = -1;
-    let removedChecks: Check[] = [];
+    let removedChecks: SupplementCheck[] = [];
     setSupplements((prev) => {
       at = prev.findIndex((s) => s.id === id);
       removed = at >= 0 ? prev[at] : undefined;
@@ -313,6 +306,7 @@ export function SupplementsProvider({ children }: { children: ReactNode }): Reac
     return {
       loaded,
       supplements,
+      checks,
       checkedToday,
       takenCount: supplements.reduce((n, s) => (takenToday.has(s.id) ? n + 1 : n), 0),
       streak: computeStreak(supplements, checksByDay),

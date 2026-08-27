@@ -76,6 +76,44 @@ export type WeightEntry = {
   weightKg: number;
 };
 
+/** Water logged on one local calendar day. */
+export type WaterEntry = {
+  /** Local calendar day, formatted YYYY-MM-DD. */
+  date: string;
+  glasses: number;
+};
+
+export type MuscleGroup =
+  | 'chest'
+  | 'legs'
+  | 'back'
+  | 'arms'
+  | 'shoulders'
+  | 'abs'
+  | 'glutes'
+  | 'other';
+
+/**
+ * Workout focus selections. The first four values are retained for previously
+ * saved workouts; the logger now exposes individual muscles, full body, and cardio.
+ */
+export type WorkoutSplit =
+  | 'upper_body'
+  | 'lower_body'
+  | 'push'
+  | 'pull'
+  | MuscleGroup
+  | 'full_body'
+  | 'cardio';
+export type MuscleSetCounts = Record<MuscleGroup, number>;
+export type TrainingActivityType = 'strength' | 'cardio';
+export type LoadUnit = 'kg' | 'lb';
+
+export type ExerciseDetails = {
+  workoutSplits: WorkoutSplit[];
+  muscleSets: MuscleSetCounts;
+};
+
 /** A logged workout; a conservative portion of its burn is credited to the daily budget. */
 export type ExerciseEntry = {
   id: string;
@@ -86,6 +124,10 @@ export type ExerciseEntry = {
   caloriesBurned: number;
   /** User-entered workout duration. Older rows default to 30 minutes. */
   durationMinutes: number;
+  /** Multiple training splits may describe the same completed workout. */
+  workoutSplits: WorkoutSplit[];
+  /** One completed set equals one weekly Progress point for that muscle. */
+  muscleSets: MuscleSetCounts;
 };
 
 /** A reusable meal template the user can re-log with one tap. */

@@ -23,12 +23,14 @@ import { supabase } from './supabase';
 import { syncWidget } from './widget-sync';
 import {
   ExerciseEntry,
+  ExerciseDetails,
   FoodAnalysis,
   FoodItem,
   FoodTotals,
   LoggedMeal,
   SavedMeal,
   UserProfile,
+  WaterEntry,
   WeightEntry,
 } from './types';
 
@@ -130,6 +132,22 @@ function rowToProfile(r: any): UserProfile {
 }
 
 function rowToExercise(r: any): ExerciseEntry {
+  const validSplits = new Set([
+    'upper_body',
+    'lower_body',
+    'push',
+    'pull',
+    'chest',
+    'legs',
+    'back',
+    'arms',
+    'shoulders',
+    'abs',
+    'glutes',
+    'other',
+    'full_body',
+    'cardio',
+  ]);
   return {
     id: r.id,
     date: r.day,
@@ -137,11 +155,28 @@ function rowToExercise(r: any): ExerciseEntry {
     name: r.name,
     caloriesBurned: r.calories_burned ?? 0,
     durationMinutes: Math.max(1, Number(r.duration_minutes) || 30),
+    workoutSplits: Array.isArray(r.workout_splits)
+      ? r.workout_splits.filter((value: unknown) => typeof value === 'string' && validSplits.has(value))
+      : [],
+    muscleSets: {
+      chest: Math.max(0, Number(r.chest_sets) || 0),
+      legs: Math.max(0, Number(r.leg_sets) || 0),
+      back: Math.max(0, Number(r.back_sets) || 0),
+      arms: Math.max(0, Number(r.arm_sets) || 0),
+      shoulders: Math.max(0, Number(r.shoulder_sets) || 0),
+      abs: Math.max(0, Number(r.ab_sets) || 0),
+      glutes: Math.max(0, Number(r.glute_sets) || 0),
+      other: Math.max(0, Number(r.other_sets) || 0),
+    },
   };
 }
 
 function rowToWeight(r: any): WeightEntry {
   return { date: r.day, weightKg: Number(r.weight_kg) };
+}
+
+function rowToWater(r: any): WaterEntry {
+  return { date: r.day, glasses: Math.max(0, Number(r.glasses) || 0) };
 }
 
 function rowToSavedMeal(r: any): SavedMeal {
@@ -210,6 +245,8 @@ type MealsContextValue = {
   latestWeight: number | null;
   /** Glasses of water logged today. */
   waterToday: number;
+  /** Daily water history, newest first. */
+  waterHistory: WaterEntry[];
   /** Daily water goal, in glasses. */
   waterGoal: number;
   /** Set today's water glass count. */
@@ -229,7 +266,12 @@ type MealsContextValue = {
   /** Today's base calorie target plus exercise credit. */
   calorieBudget: number;
   /** Log a workout for today. */
-  addExercise: (name: string, caloriesBurned: number, durationMinutes?: number) => Promise<void>;
+  addExercise: (
+    name: string,
+    caloriesBurned: number,
+    durationMinutes?: number,
+    details?: ExerciseDetails
+  ) => Promise<void>;
   /** Remove a logged workout. */
   removeExercise: (id: string) => Promise<void>;
   profile: UserProfile | null;
@@ -253,8 +295,8 @@ type MealsContextValue = {
   /** Edit a logged meal's title/totals (correct an AI estimate). */
   updateMeal: (id: string, patch: { title: string; total: FoodTotals }) => Promise<void>;
   saveProfile: (profile: UserProfile) => Promise<void>;
-  /** Log (or overwrite) today's weight; also updates the profile weight. */
-  logWeight: (weightKg: number) => Promise<void>;
+  /** Log (or overwrite) a day's weight; the newest entry also updates the profile weight. */
+  logWeight: (weightKg: number, date?: string) => Promise<void>;
 };
 
 const MealsContext = createContext<MealsContextValue | null>(null);
@@ -266,6 +308,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   /** Glasses of water logged today. */
   const [waterToday, setWaterToday] = useState(0);
+  const [waterHistory, setWaterHistory] = useState<WaterEntry[]>([]);
   /** All exercises for the signed-in user (filtered to today for the budget). */
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -302,7 +345,14 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       .eq('day', today)
       .maybeSingle()
       .then(({ data, error }) => {
-        if (active) setWaterToday(error || !data ? 0 : (data.glasses ?? 0));
+        if (active) {
+          const glasses = error || !data ? 0 : (data.glasses ?? 0);
+          setWaterToday(glasses);
+          setWaterHistory((rows) => [
+            { date: today, glasses },
+            ...rows.filter((row) => row.date !== today),
+          ]);
+        }
       });
     return () => {
       active = false;
@@ -322,6 +372,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         setSavedMeals([]);
         setWeights([]);
         setWaterToday(0);
+        setWaterHistory([]);
         setExercises([]);
         setProfile(null);
         setLoadError(false);
@@ -352,10 +403,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
               .order('day', { ascending: true }),
             supabase
               .from('water')
-              .select('glasses')
+              .select('day, glasses')
               .eq('user_id', user.id)
-              .eq('day', dayKey())
-              .maybeSingle(),
+              .order('day', { ascending: false }),
             supabase
               .from('exercises')
               .select('*')
@@ -371,7 +421,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         // Weights, water, exercises + saved meals are non-critical: a missing
         // table or error just means empty state, never a hard load failure.
         setWeights(weightRes.error ? [] : (weightRes.data ?? []).map(rowToWeight));
-        setWaterToday(waterRes.error || !waterRes.data ? 0 : (waterRes.data.glasses ?? 0));
+        const waterRows = waterRes.error ? [] : (waterRes.data ?? []).map(rowToWater);
+        setWaterHistory(waterRows);
+        setWaterToday(waterRows.find((row) => row.date === dayKey())?.glasses ?? 0);
         setExercises(exerciseRes.error ? [] : (exerciseRes.data ?? []).map(rowToExercise));
         setSavedMeals(savedRes.error ? [] : (savedRes.data ?? []).map(rowToSavedMeal));
         if (profileRes.error || mealRes.error) {
@@ -417,10 +469,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         supabase.from('weights').select('*').eq('user_id', user.id).order('day', { ascending: true }),
         supabase
           .from('water')
-          .select('glasses')
+          .select('day, glasses')
           .eq('user_id', user.id)
-          .eq('day', dayKey())
-          .maybeSingle(),
+          .order('day', { ascending: false }),
         supabase
           .from('exercises')
           .select('*')
@@ -432,7 +483,11 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       setMeals((mealRes.data ?? []).map(rowToMeal));
       if (!savedRes.error) setSavedMeals((savedRes.data ?? []).map(rowToSavedMeal));
       if (!weightRes.error) setWeights((weightRes.data ?? []).map(rowToWeight));
-      if (!waterRes.error) setWaterToday(waterRes.data?.glasses ?? 0);
+      if (!waterRes.error) {
+        const rows = (waterRes.data ?? []).map(rowToWater);
+        setWaterHistory(rows);
+        setWaterToday(rows.find((row) => row.date === dayKey())?.glasses ?? 0);
+      }
       if (!exerciseRes.error) setExercises((exerciseRes.data ?? []).map(rowToExercise));
       setLoadError(false);
     } catch {
@@ -657,12 +712,20 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     [user, profile]
   );
 
-  // Log (or overwrite) today's weight. Also updates the profile's current
-  // weight so calorie targets stay accurate as the user's weight changes.
+  // Log (or overwrite) a weight entry. Only the newest dated entry updates the
+  // profile's current weight so back-filling history cannot rewind targets.
   const logWeight = useCallback(
-    async (weightKg: number) => {
-      if (!user || !Number.isFinite(weightKg) || weightKg <= 0) return;
-      const day = dayKey();
+    async (weightKg: number, date = dayKey()) => {
+      if (!user) throw new Error('Please sign in again before saving your weight.');
+      if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+        throw new Error('Enter a weight between 20 and 400 kg.');
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > dayKey()) {
+        throw new Error('Choose today or an earlier date.');
+      }
+      const day = date;
+      const currentLatestDay = weights.at(-1)?.date;
+      const updatesCurrentWeight = currentLatestDay == null || day >= currentLatestDay;
       const previousWeights = weights;
       const previousProfile = profile;
       // Optimistic: upsert today's entry into the sorted-by-day list.
@@ -670,24 +733,28 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         const rest = prev.filter((w) => w.date !== day);
         return [...rest, { date: day, weightKg }].sort((a, b) => a.date.localeCompare(b.date));
       });
-      if (profile) setProfile({ ...profile, weightKg });
+      if (profile && updatesCurrentWeight) setProfile({ ...profile, weightKg });
 
       // Two independent writes → two independent rollbacks. A single
       // all-or-nothing rollback desynced the client from whichever write
       // actually landed on the server.
       const weightRes = await supabase
         .from('weights')
-        .upsert({ user_id: user.id, day, weight_kg: weightKg }, { onConflict: 'user_id,day' });
+        .upsert({ user_id: user.id, day, weight_kg: weightKg }, { onConflict: 'user_id,day' })
+        .select('weight_kg')
+        .single();
       if (weightRes.error) {
         setWeights(previousWeights);
         setProfile(previousProfile);
         throw new Error('Could not save your weight. Check your connection and try again.');
       }
-      if (profile) {
+      if (profile && updatesCurrentWeight) {
         const profileRes = await supabase
           .from('profiles')
           .update({ weight_kg: weightKg })
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .select('weight_kg')
+          .single();
         if (profileRes.error) {
           // The weight entry IS saved — only the profile mirror failed.
           setProfile(previousProfile);
@@ -707,20 +774,33 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       const next = Math.max(0, Math.round(glasses));
       const previous = waterToday;
       setWaterToday(next); // optimistic
+      setWaterHistory((rows) => [
+        { date: today, glasses: next },
+        ...rows.filter((row) => row.date !== today),
+      ]);
       const { error } = await supabase
         .from('water')
         .upsert({ user_id: user.id, day: dayKey(), glasses: next }, { onConflict: 'user_id,day' });
       if (error) {
         setWaterToday(previous);
+        setWaterHistory((rows) => [
+          { date: today, glasses: previous },
+          ...rows.filter((row) => row.date !== today),
+        ]);
         // Water is low-stakes; swallow the error rather than interrupting.
       }
     },
-    [user, waterToday]
+    [user, waterToday, today]
   );
 
   // Log a workout for today. A conservative portion is credited to the budget.
   const addExercise = useCallback(
-    async (name: string, caloriesBurned: number, durationMinutes = 30) => {
+    async (
+      name: string,
+      caloriesBurned: number,
+      durationMinutes = 30,
+      details?: ExerciseDetails
+    ) => {
       if (!user) return;
       const safeDuration = Math.max(1, Math.min(24 * 60, Math.round(durationMinutes)));
       const { data, error } = await supabase
@@ -731,6 +811,15 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           name,
           calories_burned: Math.max(0, Math.round(caloriesBurned)),
           duration_minutes: safeDuration,
+          workout_splits: details?.workoutSplits ?? [],
+          chest_sets: Math.max(0, Math.round(details?.muscleSets.chest ?? 0)),
+          leg_sets: Math.max(0, Math.round(details?.muscleSets.legs ?? 0)),
+          back_sets: Math.max(0, Math.round(details?.muscleSets.back ?? 0)),
+          arm_sets: Math.max(0, Math.round(details?.muscleSets.arms ?? 0)),
+          shoulder_sets: Math.max(0, Math.round(details?.muscleSets.shoulders ?? 0)),
+          ab_sets: Math.max(0, Math.round(details?.muscleSets.abs ?? 0)),
+          glute_sets: Math.max(0, Math.round(details?.muscleSets.glutes ?? 0)),
+          other_sets: Math.max(0, Math.round(details?.muscleSets.other ?? 0)),
         })
         .select()
         .single();
@@ -814,6 +903,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       weights,
       latestWeight: weights.length > 0 ? weights[weights.length - 1].weightKg : null,
       waterToday,
+      waterHistory,
       waterGoal: profile?.waterGoal ?? WATER_GOAL,
       setWater,
       setWaterGoal,
@@ -842,7 +932,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       saveProfile,
       logWeight,
     };
-  }, [meals, savedMeals, saveMeal, removeSavedMeal, quickLog, weights, waterToday, setWater, setWaterGoal, setCalorieBias, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
+  }, [meals, savedMeals, saveMeal, removeSavedMeal, quickLog, weights, waterToday, waterHistory, setWater, setWaterGoal, setCalorieBias, exercises, addExercise, removeExercise, profile, loaded, loadError, retryLoad, refresh, today, addMeal, removeMeal, updateMeal, saveProfile, logWeight]);
 
   // Keep the Android home-screen widget in sync with today's numbers.
   const eaten = Math.round(value.todayTotals.calories);

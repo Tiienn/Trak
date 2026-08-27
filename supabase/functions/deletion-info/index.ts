@@ -65,8 +65,12 @@ const PAGE = `<!DOCTYPE html>
       <li>Your meals and food logs</li>
       <li>Your weight, water, and exercise logs</li>
       <li>Your supplements</li>
+      <li>Your Body Analysis preferences, written results, reports, and usage counters</li>
       <li>Your preferences and settings</li>
     </ul>
+
+    <h2>Progress photos on your device</h2>
+    <p>Body Analysis progress photos are not stored in Trak's database. If you delete your account in the app, Trak also attempts to delete its local photo copies from that device. If you use another device, clear the app's data or uninstall Trak there to remove any device-only copies.</p>
 
     <p class="muted">Deletion is immediate and permanent. We keep no backup copy of your data once your account is deleted.</p>
   </main>

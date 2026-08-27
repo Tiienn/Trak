@@ -15,6 +15,7 @@ import {
   TargetIcon,
 } from '@/components/icons';
 import { RingMark, TrakWordmark } from '@/components/logo';
+import { ProfileAvatarButton } from '@/components/profile-avatar-button';
 import { Brand, Colors, Spacing, Type } from '@/constants/theme';
 import {
   decksForGroup,
@@ -143,8 +144,11 @@ export default function GamesScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.logoRow}>
-            <RingMark size={30} />
-            <TrakWordmark color={colors.text} size={28} />
+            <View style={styles.brandRow}>
+              <RingMark size={30} />
+              <TrakWordmark color={colors.text} size={28} />
+            </View>
+            <ProfileAvatarButton colors={colors} />
           </View>
           <Text style={[styles.title, { color: colors.text }]}>Choose a food deck</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Practice the foods you actually eat.</Text>
@@ -299,9 +303,10 @@ const styles = StyleSheet.create({
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    justifyContent: 'space-between',
     marginBottom: Spacing.two,
   },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   // Sits directly under the Trak wordmark (28), so it stays smaller than the brand.
   title: { fontFamily: Type.display, fontSize: 24, lineHeight: 29, letterSpacing: -0.5 },
   subtitle: { fontSize: 15, lineHeight: 22, marginTop: 4 },

@@ -1,12 +1,12 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet, View, type ColorValue } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand, Colors } from '@/constants/theme';
 import { useAppScheme } from '@/lib/theme';
 
-type TabIconName = 'home' | 'chat' | 'games' | 'profile';
+type TabIconName = 'home' | 'chat' | 'games' | 'progress';
 
 function TabIcon({ name, color, focused }: { name: TabIconName; color: ColorValue; focused: boolean }) {
   const fill = focused ? color : 'none';
@@ -29,10 +29,13 @@ function TabIcon({ name, color, focused }: { name: TabIconName; color: ColorValu
           strokeLinejoin="round"
         />
       ) : (
-        <>
-          <Circle cx={12} cy={8} r={4} fill={fill} stroke={color} strokeWidth={2} />
-          <Path d="M4.5 21a7.5 7.5 0 0 1 15 0" fill={fill} stroke={color} strokeWidth={2} strokeLinecap="round" />
-        </>
+        <Path
+          d="m4 17 5-5 3.5 3.5 7-7m-4.5 0h4.5V13"
+          stroke={color}
+          strokeWidth={focused ? 2.5 : 2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       )}
     </Svg>
   );
@@ -110,10 +113,10 @@ export default function AppTabs() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="progress"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => <TabIcon name="profile" color={color} focused={focused} />,
+          title: 'Progress',
+          tabBarIcon: ({ color, focused }) => <TabIcon name="progress" color={color} focused={focused} />,
         }}
       />
     </Tabs>

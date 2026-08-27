@@ -1,8 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PillIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
@@ -35,6 +38,7 @@ function CheckCircle({ checked, colors }: { checked: boolean; colors: ThemeColor
 export default function SupplementsScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const insets = useSafeAreaInsets();
   const { loaded, supplements, checkedToday, takenCount, streak, addSupplement, renameSupplement, removeSupplement, toggleTaken } =
     useSupplements();
 
@@ -49,8 +53,20 @@ export default function SupplementsScreen() {
   const [newName, setNewName] = useState('');
   // Keep focus on the add field so the user can rattle off several in a row.
   const addInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
   const allDone = supplements.length > 0 && takenCount === supplements.length;
+
+  function revealInput() {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }
+
+  useEffect(() => {
+    if (!adding && !editingId) return;
+    const keyboardListener = Keyboard.addListener('keyboardDidShow', revealInput);
+    revealInput();
+    return () => keyboardListener.remove();
+  }, [adding, editingId]);
 
   async function tap(id: string) {
     try {
@@ -113,7 +129,7 @@ export default function SupplementsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]} edges={['bottom']}>
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Supplements</Text>
           <Pressable onPress={() => router.back()} hitSlop={12}>
@@ -135,10 +151,16 @@ export default function SupplementsScreen() {
           </View>
         ) : null}
 
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView
+            ref={scrollRef}
+            style={styles.flex}
+            contentContainerStyle={styles.scroll}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
           {loaded && supplements.length === 0 ? (
             <View style={styles.emptyWrap}>
               <View style={[styles.emptyTile, { backgroundColor: colors.greenTint }]}>
@@ -174,6 +196,7 @@ export default function SupplementsScreen() {
                     <View style={styles.editWrap}>
                       <Text style={[styles.editHeading, { color: colors.textSecondary }]}>NAME</Text>
                       <TextInput
+                        accessibilityLabel={`Rename ${s.name}`}
                         style={[styles.nameInput, { color: colors.text, backgroundColor: colors.background }]}
                         value={draft?.id === s.id ? draft.name : s.name}
                         onChangeText={(t) => setDraft({ id: s.id, name: t })}
@@ -181,6 +204,7 @@ export default function SupplementsScreen() {
                         placeholder="Supplement name"
                         placeholderTextColor={colors.textSecondary}
                         maxLength={40}
+                        onFocus={revealInput}
                       />
                       <Pressable style={styles.deleteBtn} onPress={() => confirmDelete(s.id, s.name)}>
                         <Text style={styles.deleteText}>Delete</Text>
@@ -195,6 +219,7 @@ export default function SupplementsScreen() {
           {adding ? (
             <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
               <TextInput
+                accessibilityLabel="New supplement name"
                 ref={addInputRef}
                 style={[styles.nameInput, { color: colors.text, backgroundColor: colors.background }]}
                 value={newName}
@@ -205,6 +230,7 @@ export default function SupplementsScreen() {
                 maxLength={40}
                 autoFocus
                 returnKeyType="done"
+                onFocus={revealInput}
               />
               <View style={styles.addRow}>
                 <Pressable
@@ -235,7 +261,8 @@ export default function SupplementsScreen() {
               Want a daily nudge? Set a reminder ›
             </Text>
           </Pressable>
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
@@ -244,6 +271,7 @@ export default function SupplementsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
+  flex: { flex: 1 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

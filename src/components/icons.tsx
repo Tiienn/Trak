@@ -203,6 +203,24 @@ export function CheckIcon({ size = 22, color = '#ffffff' }: { size?: number; col
   );
 }
 
+/** Close action — kept in the shared icon set so screens never use a text glyph. */
+export function CloseIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M5 5l14 14M19 5 5 19" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Forward navigation indicator. */
+export function ChevronRightIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="m9 5 7 7-7 7" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 /** Calendar page — weekly streaks. */
 export function CalendarIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
   return (
@@ -383,6 +401,21 @@ export function GamepadIcon({ size = 22, color = '#ffffff' }: { size?: number; c
       <Path d="M7.6 10.2v3.6M5.8 12h3.6" stroke={color} strokeWidth={2} strokeLinecap="round" />
       <Circle cx={15.4} cy={10.8} r={1.15} fill={color} />
       <Circle cx={17.7} cy={13.2} r={1.15} fill={color} />
+    </Svg>
+  );
+}
+
+/** Person silhouette — account and profile entry points. */
+export function UserIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={8} r={3.6} stroke={color} strokeWidth={2} />
+      <Path
+        d="M4.8 20a7.2 7.2 0 0 1 14.4 0"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }

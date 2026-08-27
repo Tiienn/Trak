@@ -8,13 +8,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Platform } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
   type CustomerInfo,
   type PurchasesPackage,
 } from 'react-native-purchases';
 
+import { resolveTrakCapabilities, type TrakCapabilities } from './access';
 import { useAuth } from './auth';
 import { useMeals } from './store';
 
@@ -32,9 +32,11 @@ import { useMeals } from './store';
  */
 
 const apiKey =
-  Platform.OS === 'ios'
+  process.env.EXPO_OS === 'ios'
     ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
-    : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
+    : process.env.EXPO_OS === 'android'
+      ? process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+      : undefined;
 
 export const purchasesConfigured = Boolean(apiKey);
 export const testerAccessEnabled =
@@ -89,6 +91,8 @@ type SubscriptionContextValue = {
   trialDaysLeft: number;
   /** Gates the AI features only — never the rest of the app. */
   hasAccess: boolean;
+  /** Product-shaped access boundary used by every feature screen. */
+  capabilities: TrakCapabilities;
   loading: boolean;
   testerAccess: boolean;
   refresh: () => Promise<boolean>;
@@ -98,13 +102,14 @@ type SubscriptionContextValue = {
 type PurchasesState = Pick<
   SubscriptionContextValue,
   'isPro' | 'loading' | 'testerAccess' | 'refresh'
->;
+> & { activeEntitlements: string[] };
 
 const SubscriptionContext = createContext<PurchasesState | null>(null);
 
 export function PurchasesProvider({ children }: { children: ReactNode }) {
   const { user, authLoading } = useAuth();
   const [isPro, setIsPro] = useState(false);
+  const [activeEntitlements, setActiveEntitlements] = useState<string[]>([]);
   const [resolvedUserId, setResolvedUserId] = useState<string | null | undefined>(
     purchasesConfigured ? undefined : null
   );
@@ -116,7 +121,10 @@ export function PurchasesProvider({ children }: { children: ReactNode }) {
     initPurchases();
     let active = true;
     const listener = (info: CustomerInfo) => {
-      if (active) setIsPro(customerHasPro(info));
+      if (active) {
+        setIsPro(customerHasPro(info));
+        setActiveEntitlements(Object.keys(info.entitlements.active));
+      }
     };
     Purchases.addCustomerInfoUpdateListener(listener);
 
@@ -136,17 +144,29 @@ export function PurchasesProvider({ children }: { children: ReactNode }) {
         if (user) {
           const { customerInfo } = await Purchases.logIn(user.id);
           identifiedRef.current = true;
-          if (active) setIsPro(customerHasPro(customerInfo));
+          if (active) {
+            setIsPro(customerHasPro(customerInfo));
+            setActiveEntitlements(Object.keys(customerInfo.entitlements.active));
+          }
         } else if (identifiedRef.current) {
           const customerInfo = await Purchases.logOut();
           identifiedRef.current = false;
-          if (active) setIsPro(customerHasPro(customerInfo));
+          if (active) {
+            setIsPro(customerHasPro(customerInfo));
+            setActiveEntitlements(Object.keys(customerInfo.entitlements.active));
+          }
         } else {
           const customerInfo = await Purchases.getCustomerInfo();
-          if (active) setIsPro(customerHasPro(customerInfo));
+          if (active) {
+            setIsPro(customerHasPro(customerInfo));
+            setActiveEntitlements(Object.keys(customerInfo.entitlements.active));
+          }
         }
       } catch {
-        if (active) setIsPro(false);
+        if (active) {
+          setIsPro(false);
+          setActiveEntitlements([]);
+        }
       } finally {
         if (active) setResolvedUserId(targetUserId);
       }
@@ -164,19 +184,21 @@ export function PurchasesProvider({ children }: { children: ReactNode }) {
     const info = await Purchases.getCustomerInfo();
     const active = customerHasPro(info);
     setIsPro(active);
+    setActiveEntitlements(Object.keys(info.entitlements.active));
     return active;
   }, []);
 
   const value = useMemo<PurchasesState>(
     () => ({
       isPro,
+      activeEntitlements,
       loading:
         authLoading ||
         (purchasesConfigured && resolvedUserId !== (user?.id ?? null)),
       testerAccess: testerAccessEnabled,
       refresh,
     }),
-    [authLoading, isPro, refresh, resolvedUserId, user?.id]
+    [activeEntitlements, authLoading, isPro, refresh, resolvedUserId, user?.id]
   );
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
@@ -193,11 +215,20 @@ export function useSubscription(): SubscriptionContextValue {
   if (!context) throw new Error('useSubscription must be used inside PurchasesProvider');
   const { profile } = useMeals();
   const { inTrial, trialDaysLeft } = trialStateFrom(profile?.createdAt ?? null);
+  const capabilities = resolveTrakCapabilities({
+    isPro: context.isPro,
+    inTrial,
+    testerAccess: context.testerAccess,
+    activeEntitlements: context.activeEntitlements,
+  });
   return {
     ...context,
     inTrial,
     trialDaysLeft,
-    hasAccess: context.isPro || inTrial || context.testerAccess,
+    capabilities,
+    // Compatibility alias for older UI. Nutrition AI is exactly the feature
+    // this boolean gated before the capability boundary was introduced.
+    hasAccess: capabilities.nutritionAi,
   };
 }
 

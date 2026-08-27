@@ -18,43 +18,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
 import { RingMark, TrakWordmark } from '@/components/logo';
+import { ProfileAvatarButton } from '@/components/profile-avatar-button';
 import { askTrak, type ChatTurn } from '@/lib/chat';
 import { chatMealContext } from '@/lib/chat-context';
-import { calorieBudgetForDay, caloriesBurnedForDay, creditedExerciseCalories } from '@/lib/exercise';
+import { askHistoryContext, buildDailyHistory, personalRecords } from '@/lib/history';
 import { dailyMealSuggestions, type DailyMealSuggestion } from '@/lib/meal-memory';
 import { useSubscription } from '@/lib/purchases';
-import { sumTotals, useMeals } from '@/lib/store';
+import { useMeals } from '@/lib/store';
+import { useSupplements } from '@/lib/supplements';
 import { useAppScheme } from '@/lib/theme';
-import type { ExerciseEntry, FoodAnalysis, LoggedMeal } from '@/lib/types';
-
-/**
- * A compact "last 7 days" digest the assistant can reason about for trend
- * questions — one line per day, newest first.
- */
-function weekSummary(
-  meals: LoggedMeal[],
-  exercises: ExerciseEntry[],
-  baseCalorieTarget: number
-): string {
-  const byDay = new Map<string, LoggedMeal[]>();
-  for (const m of meals) {
-    if (!byDay.has(m.date)) byDay.set(m.date, []);
-    byDay.get(m.date)!.push(m);
-  }
-  const dates = new Set([...byDay.keys(), ...exercises.map((exercise) => exercise.date)]);
-  return [...dates]
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, 7)
-    .map((date) => {
-      const dayMeals = byDay.get(date) ?? [];
-      const t = sumTotals(dayMeals);
-      const burned = caloriesBurnedForDay(exercises, date);
-      const credit = creditedExerciseCalories(burned);
-      const budget = calorieBudgetForDay(baseCalorieTarget, burned);
-      return `${date}: ate ${t.calories}/${budget} kcal, ${t.protein_g}p ${t.carbs_g}c ${t.fat_g}f (${dayMeals.length} meals); exercise ${burned} kcal burned, ${credit} credited`;
-    })
-    .join('\n');
-}
+import type { FoodAnalysis } from '@/lib/types';
 
 type UiMessage = {
   id: string;
@@ -97,6 +70,8 @@ const ASK_GROUPS: SuggestionGroup[] = [
       'Which meals have the most calories?',
       'How consistent have I been?',
       'What changed this week?',
+      'What are my personal records?',
+      'When was my best Trak score?',
     ].map((label) => ({ label, prompt: label })),
   },
 ];
@@ -180,10 +155,14 @@ export default function ChatScreen() {
     exerciseCreditToday,
     calorieBudget,
     todayMeals,
+    waterHistory,
+    waterGoal,
   } = useMeals();
+  const { supplements, checks } = useSupplements();
   // Chat and Ask both call the model, so they're gated. History stays readable
   // either way — locking someone out of what they already wrote is hostile.
-  const { hasAccess } = useSubscription();
+  const { capabilities } = useSubscription();
+  const hasAccess = capabilities.nutritionAi;
   const params = useLocalSearchParams<{ mode?: string; t?: string }>();
 
   // Chat and Ask are two independent conversations with their own histories.
@@ -220,6 +199,18 @@ export default function ChatScreen() {
     ],
     [meals],
   );
+  const trackingContext = useMemo(() => {
+    const days = buildDailyHistory({
+      meals,
+      exercises,
+      water: waterHistory,
+      supplements,
+      supplementChecks: checks,
+      targets,
+      waterGoal,
+    });
+    return askHistoryContext(days, personalRecords(days));
+  }, [meals, exercises, waterHistory, supplements, checks, targets, waterGoal]);
   const suggestionGroups = mode === 'ask' ? ASK_GROUPS : chatGroups;
 
   function toggleSection(id: SuggestionGroup['id']) {
@@ -296,7 +287,8 @@ export default function ChatScreen() {
           eaten: todayTotals,
           exercise: { burned: burnedToday, credited: exerciseCreditToday },
           meals: chatMealContext(todayMeals),
-          week: weekSummary(meals, exercises, targets.calories),
+          recentDays: trackingContext.recentDays,
+          personalRecords: trackingContext.personalRecords,
         },
         calorieBias,
         controller.signal
@@ -366,8 +358,11 @@ export default function ChatScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.headerRow}>
-          <RingMark size={30} />
-          <TrakWordmark color={colors.text} size={28} />
+          <View style={styles.logoRow}>
+            <RingMark size={30} />
+            <TrakWordmark color={colors.text} size={28} />
+          </View>
+          <ProfileAvatarButton colors={colors} />
         </View>
 
         <View style={[styles.modeSwitch, { backgroundColor: colors.backgroundElement }]}>
@@ -589,10 +584,11 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    justifyContent: 'space-between',
     paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
 
   modeSwitch: {
     flexDirection: 'row',

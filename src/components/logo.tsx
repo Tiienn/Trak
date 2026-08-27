@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 
 import { Brand, Type } from '@/constants/theme';
 
@@ -23,19 +23,23 @@ export function RingMark({ size = 28, color = Brand.green }: { size?: number; co
 
   return (
     <Svg width={size} height={size}>
-      <G origin={`${center}, ${center}`} x={center} y={center}>
-        <Circle
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${arc} ${gap}`}
-          rotation={-12.5}
-          origin="0, 0"
-        />
-        <Circle cx={dotPosition} cy={-dotPosition} r={dotRadius} fill={color} />
-      </G>
+      <Circle
+        cx={center}
+        cy={center}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${arc} ${gap}`}
+        transform={`rotate(-12.5 ${center} ${center})`}
+      />
+      <Circle
+        cx={center + dotPosition}
+        cy={center - dotPosition}
+        r={dotRadius}
+        fill={color}
+      />
     </Svg>
   );
 }

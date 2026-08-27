@@ -57,4 +57,6 @@ credentials.json
 
 # Local design/QA output and editor launch state
 /artifacts/
+/output/
+/.playwright-cli/
 /.claude/launch.json

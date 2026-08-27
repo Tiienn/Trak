@@ -51,7 +51,7 @@ const PAGE = `<!DOCTYPE html>
   <main>
     <div class="accent"></div>
     <h1>Trak Privacy Policy</h1>
-    <p class="muted" style="margin-top: 0;">Effective July 2026</p>
+    <p class="muted" style="margin-top: 0;">Effective August 2026</p>
 
     <h2>Who we are</h2>
     <p>Trak is a calorie- and nutrition-tracking app. This policy covers the Trak Android and iOS app.</p>
@@ -69,10 +69,15 @@ const PAGE = `<!DOCTYPE html>
       <li>Water intake</li>
       <li>Exercise entries</li>
       <li>Supplements and daily check-offs</li>
+      <li>Body Analysis preferences, written results, and the goal, weight, or optional waist measurement used for a check-in</li>
     </ul>
 
     <h2>Meal photos</h2>
     <p>When you scan a meal, the photo is sent to our server and forwarded to Google's <strong>Gemini API</strong> solely to estimate nutrition. We do not store your photos on our servers &mdash; photos are kept only on your device.</p>
+
+    <h2>Body Analysis photos</h2>
+    <p>If you choose Body Analysis, your three adult progress photos are resized on your device, sent securely through our server, and forwarded to Google's <strong>Gemini API</strong> for that analysis. We also send limited context needed for the result: your goal, recent weight trend, optional waist measurement, training preferences, summarized nutrition evidence, and an earlier written check-in when available. Trak does not store these photos in its database or application logs. The progress copies shown later are stored only in the app's private cache on that device, are excluded from device backup, do not sync to another device, and can be deleted separately from the written result. Your device may clear cached copies when it needs space.</p>
+    <p>We store the written Body Analysis result, your analysis preferences, the goal and measurements used for the check-in, and model and prompt versions. We also store a report if you report an inaccurate, unsafe, or other problematic analysis. Body Analysis is restricted to adults and is designed to refuse unsupported or unsafe image requests.</p>
 
     <h2>Chat</h2>
     <p>Messages you type to the assistant are processed by Google's <strong>Gemini API</strong> to answer you. Recent conversation context is kept on your device, not on our servers.</p>
@@ -92,7 +97,7 @@ const PAGE = `<!DOCTYPE html>
     <p>We count your daily AI requests (a number tied to your account) to prevent abuse.</p>
 
     <h2>AI reliability data</h2>
-    <p>To improve reliability, we record technical details such as the AI model and prompt version, data source, response time, success or error status, and a pseudonymous account identifier. This technical log does not contain your meal photo, chat text, food name, email address, nutrition totals, body measurements, or Health Connect data.</p>
+    <p>To improve reliability, we record technical details such as the AI model and prompt version, data source, response time, success or error status, and a pseudonymous account identifier. This technical log does not contain your meal or Body Analysis photo, chat text, food name, email address, nutrition totals, body measurements, or Health Connect data.</p>
 
     <h2>Nutrition estimates</h2>
     <p>Trak provides approximate nutrition and general wellness information, not medical advice, diagnosis, or treatment. Consult a qualified healthcare professional for medical or dietary care.</p>
@@ -101,7 +106,7 @@ const PAGE = `<!DOCTYPE html>
     <p>We do <strong>not</strong> sell your data, show ads, or share personal data with advertisers.</p>
 
     <h2>Data deletion</h2>
-    <p>You can delete your account in-app at <strong>Profile &rarr; Delete account</strong>. This permanently erases your account and all data immediately. You can also see <a href="https://tqhgdnmzhuczuyyrmvzx.supabase.co/functions/v1/deletion-info">our account-deletion page</a>.</p>
+    <p>You can delete individual Body Analysis photos or results, erase all Body Analysis data, or delete your account in-app. Account deletion is available at <strong>Profile &rarr; Delete account</strong> and permanently erases your account and server-side account data. Trak also attempts to remove local Body Analysis photos from the current device. You can also see <a href="https://tqhgdnmzhuczuyyrmvzx.supabase.co/functions/v1/deletion-info">our account-deletion page</a>.</p>
 
     <h2>Children</h2>
     <p>Trak is not directed at children under 18. Calorie tracking is not appropriate for young children.</p>

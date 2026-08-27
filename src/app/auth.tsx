@@ -118,7 +118,7 @@ export default function AuthScreen() {
                 </Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                   {mode === 'signin'
-                    ? 'Your meals, progress, and next best choice—together.'
+                    ? 'See your meals clearly. Understand your progress. Choose what’s next.'
                     : 'Track food with a scan, a barcode, or a quick chat.'}
                 </Text>
               </View>
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   googleIcon: { width: 20, height: 20 },
-  googleButtonText: { fontFamily: 'LeagueSpartan_700Bold', fontSize: 16 },
+  googleButtonText: { fontSize: 17, fontWeight: '600' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: Spacing.three },
   divider: { height: StyleSheet.hairlineWidth, flex: 1 },
   dividerText: { fontSize: 13 },

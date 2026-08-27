@@ -16,7 +16,33 @@ export type Reminder = {
 };
 
 const STORAGE_KEY = 'trak.reminders.v1';
+const BODY_ANALYSIS_STORAGE_KEY = 'trak.bodyAnalysisReminder.v1';
 const CHANNEL_ID = 'meal-reminders';
+const BODY_ANALYSIS_NOTIFICATION_ID = 'body-analysis-recheck';
+export const BODY_ANALYSIS_RECHECK_DAYS = 28;
+
+type BodyAnalysisReminder = {
+  scanId: string;
+  dueAt: number;
+};
+
+export function bodyAnalysisDueAt(createdAt: string | number | Date): number {
+  const created = new Date(createdAt).getTime();
+  const anchor = Number.isFinite(created) ? created : Date.now();
+  return anchor + BODY_ANALYSIS_RECHECK_DAYS * 24 * 60 * 60 * 1000;
+}
+
+async function loadBodyAnalysisReminder(): Promise<BodyAnalysisReminder | null> {
+  try {
+    const raw = await AsyncStorage.getItem(BODY_ANALYSIS_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (typeof value?.scanId !== 'string' || !Number.isFinite(value?.dueAt)) return null;
+    return { scanId: value.scanId, dueAt: Number(value.dueAt) };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Built-in reminders, grouped by category and off by default so the app never
@@ -121,17 +147,65 @@ export async function ensurePermission(): Promise<boolean> {
 async function ensureChannel() {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-    name: 'Meal reminders',
+    name: 'Trak reminders',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#10B981',
   });
 }
 
+async function scheduleStoredBodyAnalysisReminder(): Promise<boolean> {
+  const reminder = await loadBodyAnalysisReminder();
+  if (!reminder) return false;
+  if (reminder.dueAt <= Date.now()) {
+    await AsyncStorage.removeItem(BODY_ANALYSIS_STORAGE_KEY).catch(() => {});
+    await Notifications.cancelScheduledNotificationAsync(BODY_ANALYSIS_NOTIFICATION_ID).catch(() => {});
+    return false;
+  }
+  await Notifications.cancelScheduledNotificationAsync(BODY_ANALYSIS_NOTIFICATION_ID).catch(() => {});
+  await Notifications.scheduleNotificationAsync({
+    identifier: BODY_ANALYSIS_NOTIFICATION_ID,
+    content: {
+      title: 'Body Analysis check-in · Trak',
+      body: 'It has been 28 days. Take a new check-in to refresh your progress and training focus.',
+      data: { route: '/body-analysis', scanId: reminder.scanId },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: reminder.dueAt,
+      channelId: CHANNEL_ID,
+    },
+  });
+  return true;
+}
+
+/** Replace the previous check-in reminder with one exactly 28 days after this scan. */
+export async function scheduleBodyAnalysisRecheck(
+  scanId: string,
+  createdAt: string | number | Date,
+  requestPermission = true
+): Promise<boolean> {
+  const reminder = { scanId, dueAt: bodyAnalysisDueAt(createdAt) };
+  await AsyncStorage.setItem(BODY_ANALYSIS_STORAGE_KEY, JSON.stringify(reminder));
+  const permission = requestPermission
+    ? await ensurePermission()
+    : await Notifications.getPermissionsAsync().then((value) => value.granted);
+  if (!permission) return false;
+  await ensureChannel();
+  return scheduleStoredBodyAnalysisReminder();
+}
+
+export async function cancelBodyAnalysisRecheck(scanId?: string): Promise<void> {
+  const current = await loadBodyAnalysisReminder();
+  if (scanId && current?.scanId !== scanId) return;
+  await AsyncStorage.removeItem(BODY_ANALYSIS_STORAGE_KEY).catch(() => {});
+  await Notifications.cancelScheduledNotificationAsync(BODY_ANALYSIS_NOTIFICATION_ID).catch(() => {});
+}
+
 /**
  * Cancel every scheduled reminder and re-schedule the enabled ones.
- * Reminders are the only notifications Trak schedules, so a blanket
- * cancel is safe. Persists the list too.
+ * The Body Analysis check-in is restored after the blanket cancellation.
+ * Persists the daily reminder list too.
  *
  * Calls are SERIALIZED through a promise chain: rapid stepper taps used to
  * overlap, letting an older list's schedule land after a newer list's
@@ -165,6 +239,7 @@ async function applyNow(list: Reminder[]): Promise<void> {
       },
     });
   }
+  await scheduleStoredBodyAnalysisReminder();
 }
 
 /**
@@ -175,7 +250,8 @@ async function applyNow(list: Reminder[]): Promise<void> {
 export async function bootstrapReminders(): Promise<void> {
   try {
     const list = await loadReminders();
-    if (!list.some((r) => r.enabled)) return;
+    const bodyAnalysisReminder = await loadBodyAnalysisReminder();
+    if (!list.some((r) => r.enabled) && !bodyAnalysisReminder) return;
     const perm = await Notifications.getPermissionsAsync();
     if (!perm.granted) return;
     await applyReminders(list);

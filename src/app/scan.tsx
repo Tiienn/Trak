@@ -8,18 +8,22 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
+  Keyboard,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BarcodeIcon } from '@/components/icons';
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
+import { askTrak } from '@/lib/chat';
+import { foodCorrectionPrompt, replaceFoodItem } from '@/lib/food-correction';
 import { loadGameStats, recordScanGuess } from '@/lib/game';
 import { photoMealMemory } from '@/lib/meal-memory';
 import { useSubscription } from '@/lib/purchases';
@@ -38,13 +42,14 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const insets = useSafeAreaInsets();
   const { addMeal, calorieBias, meals } = useMeals();
-  const { hasAccess } = useSubscription();
+  const { capabilities } = useSubscription();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   // Guess-before-you-scan: an optional quick guess made while the AI thinks.
   const [guess, setGuess] = useState<number | null>(null);
   const guessRef = useRef<number | null>(null);
@@ -84,7 +89,7 @@ export default function ScanScreen() {
   }
 
   async function onAddToToday() {
-    if (!analysis || saving) return; // guard against double taps
+    if (!analysis || saving || correcting) return; // guard against double taps / mid-correction logs
     setSaving(true);
     try {
       await addMeal(analysis, photoUri ? await persistPhoto(photoUri) : undefined);
@@ -93,6 +98,43 @@ export default function ScanScreen() {
     } catch (e: any) {
       Alert.alert('Not saved', e?.message ?? 'Could not save your meal. Please try again.');
       setSaving(false);
+    }
+  }
+
+  async function onCorrectItem(index: number, name: string, quantity: string) {
+    if (!analysis || correcting) return;
+    const current = analysis.items[index];
+    if (!current) return;
+
+    setCorrecting(true);
+    try {
+      const reply = await askTrak(
+        [
+          {
+            role: 'user',
+            content: foodCorrectionPrompt(name, quantity, current.grams),
+          },
+        ],
+        {
+          targets: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+          eaten: { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+        },
+        calorieBias,
+      );
+
+      if (reply.kind !== 'meal' || reply.analysis.items.length === 0) {
+        throw new Error('Could not find nutrition for that food. Try a more specific name.');
+      }
+
+      setAnalysis((latest) =>
+        latest ? replaceFoodItem(latest, index, reply.analysis.items) : latest,
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Could not update food', e?.message ?? 'Please check the food and try again.');
+      throw e;
+    } finally {
+      setCorrecting(false);
     }
   }
 
@@ -158,13 +200,14 @@ export default function ScanScreen() {
     setErrorMsg('');
     guessRef.current = null;
     setGuess(null);
+    setCorrecting(false);
     setPhase('camera');
   }
 
   // AI photo scan is the paid feature. Show the lock INSTEAD of the camera —
   // letting someone frame and shoot a meal only to be blocked afterwards
   // wastes their time (and asks for a camera permission we won't use).
-  if (!hasAccess) {
+  if (!capabilities.nutritionAi) {
     return (
       <View style={styles.black}>
         <SafeAreaView style={styles.topBar}>
@@ -207,30 +250,42 @@ export default function ScanScreen() {
   // Only require camera permission while the live camera is showing. The
   // gallery/analyzing/result phases must render even if the camera is denied.
   if (phase === 'camera' && !permission.granted) {
+    const cameraAccessBlocked = permission.canAskAgain === false;
+
     return (
       <SafeAreaView style={styles.permissionWrap}>
         <Text style={styles.permTitle}>Camera access</Text>
-        <Text style={styles.permBody}>Trak needs your camera to scan meals.</Text>
-        <Pressable
-          style={styles.primaryBtn}
-          onPress={() =>
-            permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()
-          }>
-          <Text style={styles.primaryBtnText}>
-            {permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.linkBtn} onPress={onPickFromGallery}>
-          <Text style={styles.linkText}>Or choose a photo instead</Text>
-        </Pressable>
-        <Pressable
-          style={styles.linkBtn}
-          onPress={() => {
-            cancelAnalysis();
-            router.back();
-          }}>
-          <Text style={styles.linkTextMuted}>Close</Text>
-        </Pressable>
+        <Text style={styles.permBody}>
+          {cameraAccessBlocked
+            ? "Camera access isn't available. You can still scan a meal from a photo."
+            : 'Trak uses your camera to scan meals and estimate their nutrition.'}
+        </Text>
+        {cameraAccessBlocked ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.primaryBtn}
+              onPress={onPickFromGallery}>
+              <Text style={styles.primaryBtnText}>Choose a photo</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.linkBtn}
+              onPress={() => {
+                cancelAnalysis();
+                router.back();
+              }}>
+              <Text style={styles.linkTextMuted}>Close</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.primaryBtn}
+            onPress={requestPermission}>
+            <Text style={styles.primaryBtnText}>Continue</Text>
+          </Pressable>
+        )}
       </SafeAreaView>
     );
   }
@@ -326,9 +381,11 @@ export default function ScanScreen() {
           analysis={analysis}
           guess={guess}
           saving={saving}
+          correcting={correcting}
           colors={colors}
           onRetake={reset}
           onDone={onAddToToday}
+          onCorrectItem={onCorrectItem}
         />
       )}
     </View>
@@ -348,18 +405,54 @@ function ResultSheet({
   analysis,
   guess,
   saving,
+  correcting,
   colors,
   onRetake,
   onDone,
+  onCorrectItem,
 }: {
   analysis: FoodAnalysis;
   guess: number | null;
   saving: boolean;
+  correcting: boolean;
   colors: ThemeColors;
   onRetake: () => void;
   onDone: () => void;
+  onCorrectItem: (index: number, name: string, quantity: string) => Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+
+  function startEditing(index: number) {
+    const item = analysis.items[index];
+    if (!item || saving || correcting) return;
+    setEditingIndex(index);
+    setEditName(item.name);
+    setEditQuantity(item.quantity);
+  }
+
+  function cancelEditing() {
+    if (correcting) return;
+    Keyboard.dismiss();
+    setEditingIndex(null);
+    setEditName('');
+    setEditQuantity('');
+  }
+
+  async function saveCorrection() {
+    if (editingIndex == null || !editName.trim() || correcting) return;
+    try {
+      await onCorrectItem(editingIndex, editName.trim(), editQuantity.trim());
+      Keyboard.dismiss();
+      setEditingIndex(null);
+      setEditName('');
+      setEditQuantity('');
+    } catch {
+      // The parent shows the actionable error and keeps the editor open.
+    }
+  }
   // How the user's quick guess compares to the AI estimate.
   const actual = analysis.total.calories;
   const guessErr =
@@ -380,7 +473,15 @@ function ResultSheet({
 
   return (
     <View style={[styles.resultSheet, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView
+        bottomOffset={24}
+        enabled={editingIndex != null}
+        extraKeyboardSpace={insets.bottom}
+        style={styles.keyboardAwareScroll}
+        contentContainerStyle={styles.resultScroll}
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled">
         <Text style={[styles.resultTitle, { color: colors.text }]}>{analysis.title}</Text>
         <Text style={[styles.confidenceText, { color: colors.textSecondary }]}>
           AI estimate · {Math.round(analysis.confidence * 100)}% confident
@@ -409,51 +510,129 @@ function ResultSheet({
 
         {analysis.items.length > 0 && (
           <View style={[styles.itemsBox, { backgroundColor: colors.backgroundElement }]}>
-            {analysis.items.map((it, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.itemRow,
-                  { borderBottomColor: colors.backgroundSelected },
-                  i === analysis.items.length - 1 && styles.itemRowLast,
-                ]}>
-                <View style={styles.itemInfo}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>{it.name}</Text>
-                  {!!it.quantity && (
-                    <Text style={[styles.itemQty, { color: colors.textSecondary }]}>
-                      {it.quantity}
-                    </Text>
-                  )}
+            {analysis.items.map((it, i) =>
+              editingIndex === i ? (
+                <View
+                  key={`edit-${i}`}
+                  style={[
+                    styles.itemEditor,
+                    { borderBottomColor: colors.backgroundSelected },
+                    i === analysis.items.length - 1 && styles.itemRowLast,
+                  ]}>
+                  <Text style={[styles.editorLabel, { color: colors.textSecondary }]}>Correct food</Text>
+                  <TextInput
+                    accessibilityLabel="Food name"
+                    autoFocus
+                    autoCapitalize="sentences"
+                    autoCorrect
+                    maxLength={100}
+                    placeholder="Food name, e.g. grilled fish"
+                    placeholderTextColor={colors.textSecondary}
+                    style={[
+                      styles.editorInput,
+                      { color: colors.text, backgroundColor: colors.backgroundSelected },
+                    ]}
+                    value={editName}
+                    onChangeText={setEditName}
+                    editable={!correcting}
+                  />
+                  <TextInput
+                    accessibilityLabel="Serving size"
+                    autoCapitalize="none"
+                    maxLength={50}
+                    placeholder="Serving, e.g. 100 g"
+                    placeholderTextColor={colors.textSecondary}
+                    style={[
+                      styles.editorInput,
+                      { color: colors.text, backgroundColor: colors.backgroundSelected },
+                    ]}
+                    value={editQuantity}
+                    onChangeText={setEditQuantity}
+                    editable={!correcting}
+                  />
+                  <View style={styles.editorActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      style={styles.editorCancel}
+                      onPress={cancelEditing}
+                      disabled={correcting}>
+                      <Text style={[styles.editorCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      style={[
+                        styles.editorSave,
+                        (!editName.trim() || correcting) && styles.btnBusy,
+                      ]}
+                      onPress={saveCorrection}
+                      disabled={!editName.trim() || correcting}>
+                      {correcting ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <Text style={styles.editorSaveText}>Update nutrition</Text>
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
-                <Text style={[styles.itemCals, { color: colors.text }]}>{it.calories} cal</Text>
-              </View>
-            ))}
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${it.name}`}
+                  key={`${it.name}-${i}`}
+                  style={[
+                    styles.itemRow,
+                    { borderBottomColor: colors.backgroundSelected },
+                    i === analysis.items.length - 1 && styles.itemRowLast,
+                  ]}
+                  onPress={() => startEditing(i)}
+                  disabled={saving || correcting}>
+                  <View style={styles.itemInfo}>
+                    <Text style={[styles.itemName, { color: colors.text }]}>{it.name}</Text>
+                    {!!it.quantity && (
+                      <Text style={[styles.itemQty, { color: colors.textSecondary }]}>
+                        {it.quantity}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.itemMeta}>
+                    <Text style={[styles.itemCals, { color: colors.text }]}>{it.calories} cal</Text>
+                    <Text style={styles.itemEdit}>Edit</Text>
+                  </View>
+                </Pressable>
+              ),
+            )}
           </View>
         )}
 
         {!!analysis.notes && (
           <Text style={[styles.notes, { color: colors.textSecondary }]}>{analysis.notes}</Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
-      <View style={[styles.resultButtons, { borderTopColor: colors.backgroundSelected, paddingBottom: 16 + insets.bottom }]}>
-        <Pressable
-          style={[styles.secondaryBtn, { backgroundColor: colors.backgroundElement }]}
-          onPress={onRetake}
-          disabled={saving}>
-          <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Retake</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.primaryBtnFlex, saving && styles.btnBusy]}
-          onPress={onDone}
-          disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.primaryBtnText}>Add to today</Text>
-          )}
-        </Pressable>
-      </View>
+      {editingIndex == null && (
+        <View
+          style={[
+            styles.resultButtons,
+            { borderTopColor: colors.backgroundSelected, paddingBottom: 16 + insets.bottom },
+          ]}>
+          <Pressable
+            style={[styles.secondaryBtn, { backgroundColor: colors.backgroundElement }]}
+            onPress={onRetake}
+            disabled={saving || correcting}>
+            <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Retake</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.primaryBtnFlex, (saving || correcting) && styles.btnBusy]}
+            onPress={onDone}
+            disabled={saving || correcting}>
+            {saving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryBtnText}>Add to today</Text>
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -583,6 +762,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingTop: 20,
   },
+  keyboardAwareScroll: { flexShrink: 1 },
   resultScroll: { paddingHorizontal: 24, paddingBottom: 12, alignItems: 'center' },
   resultTitle: { fontSize: 24, fontWeight: '800', color: '#111111', textAlign: 'center' },
   confidenceText: { fontSize: 13, color: '#8A8F98', marginTop: 4 },
@@ -606,6 +786,35 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 15, fontWeight: '600', color: '#111111' },
   itemQty: { fontSize: 13, color: '#8A8F98', marginTop: 2 },
   itemCals: { fontSize: 15, fontWeight: '700', color: '#111111' },
+  itemMeta: { alignItems: 'flex-end', gap: 3 },
+  itemEdit: { color: Brand.green, fontSize: 12, fontWeight: '700' },
+  itemEditor: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 9,
+  },
+  editorLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  editorInput: {
+    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+  },
+  editorActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
+  editorCancel: { paddingHorizontal: 10, paddingVertical: 10 },
+  editorCancelText: { fontSize: 14, fontWeight: '700' },
+  editorSave: {
+    minWidth: 142,
+    minHeight: 42,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.green,
+  },
+  editorSaveText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
   notes: { fontSize: 13, color: '#8A8F98', marginTop: 16, textAlign: 'center', fontStyle: 'italic' },
 
   resultButtons: {

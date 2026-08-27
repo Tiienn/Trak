@@ -38,10 +38,11 @@ import {
 
 type IconCmp = (props: { size?: number; color?: string }) => React.JSX.Element;
 
-/** What money actually buys — the two features that cost per use to run. */
+/** What money actually buys — the features that cost per use to run. */
 const PERKS: [IconCmp, string, string][] = [
   [CameraIcon, 'AI photo scan', 'Snap a plate and get calories and macros back in seconds.'],
   [SparklesIcon, 'Chat and Ask', 'Nutrition answers, meal ideas, and coaching whenever you want it.'],
+  [TrendUpIcon, 'Body Analysis', 'Private progress-photo check-ins with focused training and nutrition next steps.'],
 ];
 
 /** Everything below stays free with or without a subscription. */
@@ -76,7 +77,7 @@ function headerFor(isPro: boolean, inTrial: boolean, daysLeft: number) {
   if (isPro) {
     return {
       title: 'Your subscription is active',
-      body: 'AI photo scan and Chat are unlocked on this account. Thank you for paying for the parts that cost real money to run.',
+      body: 'AI photo scan, Chat, and Body Analysis are unlocked on this account. Thank you for paying for the parts that cost real money to run.',
     };
   }
   if (inTrial) {
@@ -86,12 +87,12 @@ function headerFor(isPro: boolean, inTrial: boolean, daysLeft: number) {
         : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your free trial`;
     return {
       title,
-      body: 'You have full access right now. Subscribe before the trial ends to keep AI photo scan and Chat without a break.',
+      body: 'You have full access right now. Subscribe before the trial ends to keep AI photo scan, Chat, and Body Analysis without a break.',
     };
   }
   return {
     title: 'Unlock AI logging',
-    body: `Your ${TRIAL_DAYS}-day free trial has ended. A subscription brings back AI photo scan and Chat. Barcode scan, quick-add, and manual logging stay free forever.`,
+    body: `Your ${TRIAL_DAYS}-day free trial has ended. A subscription brings back AI photo scan, Chat, and Body Analysis. Barcode scan, quick-add, and manual logging stay free forever.`,
   };
 }
 
@@ -138,7 +139,7 @@ export default function PaywallScreen() {
       if (ok) {
         await refresh();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        Alert.alert('You’re all set', 'Your subscription is active. AI photo scan and Chat are unlocked.', [
+        Alert.alert('You’re all set', 'Your subscription is active. AI photo scan, Chat, and Body Analysis are unlocked.', [
           { text: 'Done', onPress: () => router.replace('/(tabs)') },
         ]);
       }

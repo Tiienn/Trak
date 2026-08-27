@@ -35,7 +35,7 @@ export function num(v: unknown): number | null {
 
 export type AiRunInput = {
   requestId: string;
-  feature: 'photo_scan' | 'chat' | 'nutrition_enrichment';
+  feature: 'photo_scan' | 'chat' | 'nutrition_enrichment' | 'body_analysis';
   userId: string;
   status: 'success' | 'degraded' | 'error';
   errorCode?: string;

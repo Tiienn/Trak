@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { extractError } from './analyzeFood';
-import { applyReminders } from './reminders';
+import { bodyPhotoRepository } from './body-photo-store';
+import { applyReminders, cancelBodyAnalysisRecheck } from './reminders';
 import { supabase } from './supabase';
 
 // Non-personal device preference (theme) is deliberately kept.
@@ -32,6 +33,7 @@ export async function deleteAccount(): Promise<void> {
   // must not surface as an error: the account is already gone server-side.
 
   // Clears stored reminders AND cancels every scheduled notification.
+  await cancelBodyAnalysisRecheck().catch(() => {});
   await applyReminders([]).catch(() => {});
 
   const keys = [...CLEAR_KEYS, 'trak.dietStyle.v1'];
@@ -40,6 +42,10 @@ export async function deleteAccount(): Promise<void> {
     await AsyncStorage.multiRemove(keys);
   } catch {
     // Best-effort: a failed clear leaves harmless local scraps behind.
+  }
+
+  if (userId) {
+    await bodyPhotoRepository.deleteAll(userId).catch(() => {});
   }
 
   // The server already deleted the auth user, so this signOut may 4xx.

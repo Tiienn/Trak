@@ -1,17 +1,21 @@
 import { LeagueSpartan_700Bold } from '@expo-google-fonts/league-spartan/700Bold';
 import { LeagueSpartan_800ExtraBold } from '@expo-google-fonts/league-spartan/800ExtraBold';
 import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider } from '@/lib/auth';
+import { BodyAnalysisProvider } from '@/lib/body-analysis-store';
 import { PurchasesProvider } from '@/lib/purchases';
 import { bootstrapReminders } from '@/lib/reminders';
 import { MealsProvider } from '@/lib/store';
 import { SupplementsProvider } from '@/lib/supplements';
 import { ThemeModeProvider, useAppScheme } from '@/lib/theme';
+import { TrainingPlanProvider } from '@/lib/training-plan';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,11 +41,19 @@ function ThemedNavigator() {
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
+          name="body-analysis"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
           name="meal/[id]"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
           name="profile"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="account"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
@@ -54,6 +66,10 @@ function ThemedNavigator() {
         />
         <Stack.Screen
           name="exercise"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="training-plan"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
@@ -112,22 +128,39 @@ export default function RootLayout() {
     bootstrapReminders();
   }, []);
 
+  useEffect(() => {
+    const openBodyAnalysis = (response: Notifications.NotificationResponse | null) => {
+      if (response?.notification.request.content.data?.route !== '/body-analysis') return;
+      router.push('/body-analysis');
+      void Notifications.clearLastNotificationResponseAsync();
+    };
+    void Notifications.getLastNotificationResponseAsync().then(openBodyAnalysis);
+    const subscription = Notifications.addNotificationResponseReceivedListener(openBodyAnalysis);
+    return () => subscription.remove();
+  }, []);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ThemeModeProvider>
-      <AuthProvider>
-        <PurchasesProvider>
-          <MealsProvider>
-            {/* No app-wide subscription gate: everything except the AI
-                features (photo scan, Chat/Ask) is free forever. Those two
-                screens gate themselves via useSubscription().hasAccess. */}
-            <SupplementsProvider>
-              <ThemedNavigator />
-            </SupplementsProvider>
-          </MealsProvider>
-        </PurchasesProvider>
-      </AuthProvider>
-    </ThemeModeProvider>
+    <KeyboardProvider>
+      <ThemeModeProvider>
+        <AuthProvider>
+          <PurchasesProvider>
+            <MealsProvider>
+              {/* No app-wide subscription gate: paid AI capabilities gate
+                  themselves at their entry screens; all core tracking remains
+                  available independently. */}
+              <BodyAnalysisProvider>
+                <SupplementsProvider>
+                  <TrainingPlanProvider>
+                    <ThemedNavigator />
+                  </TrainingPlanProvider>
+                </SupplementsProvider>
+              </BodyAnalysisProvider>
+            </MealsProvider>
+          </PurchasesProvider>
+        </AuthProvider>
+      </ThemeModeProvider>
+    </KeyboardProvider>
   );
 }

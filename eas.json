@@ -15,8 +15,14 @@
     },
     "testing": {
       "extends": "production",
+      "distribution": "internal",
       "env": {
+        "APP_VARIANT": "testing",
         "EXPO_PUBLIC_TESTER_ACCESS": "true"
+      },
+      "android": {
+        "credentialsSource": "remote",
+        "buildType": "apk"
       }
     },
     "production": {
@@ -40,7 +46,7 @@
         "ascApiKeyIssuerId": "f2c7f4be-2fcf-4777-b263-a4f7da8b4e79"
       },
       "android": {
-        "track": "alpha",
+        "track": "production",
         "releaseStatus": "completed"
       }
     }

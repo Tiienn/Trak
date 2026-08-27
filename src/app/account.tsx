@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useAppScheme, useThemeMode, type ThemeMode } from '@/lib/theme';
@@ -53,7 +53,7 @@ function ProfileCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
-/** Tappable card that opens the weekly insights screen. */
+/** Personal summaries stay in Profile; Progress is reserved for Body Analysis. */
 function InsightsCard({ colors }: { colors: ThemeColors }) {
   return (
     <Pressable
@@ -64,16 +64,13 @@ function InsightsCard({ colors }: { colors: ThemeColors }) {
       onPress={() => router.push('/insights')}>
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Insights</Text>
-        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          Your last 7 days at a glance.
-        </Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Your last 7 days at a glance.</Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
     </Pressable>
   );
 }
 
-/** Tappable card that opens the full day-by-day meal and workout history. */
 function HistoryCard({ colors }: { colors: ThemeColors }) {
   return (
     <Pressable
@@ -84,16 +81,13 @@ function HistoryCard({ colors }: { colors: ThemeColors }) {
       onPress={() => router.push('/history')}>
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>History</Text>
-        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>
-          Every meal and workout you’ve logged, by day.
-        </Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Every meal and workout you’ve logged, by day.</Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
     </Pressable>
   );
 }
 
-/** Tappable card that opens the achievements/streak screen. */
 function AchievementsCard({ colors }: { colors: ThemeColors }) {
   const { streak } = useMeals();
   return (
@@ -290,22 +284,35 @@ export default function ProfileScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={[styles.safe, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
-          <Pressable
-            onPress={() =>
-              Alert.alert('Sign out?', 'You can sign back in anytime.', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-              ])
-            }
-            hitSlop={8}>
-            <Text style={styles.signOut}>Sign out</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() =>
+                Alert.alert('Sign out?', 'You can sign back in anytime.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+                ])
+              }
+              hitSlop={8}>
+              <Text style={styles.signOut}>Sign out</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close profile"
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.closeButton,
+                { backgroundColor: colors.backgroundElement, opacity: pressed ? 0.7 : 1 },
+              ]}>
+              <Text style={[styles.closeText, { color: colors.textSecondary }]}>×</Text>
+            </Pressable>
+          </View>
         </View>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <ProfileCard colors={colors} />
@@ -317,7 +324,7 @@ export default function ProfileScreen() {
           <ProCard colors={colors} />
           <AppearanceCard colors={colors} />
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -333,7 +340,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
   },
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   signOut: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeText: { fontSize: 28, lineHeight: 30, fontWeight: '300' },
 
   scroll: { paddingBottom: 100 },
   healthCard: {

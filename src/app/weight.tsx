@@ -1,221 +1,191 @@
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { WeightChart } from '@/components/weight-chart';
-import { Brand, Colors, Spacing } from '@/constants/theme';
-import { useMeals } from '@/lib/store';
+import { CalendarIcon, ChevronRightIcon, CloseIcon } from '@/components/icons';
+import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
+import { dayKey, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
-function formatWhen(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+const ITEM_HEIGHT = 50;
+const KG_TO_LB = 2.2046226218;
+const KG_VALUES = Array.from({ length: 381 }, (_, index) => index + 20);
+const LB_VALUES = Array.from({ length: 838 }, (_, index) => index + 44);
+const DECIMALS = Array.from({ length: 10 }, (_, index) => index);
+type WeightUnit = 'kg' | 'lb';
+
+function dateFromKey(value: string): Date {
+  const [year, month, date] = value.split('-').map(Number);
+  return new Date(year, month - 1, date, 12);
+}
+
+function recentDates(): string[] {
+  const today = new Date();
+  return Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12);
+    date.setDate(date.getDate() - index);
+    return dayKey(date);
+  });
+}
+
+function formatDate(value: string): string {
+  return dateFromKey(value).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function PickerColumn({ values, selected, onChange, width, colors, accessibilityLabel }: {
+  values: (number | string)[];
+  selected: number | string;
+  onChange: (value: any) => void;
+  width: number;
+  colors: ThemeColors;
+  accessibilityLabel: string;
+}) {
+  const initialIndex = Math.max(0, values.indexOf(selected));
+  return (
+    <View style={{ width, height: ITEM_HEIGHT * 3 }} accessibilityLabel={accessibilityLabel}>
+      <View pointerEvents="none" style={[styles.selectionBand, { borderColor: colors.backgroundSelected }]} />
+      <FlatList
+        key={`${values[0]}-${selected}`}
+        data={values}
+        keyExtractor={(item) => String(item)}
+        initialScrollIndex={initialIndex}
+        getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={ITEM_HEIGHT}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingVertical: ITEM_HEIGHT }}
+        onScrollToIndexFailed={() => {}}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.max(0, Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / ITEM_HEIGHT)));
+          onChange(values[index]);
+          void Haptics.selectionAsync();
+        }}
+        renderItem={({ item }) => {
+          const isSelected = item === selected;
+          return <View style={styles.pickerItem}><Text style={[styles.pickerText, { color: isSelected ? colors.text : colors.textSecondary }, isSelected && styles.pickerTextSelected]}>{item}</Text></View>;
+        }}
+      />
+    </View>
+  );
+}
+
+function DateModal({ visible, selectedDate, onSelect, onClose, colors }: {
+  visible: boolean;
+  selectedDate: string;
+  onSelect: (date: string) => void;
+  onClose: () => void;
+  colors: ThemeColors;
+}) {
+  const dates = useMemo(() => recentDates(), []);
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <SafeAreaView style={[styles.dateSheet, { backgroundColor: colors.backgroundElement }]} edges={['bottom']}>
+        <View style={styles.sheetHeader}>
+          <View><Text style={[styles.sheetTitle, { color: colors.text }]}>Log date</Text><Text style={[styles.sheetCaption, { color: colors.textSecondary }]}>Choose from the last 30 days</Text></View>
+          <Pressable onPress={onClose} style={[styles.closeButton, { backgroundColor: colors.backgroundSelected }]}><CloseIcon size={22} color={colors.text} /></Pressable>
+        </View>
+        <FlatList
+          data={dates}
+          keyExtractor={(item) => item}
+          renderItem={({ item }) => {
+            const selected = item === selectedDate;
+            return <Pressable onPress={() => { onSelect(item); onClose(); }} style={[styles.dateOption, selected && { backgroundColor: colors.greenTint }]}><CalendarIcon size={20} color={selected ? Brand.green : colors.textSecondary} /><Text style={[styles.dateOptionText, { color: colors.text }]}>{item === dayKey() ? 'Today' : formatDate(item)}</Text>{selected ? <Text style={styles.selectedLabel}>Selected</Text> : null}</Pressable>;
+          }}
+        />
+      </SafeAreaView>
+    </Modal>
+  );
 }
 
 export default function WeightScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { weights, latestWeight, profile, logWeight } = useMeals();
-
-  const [input, setInput] = useState(latestWeight ? String(Math.round(latestWeight * 10) / 10) : '');
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ date?: string; returnTo?: string }>();
+  const { weights, latestWeight, profile, loaded, loadError, retryLoad, logWeight } = useMeals();
+  const requestedDate = typeof params.date === 'string' && params.date <= dayKey() ? params.date : dayKey();
+  const savedForDate = weights.find((entry) => entry.date === requestedDate)?.weightKg;
+  const startingKg = savedForDate ?? latestWeight ?? profile?.weightKg ?? 70;
+  const [unit, setUnit] = useState<WeightUnit>('kg');
+  const [whole, setWhole] = useState(Math.floor(startingKg));
+  const [decimal, setDecimal] = useState(Math.round((startingKg - Math.floor(startingKg)) * 10));
+  const [selectedDate, setSelectedDate] = useState(requestedDate);
+  const [dateOpen, setDateOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Net change since the first logged weight.
-  const change =
-    weights.length >= 2 ? weights[weights.length - 1].weightKg - weights[0].weightKg : null;
-  const goalDown = profile?.goal === 'lose';
+  function changeUnit(next: WeightUnit) {
+    if (next === unit) return;
+    const displayed = whole + decimal / 10;
+    const kg = unit === 'kg' ? displayed : displayed / KG_TO_LB;
+    const converted = next === 'kg' ? kg : kg * KG_TO_LB;
+    const rounded = Math.round(converted * 10) / 10;
+    setUnit(next);
+    setWhole(Math.floor(rounded));
+    setDecimal(Math.round((rounded - Math.floor(rounded)) * 10));
+  }
 
   async function save() {
-    const kg = parseFloat(input);
-    // Plausibility bounds: this value also overwrites the profile weight that
-    // drives calorie targets, so a typo like 700 (meaning 70.0) must not pass.
-    if (!Number.isFinite(kg) || kg < 20 || kg > 400 || saving) return;
+    if (saving) return;
+    const displayed = whole + decimal / 10;
+    const kg = unit === 'kg' ? displayed : displayed / KG_TO_LB;
+    if (kg < 20 || kg > 400) {
+      Alert.alert('Check your weight', 'Enter a weight between 20 and 400 kg.');
+      return;
+    }
     setSaving(true);
     try {
-      await logWeight(kg);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } catch (e: any) {
-      Alert.alert('Not saved', e?.message ?? 'Please try again.');
+      await logWeight(Math.round(kg * 10) / 10, selectedDate);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (error: any) {
+      Alert.alert('Not saved', error?.message ?? 'Please try again.');
     } finally {
       setSaving(false);
     }
   }
 
+  if (!loaded) return <View style={[styles.centered, { backgroundColor: colors.background }]}><ActivityIndicator color={Brand.green} /><Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your weight…</Text></View>;
+  if (loadError) return <View style={[styles.centered, { backgroundColor: colors.background }]}><Text style={[styles.errorTitle, { color: colors.text }]}>Couldn&apos;t load your weight</Text><Pressable style={styles.addButton} onPress={retryLoad}><Text style={styles.addButtonText}>Try again</Text></Pressable></View>;
+
+  const wholeValues = unit === 'kg' ? KG_VALUES : LB_VALUES;
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Weight</Text>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
-          </Pressable>
+      <SafeAreaView style={[styles.safe, { paddingTop: insets.top }]} edges={['bottom']}>
+        <View style={styles.header}>
+          <View style={styles.headerSpacer} />
+          <Text style={[styles.headerLabel, { color: colors.text }]}>Weigh-in</Text>
+          <Pressable accessibilityLabel="Close weigh-in" onPress={() => router.back()} style={[styles.closeButton, { backgroundColor: colors.backgroundElement }]}><CloseIcon size={24} color={colors.text} /></Pressable>
         </View>
-
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            {/* Current + change */}
-            <View style={[styles.currentCard, { backgroundColor: colors.backgroundElement }]}>
-              <Text style={[styles.currentLabel, { color: colors.textSecondary }]}>
-                {latestWeight != null ? 'Current weight' : 'No weight logged yet'}
-              </Text>
-              {latestWeight != null ? (
-                <Text style={[styles.currentValue, { color: colors.text }]}>
-                  {Math.round(latestWeight * 10) / 10} kg
-                </Text>
-              ) : null}
-              {change != null ? (
-                <Text
-                  style={[
-                    styles.change,
-                    { color: change === 0 ? colors.textSecondary : Brand.greenDark },
-                  ]}>
-                  {change > 0 ? '▲' : change < 0 ? '▼' : ''} {Math.abs(Math.round(change * 10) / 10)} kg
-                  {' '}since {formatWhen(weights[0].date)}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Chart */}
-            <View style={[styles.chartCard, { backgroundColor: colors.backgroundElement }]}>
-              <WeightChart weights={weights} colors={colors} goalDown={goalDown} />
-            </View>
-
-            {/* Log input */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                LOG TODAY&apos;S WEIGHT
-              </Text>
-              <View style={styles.inputRow}>
-                <View style={[styles.inputBox, { backgroundColor: colors.backgroundElement }]}>
-                  <TextInput
-                    style={[styles.input, { color: colors.text }]}
-                    keyboardType="numeric"
-                    value={input}
-                    onChangeText={setInput}
-                    placeholder="kg"
-                    placeholderTextColor={colors.textSecondary}
-                    maxLength={5}
-                  />
-                  <Text style={[styles.unit, { color: colors.textSecondary }]}>kg</Text>
-                </View>
-                <Pressable
-                  style={[styles.logBtn, { opacity: parseFloat(input) > 0 && !saving ? 1 : 0.4 }]}
-                  onPress={save}
-                  disabled={!(parseFloat(input) > 0) || saving}>
-                  {saving ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <Text style={styles.logBtnText}>Log</Text>
-                  )}
-                </Pressable>
-              </View>
-              <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                Logging again today updates it. Your calorie targets adjust to your latest weight.
-              </Text>
-            </View>
-
-            {/* History list */}
-            {weights.length > 0 ? (
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>HISTORY</Text>
-                <View style={[styles.historyCard, { backgroundColor: colors.backgroundElement }]}>
-                  {[...weights].reverse().map((w, i, arr) => (
-                    <View
-                      key={w.date}
-                      style={[
-                        styles.historyRow,
-                        i < arr.length - 1 && {
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: colors.backgroundSelected,
-                        },
-                      ]}>
-                      <Text style={[styles.historyDate, { color: colors.textSecondary }]}>
-                        {formatWhen(w.date)}
-                      </Text>
-                      <Text style={[styles.historyValue, { color: colors.text }]}>
-                        {Math.round(w.weightKg * 10) / 10} kg
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : null}
-          </ScrollView>
-        </KeyboardAvoidingView>
+        <Text style={[styles.title, { color: colors.text }]}>What is your weight?</Text>
+        <Pressable onPress={() => setDateOpen(true)} style={[styles.dateRow, { backgroundColor: colors.backgroundElement }]}>
+          <Text style={[styles.dateLabel, { color: colors.text }]}>Log Date</Text>
+          <View style={styles.dateValueRow}><Text style={[styles.dateValue, { color: colors.textSecondary }]}>{formatDate(selectedDate)}</Text><ChevronRightIcon size={22} color={colors.textSecondary} /></View>
+        </Pressable>
+        <View style={styles.pickerArea}>
+          <PickerColumn values={wholeValues} selected={whole} onChange={setWhole} width={116} colors={colors} accessibilityLabel="Weight whole number" />
+          <Text style={[styles.decimalPoint, { color: colors.text }]}>.</Text>
+          <PickerColumn values={DECIMALS} selected={decimal} onChange={setDecimal} width={86} colors={colors} accessibilityLabel="Weight decimal" />
+          <PickerColumn values={['kg', 'lb']} selected={unit} onChange={changeUnit} width={86} colors={colors} accessibilityLabel="Weight unit" />
+        </View>
+        <View style={styles.bottomArea}>
+          <Text style={[styles.helperText, { color: colors.textSecondary }]}>Your latest weigh-in keeps calorie targets and Body Analysis recommendations current.</Text>
+          <Pressable disabled={saving} onPress={save} style={[styles.addButton, saving && { opacity: 0.55 }]}>{saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.addButtonText}>ADD</Text>}</Pressable>
+        </View>
       </SafeAreaView>
+      <DateModal visible={dateOpen} selectedDate={selectedDate} onSelect={setSelectedDate} onClose={() => setDateOpen(false)} colors={colors} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  flex: { flex: 1 },
-  safe: { flex: 1, paddingHorizontal: Spacing.four },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing.two,
-    marginBottom: Spacing.two,
-  },
-  headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  closeText: { fontSize: 20, fontWeight: '600' },
-
-  scroll: { paddingBottom: Spacing.four, gap: Spacing.four },
-
-  currentCard: { borderRadius: 20, padding: Spacing.four, alignItems: 'center', gap: 4 },
-  currentLabel: { fontSize: 13, fontWeight: '600' },
-  currentValue: { fontSize: 40, fontWeight: '800', letterSpacing: -1 },
-  change: { fontSize: 13, fontWeight: '700' },
-
-  chartCard: { borderRadius: 20, padding: Spacing.three },
-
-  section: { gap: Spacing.two },
-  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-
-  inputRow: { flexDirection: 'row', gap: Spacing.two },
-  inputBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingHorizontal: Spacing.three,
-  },
-  input: { flex: 1, fontSize: 20, fontWeight: '700', paddingVertical: Spacing.three },
-  unit: { fontSize: 15, fontWeight: '600' },
-  logBtn: {
-    backgroundColor: Brand.green,
-    borderRadius: 14,
-    paddingHorizontal: Spacing.five,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  hint: { fontSize: 12, lineHeight: 17 },
-
-  historyCard: { borderRadius: 16, paddingHorizontal: Spacing.three },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.three,
-  },
-  historyDate: { fontSize: 14 },
-  historyValue: { fontSize: 15, fontWeight: '700' },
+  container: { flex: 1 }, safe: { flex: 1, paddingHorizontal: Spacing.four }, centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four, gap: Spacing.three }, loadingText: { fontSize: 14 }, errorTitle: { fontSize: 20, fontWeight: '800' },
+  header: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerSpacer: { width: 48 }, headerLabel: { fontSize: 17, fontWeight: '700' }, closeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  title: { marginTop: Spacing.four, fontFamily: Type.display, fontSize: 36, lineHeight: 42, fontWeight: '700', textAlign: 'center' },
+  dateRow: { minHeight: 66, borderRadius: 20, marginTop: Spacing.five, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, dateLabel: { fontSize: 15, fontWeight: '700' }, dateValueRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two }, dateValue: { fontSize: 15, fontWeight: '600' },
+  pickerArea: { flex: 1, minHeight: 280, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }, selectionBand: { position: 'absolute', left: 0, right: 0, top: ITEM_HEIGHT, height: ITEM_HEIGHT, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth }, pickerItem: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' }, pickerText: { fontSize: 23, fontWeight: '500' }, pickerTextSelected: { fontSize: 27, fontWeight: '700' }, decimalPoint: { marginHorizontal: -4, fontSize: 30, lineHeight: 34 },
+  bottomArea: { gap: Spacing.three, paddingBottom: Spacing.two }, helperText: { fontSize: 12, lineHeight: 17, textAlign: 'center' }, addButton: { minHeight: 58, borderRadius: 29, backgroundColor: Brand.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.five }, addButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '800', letterSpacing: 0.4 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }, dateSheet: { maxHeight: '62%', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.four }, sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.three }, sheetTitle: { fontFamily: Type.display, fontSize: 25, fontWeight: '700' }, sheetCaption: { marginTop: 2, fontSize: 12 }, dateOption: { minHeight: 54, borderRadius: 15, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.three }, dateOptionText: { flex: 1, fontSize: 15, fontWeight: '700' }, selectedLabel: { color: Brand.greenDark, fontSize: 12, fontWeight: '800' },
 });

@@ -21,6 +21,13 @@ import { corsHeaders, json, jwtPayload } from '../_shared/nutrition.ts';
 const USER_TABLES = [
   'supplement_checks',
   'supplements',
+  'body_analysis_reports',
+  'body_scans',
+  'body_analysis_preferences',
+  'body_analysis_usage',
+  'training_load_history',
+  'training_plan_items',
+  'meal_corrections',
   'saved_meals',
   'exercises',
   'water',

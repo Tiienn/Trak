@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Linking,
   Alert,
   Pressable,
   StyleSheet,
@@ -103,25 +102,36 @@ export default function BarcodeScreen() {
 
   // Camera permission is only needed for live scanning; the photo path works regardless.
   if (phase === 'scanning' && !permission.granted) {
+    const cameraAccessBlocked = permission.canAskAgain === false;
+
     return (
       <SafeAreaView style={styles.permWrap}>
         <Text style={styles.permTitle}>Camera access</Text>
-        <Text style={styles.permBody}>Trak needs your camera to scan barcodes.</Text>
-        <Pressable
-          style={styles.primaryBtn}
-          onPress={() =>
-            permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()
-          }>
-          <Text style={styles.primaryBtnText}>
-            {permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.linkBtn} onPress={onPickBarcodePhoto}>
-          <Text style={styles.link}>Or choose a barcode photo</Text>
-        </Pressable>
-        <Pressable style={styles.linkBtn} onPress={() => router.back()}>
-          <Text style={styles.linkMuted}>Close</Text>
-        </Pressable>
+        <Text style={styles.permBody}>
+          {cameraAccessBlocked
+            ? "Camera access isn't available. You can still scan a barcode from a photo."
+            : 'Trak uses your camera to scan product barcodes.'}
+        </Text>
+        {cameraAccessBlocked ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.primaryBtn}
+              onPress={onPickBarcodePhoto}>
+              <Text style={styles.primaryBtnText}>Choose a barcode photo</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" style={styles.linkBtn} onPress={() => router.back()}>
+              <Text style={styles.linkMuted}>Close</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            style={styles.primaryBtn}
+            onPress={requestPermission}>
+            <Text style={styles.primaryBtnText}>Continue</Text>
+          </Pressable>
+        )}
       </SafeAreaView>
     );
   }

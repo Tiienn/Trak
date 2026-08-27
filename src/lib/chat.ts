@@ -26,7 +26,8 @@ export async function askTrak(
     eaten: FoodTotals;
     exercise?: { burned: number; credited: number };
     meals?: ChatMealContext[];
-    week?: string;
+    recentDays?: string;
+    personalRecords?: string;
   },
   biasPct = 0,
   signal?: AbortSignal,
