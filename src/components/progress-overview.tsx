@@ -11,20 +11,21 @@ import {
   DailyWeightCard,
   pickDailyCoachTip,
 } from '@/components/daily-dashboard-cards';
+import { DailyMissionsCard } from '@/components/daily-missions-card';
 import { CheckIcon, DumbbellIcon } from '@/components/icons';
 import { Brand, Spacing, Type, type ThemeColors } from '@/constants/theme';
-import type { BodyScan } from '@/lib/body-analysis';
+import type { BodyAnalysisPreferences, BodyScan } from '@/lib/body-analysis';
 import { dailyHistoryFor } from '@/lib/history';
-import { scoreCaption } from '@/lib/score';
 import { dayKey, useMeals } from '@/lib/store';
+import { useMuscleScorePreferences } from '@/lib/muscle-score-preferences';
+import { muscleScoreScheduleLabel } from '@/lib/muscle-score-settings';
 import { useSupplements } from '@/lib/supplements';
 import { MUSCLE_GROUPS } from '@/lib/training-catalog';
-import { groupsForExercise, muscleScores, WEEKLY_SET_TARGET, workoutMinutesByDay } from '@/lib/training-progress';
+import { groupsForExercise, muscleScores, muscleScoreWindow, trainingDayKeys, WEEKLY_SET_TARGET, workoutMinutesByDay } from '@/lib/training-progress';
 import { useTrainingPlan } from '@/lib/training-plan';
 import type { MuscleGroup, MuscleSetCounts, WorkoutSplit } from '@/lib/types';
+import { recommendWorkout, workoutCatalogIdForName, type WorkoutRecommendation } from '@/lib/workout-catalog';
 
-const SCORE_SIZE = 116;
-const SCORE_STROKE = 10;
 const MINI_SIZE = 58;
 const MINI_STROKE = 7;
 const WORKOUT_GOAL = 30;
@@ -81,38 +82,21 @@ function HeaderRow({ title, subtitle, icon, colors }: {
   );
 }
 
-function ScoreCard({ score, caption, colors }: { score: number; caption: string; colors: ThemeColors }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Trak Score ${score} out of 100`}
-      onPress={() => router.push('/score')}
-      style={({ pressed }) => [styles.scoreCard, { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement }]}>
-      <View style={styles.scoreRing}>
-        <ProgressRing value={score} size={SCORE_SIZE} stroke={SCORE_STROKE} colors={colors} />
-        <View style={styles.scoreCenter}>
-          <Text style={[styles.scoreValue, { color: colors.text }]}>{score}</Text>
-          <Text style={[styles.scoreOutOf, { color: colors.textSecondary }]}>/100</Text>
-        </View>
-      </View>
-      <View style={styles.flex}>
-        <Text style={[styles.scoreLabel, { color: colors.text }]}>Trak Score</Text>
-        <Text style={[styles.scoreCaption, { color: colors.textSecondary }]}>{caption}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function MuscleBalance({ scores, colors }: { scores: ReturnType<typeof muscleScores>; colors: ThemeColors }) {
+function MuscleBalance({ scores, selectedDate, colors }: { scores: ReturnType<typeof muscleScores>; selectedDate: string; colors: ThemeColors }) {
+  const { settings, loaded, error, retry } = useMuscleScorePreferences();
+  const window = muscleScoreWindow(selectedDate, settings);
+  const period = window.manualReset
+    ? `Since manual reset · ${localDate(window.manualReset.day).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+    : muscleScoreScheduleLabel(settings);
   const ringColors = Object.fromEntries(MUSCLE_GROUPS.map((item) => [item.key, item.color]));
   return (
     <View style={styles.section}>
       <View>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly muscle score</Text>
-        <Text style={[styles.sectionCaption, { color: colors.textSecondary }]}>Chest, legs, and back earn 2 points per set. Weekly target: {WEEKLY_SET_TARGET} points each.</Text>
+        <Text style={[styles.sectionCaption, { color: colors.textSecondary }]}>{period}. Chest, legs, and back earn 2 points per set. Target: {WEEKLY_SET_TARGET} points each.</Text>
       </View>
       <View style={[styles.muscleCard, { backgroundColor: colors.backgroundElement }]}>
-        {scores.map((item) => (
+        {!loaded || error ? <Pressable disabled={!error} onPress={retry}><Text style={[styles.sectionCaption, { color: colors.textSecondary }]}>{error ? 'Could not load muscle score settings. Tap to retry.' : 'Loading muscle scores…'}</Text></Pressable> : scores.map((item) => (
           <View key={item.key} style={styles.muscleItem}>
             <View style={styles.miniRing}>
               <ProgressRing value={item.score} ringColor={ringColors[item.key]} trackColor={`${ringColors[item.key]}33`} colors={colors} />
@@ -141,7 +125,37 @@ function emptyMuscleSets(): MuscleSetCounts {
   return { chest: 0, legs: 0, back: 0, arms: 0, shoulders: 0, abs: 0, glutes: 0, other: 0 };
 }
 
-function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestScan: BodyScan | null; weakest: string; selectedDate: string; colors: ThemeColors }) {
+function plannedRecommendation(recommendation: WorkoutRecommendation): PlannedCompletion {
+  const { exercise } = recommendation;
+  const muscleSets = emptyMuscleSets();
+  const recommendedSets = recommendation.recommendedSets ?? exercise.strength?.sets ?? 0;
+  if (exercise.activityType === 'strength') {
+    exercise.primaryMuscles.forEach((muscle) => { muscleSets[muscle] = recommendedSets; });
+  }
+  return {
+    key: `catalog-${exercise.id}`,
+    name: exercise.name,
+    prescription: exercise.activityType === 'cardio'
+      ? `${exercise.cardio!.durationMinutes[0]}–${exercise.cardio!.durationMinutes[1]} min · ${exercise.cardio!.intensity}`
+      : `${recommendedSets} × ${exercise.strength!.reps} · ${exercise.strength!.restSeconds[0]}–${exercise.strength!.restSeconds[1]}s rest`,
+    durationMinutes: exercise.activityType === 'cardio'
+      ? exercise.cardio!.durationMinutes[0]
+      : exercise.estimatedMinutes,
+    // Recommendations intentionally avoid guessed calorie targets. Completing
+    // one updates workout time; completed strength sets also update muscle score.
+    calories: 0,
+    splits: exercise.activityType === 'cardio' ? ['cardio'] : exercise.primaryMuscles,
+    muscleSets,
+  };
+}
+
+function TodayTraining({ latestScan, recommendations, weakest, selectedDate, colors }: {
+  latestScan: BodyScan | null;
+  recommendations: WorkoutRecommendation[];
+  weakest: string;
+  selectedDate: string;
+  colors: ThemeColors;
+}) {
   const { loaded, items } = useTrainingPlan();
   const { exercises, addExercise } = useMeals();
   const [completingKey, setCompletingKey] = useState<string | null>(null);
@@ -150,15 +164,17 @@ function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestSc
   const subtitle = items.length > 0
     ? `${items.length} exercise${items.length === 1 ? '' : 's'} · customised by you`
     : training
-      ? `${training.daysPerWeek} days per week · from Body Analysis`
-      : 'A simple suggestion from your weekly muscle score';
+      ? `${training.daysPerWeek} days per week · adapted to your setup and weekly balance`
+      : recommendations.length > 0
+        ? 'Based on your goal, setup and last seven days'
+        : 'A simple suggestion from your weekly muscle score';
   const canComplete = selectedDate === dayKey();
   const completedNames = new Set(
     exercises
       .filter((exercise) => exercise.date === dayKey())
       .map((exercise) => exercise.name.trim().toLowerCase())
   );
-  const planned: PlannedCompletion[] = items.length > 0
+  const customPlanned: PlannedCompletion[] = items.length > 0
     ? items.slice(0, 5).map((exercise) => {
         const muscleSets = emptyMuscleSets();
         if (exercise.activityType === 'strength' && exercise.muscleGroup) muscleSets[exercise.muscleGroup] = exercise.sets;
@@ -176,7 +192,8 @@ function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestSc
           muscleSets,
         };
       })
-    : (training?.exercises.slice(0, 3) ?? []).map((exercise, index) => {
+    : [];
+  const analysisPlanned: PlannedCompletion[] = (training?.exercises.slice(0, 3) ?? []).map((exercise, index) => {
         const groups = groupsForExercise(exercise.name);
         const muscles: MuscleGroup[] = groups.length > 0 ? groups : ['other'];
         const plannedSets = Math.max(1, Math.min(20, Number.parseInt(exercise.sets, 10) || 3));
@@ -192,6 +209,24 @@ function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestSc
           muscleSets,
         };
       });
+  const recommendationPlanned = recommendations.map(plannedRecommendation);
+  const analysisNames = new Set(analysisPlanned.map((exercise) => exercise.name.trim().toLowerCase()));
+  const analysisWithinTime = analysisPlanned.slice(0, 2).reduce<PlannedCompletion[]>((selected, exercise) => {
+    const usedMinutes = selected.reduce((sum, item) => sum + item.durationMinutes, 0);
+    return usedMinutes + exercise.durationMinutes <= WORKOUT_GOAL ? [...selected, exercise] : selected;
+  }, []);
+  const remainingMinutes = WORKOUT_GOAL - analysisWithinTime.reduce((sum, exercise) => sum + exercise.durationMinutes, 0);
+  const catalogueVariation = recommendationPlanned.find((exercise) =>
+    !analysisNames.has(exercise.name.trim().toLowerCase()) && exercise.durationMinutes <= remainingMinutes
+  );
+  const planned = customPlanned.length > 0
+    ? customPlanned
+    : analysisPlanned.length > 0
+      ? [
+          ...analysisWithinTime,
+          ...(catalogueVariation ? [catalogueVariation] : []),
+        ]
+      : recommendationPlanned.slice(0, 3);
 
   async function markComplete(exercise: PlannedCompletion) {
     if (!canComplete || completedNames.has(exercise.name.trim().toLowerCase()) || completingKey) return;
@@ -212,9 +247,10 @@ function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestSc
   function confirmComplete(exercise: PlannedCompletion) {
     if (!canComplete || completedNames.has(exercise.name.trim().toLowerCase())) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const completedSets = Object.values(exercise.muscleSets).reduce((sum, sets) => sum + sets, 0);
     Alert.alert(
       'Mark training complete?',
-      `${exercise.name} will be added to today’s workout log and update your weekly muscle score.`,
+      `${exercise.name} will be added to today’s workout log and update Workout Time${completedSets > 0 ? ' and Weekly Muscle Score' : ''}.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Mark complete', onPress: () => { void markComplete(exercise); } },
@@ -253,7 +289,7 @@ function TodayTraining({ latestScan, weakest, selectedDate, colors }: { latestSc
             </Pressable>
           );
         })}
-        {loaded && items.length === 0 && !training ? <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Build a focused {weakest.toLowerCase()} session, or add your own exercises.</Text> : null}
+        {loaded && planned.length === 0 ? <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>Build a focused {weakest.toLowerCase()} session, or add your own exercises.</Text> : null}
         <Pressable style={styles.tonalButton} onPress={() => router.push('/training-plan' as never)}>
           <Text style={styles.tonalButtonText}>Customise training</Text>
         </Pressable>
@@ -298,15 +334,20 @@ function WorkoutTime({ data, selectedDate, colors }: { data: ReturnType<typeof w
   );
 }
 
-export function ProgressOverview({ colors, selectedDate, latestScan }: {
+export function ProgressOverview({ colors, selectedDate, latestScan, preferences }: {
   colors: ThemeColors;
   selectedDate: string;
   latestScan: BodyScan | null;
+  preferences: BodyAnalysisPreferences | null;
 }) {
-  const { meals, exercises, waterHistory, waterGoal, targets, weights } = useMeals();
+  const { meals, exercises, waterHistory, waterGoal, targets, weights, profile } = useMeals();
   const { supplements, checks } = useSupplements();
-  const day = useMemo(() => dailyHistoryFor(selectedDate, { meals, exercises, water: waterHistory, supplements, supplementChecks: checks, targets, waterGoal }), [selectedDate, meals, exercises, waterHistory, supplements, checks, targets, waterGoal]);
-  const balance = useMemo(() => muscleScores(exercises, selectedDate), [exercises, selectedDate]);
+  const { settings: muscleSettings } = useMuscleScorePreferences();
+  const day = useMemo(() => dailyHistoryFor(selectedDate, { meals, exercises, water: waterHistory, supplements, supplementChecks: checks, targets, waterGoal, goal: profile?.goal }), [selectedDate, meals, exercises, waterHistory, supplements, checks, targets, waterGoal, profile?.goal]);
+  const balance = useMemo(() => muscleScores(exercises, selectedDate, WEEKLY_SET_TARGET, muscleSettings), [exercises, selectedDate, muscleSettings]);
+  // Recommendation recency always means the trailing seven calendar days;
+  // display-only score resets must not make older training look unperformed.
+  const recommendationBalance = useMemo(() => muscleScores(exercises, selectedDate), [exercises, selectedDate]);
   const workoutWeek = useMemo(() => workoutMinutesByDay(exercises, selectedDate), [exercises, selectedDate]);
   const weightsThroughSelected = weights.filter((entry) => entry.date <= selectedDate);
   const selectedWeight = weightsThroughSelected.at(-1)?.weightKg ?? null;
@@ -314,6 +355,30 @@ export function ProgressOverview({ colors, selectedDate, latestScan }: {
     ? weightsThroughSelected[weightsThroughSelected.length - 1].weightKg - weightsThroughSelected[0].weightKg
     : null;
   const weakest = [...balance].sort((a, b) => a.score - b.score)[0]?.label ?? 'Full body';
+  const recommendations = useMemo(() => {
+    const attention = [...recommendationBalance].sort((a, b) => a.score - b.score || a.label.localeCompare(b.label));
+    const recommendationDays = new Set(trainingDayKeys(selectedDate));
+    const recentExerciseIds = exercises
+      .filter((exercise) => recommendationDays.has(exercise.date))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .flatMap((exercise) => {
+        const id = workoutCatalogIdForName(exercise.name);
+        return id ? [id] : [];
+      });
+    return recommendWorkout({
+      goal: profile?.goal ?? 'maintain',
+      experience: preferences?.experience ?? 'beginner',
+      location: preferences?.trainingLocation ?? 'home',
+      equipment: preferences?.equipment ?? [],
+      availableMinutes: WORKOUT_GOAL,
+      recentMuscleSets: Object.fromEntries(recommendationBalance.map((muscle) => [muscle.key, muscle.sets])),
+      musclesNeedingAttention: attention.map((muscle) => muscle.key),
+      limitations: preferences?.limitationsNote ? [preferences.limitationsNote] : [],
+      recentExerciseIds,
+      includeCardio: profile?.goal === 'lose',
+      limit: 3,
+    });
+  }, [exercises, preferences, profile?.goal, recommendationBalance, selectedDate]);
   const tip = pickDailyCoachTip({
     mealsLogged: day.meals.length,
     proteinPct: targets.protein_g > 0 ? day.totals.protein_g / targets.protein_g : 0,
@@ -324,10 +389,10 @@ export function ProgressOverview({ colors, selectedDate, latestScan }: {
 
   return (
     <View style={styles.content}>
-      <ScoreCard score={day.score} caption={scoreCaption(day.score)} colors={colors} />
+      <DailyMissionsCard missions={day.missions} selectedDate={selectedDate} colors={colors} />
       <DailyCoachCard tip={tip} colors={colors} />
-      <MuscleBalance scores={balance} colors={colors} />
-      <TodayTraining latestScan={latestScan} weakest={weakest} selectedDate={selectedDate} colors={colors} />
+      <MuscleBalance scores={balance} selectedDate={selectedDate} colors={colors} />
+      <TodayTraining latestScan={latestScan} recommendations={recommendations} weakest={weakest} selectedDate={selectedDate} colors={colors} />
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Daily logs</Text>
         <WorkoutTime data={workoutWeek} selectedDate={selectedDate} colors={colors} />
@@ -345,13 +410,6 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.three },
   sectionTitle: { fontFamily: Type.display, fontSize: 22, lineHeight: 27, fontWeight: '700' },
   sectionCaption: { marginTop: 3, fontSize: 12, lineHeight: 17 },
-  scoreCard: { minHeight: 154, borderRadius: 24, padding: Spacing.four, flexDirection: 'row', alignItems: 'center', gap: Spacing.four },
-  scoreRing: { width: SCORE_SIZE, height: SCORE_SIZE, alignItems: 'center', justifyContent: 'center' },
-  scoreCenter: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  scoreValue: { fontFamily: Type.display, fontSize: 38, lineHeight: 42, fontWeight: '700' },
-  scoreOutOf: { fontSize: 11, fontWeight: '700' },
-  scoreLabel: { fontFamily: Type.display, fontSize: 24, lineHeight: 29, fontWeight: '700' },
-  scoreCaption: { marginTop: Spacing.two, fontSize: 13, lineHeight: 19 },
   muscleCard: { borderRadius: 20, paddingVertical: Spacing.three, paddingHorizontal: Spacing.two, flexDirection: 'row', flexWrap: 'wrap', rowGap: Spacing.four },
   muscleItem: { width: '25%', alignItems: 'center', gap: Spacing.two },
   miniRing: { width: MINI_SIZE, height: MINI_SIZE, alignItems: 'center', justifyContent: 'center' },

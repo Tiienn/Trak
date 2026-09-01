@@ -1,7 +1,8 @@
 import { calorieBudgetForDay, creditedExerciseCalories } from './exercise.ts';
 import { computeScore } from './score.ts';
+import { buildDailyMissions, type DailyMission } from './missions.ts';
 import type { Supplement, SupplementCheck } from './supplements';
-import type { ExerciseEntry, FoodTotals, LoggedMeal, WaterEntry } from './types';
+import type { ExerciseEntry, FoodTotals, Goal, LoggedMeal, WaterEntry } from './types';
 
 export type DailyHistory = {
   date: string;
@@ -17,6 +18,7 @@ export type DailyHistory = {
   supplementsPlanned: number;
   loggingStreak: number;
   score: number;
+  missions: DailyMission[];
   hasActivity: boolean;
 };
 
@@ -36,6 +38,7 @@ type HistoryInput = {
   supplementChecks: SupplementCheck[];
   targets: FoodTotals;
   waterGoal: number;
+  goal?: Goal;
 };
 
 function sumTotals(meals: LoggedMeal[]): FoodTotals {
@@ -98,6 +101,17 @@ export function dailyHistoryFor(date: string, input: HistoryInput): DailyHistory
   const mealDays = new Set(input.meals.map((meal) => meal.date));
   const loggingStreak = loggingStreakOn(date, mealDays);
   const calorieBudget = calorieBudgetForDay(input.targets.calories, caloriesBurned);
+  const workoutMinutes = exercises.reduce((sum, item) => sum + Math.max(0, item.durationMinutes || 0), 0);
+  const missions = buildDailyMissions({
+    totals,
+    targets: input.targets,
+    calorieBudget,
+    mealsLogged: meals.length,
+    waterToday: waterGlasses,
+    waterGoal: input.waterGoal,
+    workoutMinutes,
+    goal: input.goal,
+  });
   const score = computeScore({
     totals,
     targets: input.targets,
@@ -106,6 +120,8 @@ export function dailyHistoryFor(date: string, input: HistoryInput): DailyHistory
     waterToday: waterGlasses,
     waterGoal: input.waterGoal,
     streak: loggingStreak,
+    workoutMinutes,
+    goal: input.goal,
   }).value;
 
   return {
@@ -122,6 +138,7 @@ export function dailyHistoryFor(date: string, input: HistoryInput): DailyHistory
     supplementsPlanned: eligibleSupplements.length,
     loggingStreak,
     score,
+    missions,
     hasActivity:
       meals.length > 0 ||
       exercises.length > 0 ||
@@ -175,8 +192,27 @@ export function askHistoryContext(days: DailyHistory[], records: PersonalRecord[
   const recentDays = days
     .filter((day) => day.hasActivity)
     .slice(0, 30)
-    .map(
-      (day) =>
+    .map((day) => {
+      const workoutMinutes = day.exercises.reduce(
+        (sum, exercise) => sum + Math.max(0, exercise.durationMinutes || 0),
+        0,
+      );
+      const focuses = [...new Set(day.exercises.flatMap((exercise) => exercise.workoutSplits ?? []))]
+        .slice(0, 10)
+        .map((focus) => focus.replace(/_/g, ' '));
+      const muscleGroups = ['chest', 'legs', 'back', 'arms', 'shoulders', 'abs', 'glutes', 'other'] as const;
+      const muscleSets = muscleGroups
+        .map((group) => ({
+          group,
+          sets: day.exercises.reduce(
+            (sum, exercise) => sum + Math.max(0, exercise.muscleSets?.[group] || 0),
+            0,
+          ),
+        }))
+        .filter((entry) => entry.sets > 0)
+        .map((entry) => `${entry.group} ${entry.sets}`)
+        .join(', ');
+      return (
         `${day.date}: score ${day.score}/100; ${Math.round(day.totals.calories)}/${Math.round(day.calorieBudget)} kcal; ` +
         `${Math.round(day.totals.protein_g)}g protein, ${Math.round(day.totals.carbs_g)}g carbs, ${Math.round(day.totals.fat_g)}g fat; ` +
         `water ${day.waterGlasses}/${day.waterGoal}; supplements ${day.supplementsTaken.length}/${day.supplementsPlanned}` +
@@ -187,8 +223,11 @@ export function askHistoryContext(days: DailyHistory[], records: PersonalRecord[
               .join(', ')})`
           : '') +
         '; ' +
-        `exercise ${Math.round(day.caloriesBurned)} kcal`
-    )
+        `exercise ${workoutMinutes} min, ${Math.round(day.caloriesBurned)} kcal` +
+        (focuses.length ? `; focus ${focuses.join(', ')}` : '') +
+        (muscleSets ? `; completed sets ${muscleSets}` : '')
+      );
+    })
     .join('\n');
   const personalRecords = records
     .map((record) => `${record.label}: ${record.value} ${record.unit} on ${record.date}`)

@@ -1,10 +1,14 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { UserIcon } from '@/components/icons';
 import { Brand, type ThemeColors } from '@/constants/theme';
+import { useTrakPoints } from '@/lib/trak-points';
 
 export function ProfileAvatarButton({ colors }: { colors: ThemeColors }) {
+  const { catalog, equipment } = useTrakPoints();
+  const frame = catalog.find((item) => item.key === equipment.frameKey);
+  const hasBadge = equipment.badgeKey != null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -15,11 +19,13 @@ export function ProfileAvatarButton({ colors }: { colors: ThemeColors }) {
         styles.button,
         {
           backgroundColor: colors.backgroundElement,
-          borderColor: colors.backgroundSelected,
+          borderColor: frame?.accent ?? colors.backgroundSelected,
+          borderWidth: frame ? 3 : 1,
           opacity: pressed ? 0.72 : 1,
         },
       ]}>
       <UserIcon size={22} color={Brand.green} />
+      {hasBadge ? <View style={[styles.badge, { backgroundColor: Brand.green, borderColor: colors.background }]} /> : null}
     </Pressable>
   );
 }
@@ -33,4 +39,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  badge: { position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
 });

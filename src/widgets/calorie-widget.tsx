@@ -2,14 +2,9 @@
 
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
-export type WidgetData = {
-  left: number;
-  eaten: number;
-  budget: number;
-  /** Optional water progress for the second line. */
-  water?: number;
-  waterGoal?: number;
-};
+import type { WidgetData } from './widget-data';
+
+export type { WidgetData } from './widget-data';
 
 const BG = '#0C1210';
 const TEXT = '#F2F7F4';

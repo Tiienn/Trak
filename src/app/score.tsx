@@ -29,7 +29,7 @@ function PartRow({ part, colors }: { part: ScorePart; colors: ThemeColors }) {
 export default function ScoreScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
-  const { todayTotals, targets, calorieBudget, todayMeals, waterToday, waterGoal, streak } =
+  const { todayTotals, targets, calorieBudget, todayMeals, todayExercises, waterToday, waterGoal, streak, profile } =
     useMeals();
 
   const score = computeScore({
@@ -40,6 +40,8 @@ export default function ScoreScreen() {
     waterToday,
     waterGoal,
     streak,
+    workoutMinutes: todayExercises.reduce((sum, exercise) => sum + exercise.durationMinutes, 0),
+    goal: profile?.goal,
   });
 
   return (
@@ -68,9 +70,9 @@ export default function ScoreScreen() {
           ))}
 
           <Text style={[styles.footnote, { color: colors.textSecondary }]}>
-            The score resets each morning and climbs as you log meals, hit protein, stay inside
-            your calorie budget, drink water, and keep your streak alive. Logged workouts add{' '}
-            {EXERCISE_CALORIE_CREDIT_PERCENT}% of estimated burn to that budget.
+            Your daily score is five missions worth 20 points each. Completed missions also add
+            permanent Trak Points to your wallet. Weekly muscle points stay separate. Logged
+            workouts add {EXERCISE_CALORIE_CREDIT_PERCENT}% of estimated burn to your calorie budget.
           </Text>
         </ScrollView>
       </SafeAreaView>

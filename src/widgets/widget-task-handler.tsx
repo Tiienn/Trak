@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 
-import { CalorieWidget, type WidgetData } from './calorie-widget';
+import { CalorieWidget } from './calorie-widget';
+import type { WidgetData } from './widget-data';
 
 /** AsyncStorage key the app writes today's summary to for the widget. */
 export const WIDGET_DATA_KEY = 'trak.widget.v1';

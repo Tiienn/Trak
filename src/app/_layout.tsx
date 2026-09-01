@@ -13,8 +13,10 @@ import { BodyAnalysisProvider } from '@/lib/body-analysis-store';
 import { PurchasesProvider } from '@/lib/purchases';
 import { bootstrapReminders } from '@/lib/reminders';
 import { MealsProvider } from '@/lib/store';
+import { MuscleScorePreferencesProvider } from '@/lib/muscle-score-preferences';
 import { SupplementsProvider } from '@/lib/supplements';
 import { ThemeModeProvider, useAppScheme } from '@/lib/theme';
+import { TrakPointsProvider } from '@/lib/trak-points';
 import { TrainingPlanProvider } from '@/lib/training-plan';
 
 SplashScreen.preventAutoHideAsync();
@@ -97,6 +99,10 @@ function ThemedNavigator() {
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen
+          name="rewards"
+          options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
           name="macro/[key]"
           options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
         />
@@ -150,13 +156,17 @@ export default function RootLayout() {
               {/* No app-wide subscription gate: paid AI capabilities gate
                   themselves at their entry screens; all core tracking remains
                   available independently. */}
-              <BodyAnalysisProvider>
-                <SupplementsProvider>
-                  <TrainingPlanProvider>
-                    <ThemedNavigator />
-                  </TrainingPlanProvider>
-                </SupplementsProvider>
-              </BodyAnalysisProvider>
+              <TrakPointsProvider>
+                <BodyAnalysisProvider>
+                  <SupplementsProvider>
+                    <TrainingPlanProvider>
+                      <MuscleScorePreferencesProvider>
+                        <ThemedNavigator />
+                      </MuscleScorePreferencesProvider>
+                    </TrainingPlanProvider>
+                  </SupplementsProvider>
+                </BodyAnalysisProvider>
+              </TrakPointsProvider>
             </MealsProvider>
           </PurchasesProvider>
         </AuthProvider>

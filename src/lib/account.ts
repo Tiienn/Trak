@@ -4,6 +4,7 @@ import { extractError } from './analyzeFood';
 import { bodyPhotoRepository } from './body-photo-store';
 import { applyReminders, cancelBodyAnalysisRecheck } from './reminders';
 import { supabase } from './supabase';
+import { muscleScoreSettingsKey } from './muscle-score-settings';
 
 // Non-personal device preference (theme) is deliberately kept.
 const CLEAR_KEYS = ['trak.chat.v1', 'trak.ask.v1', 'trak.game.v1', 'trak.waterUnit.v1'];
@@ -37,7 +38,7 @@ export async function deleteAccount(): Promise<void> {
   await applyReminders([]).catch(() => {});
 
   const keys = [...CLEAR_KEYS, 'trak.dietStyle.v1'];
-  if (userId) keys.push(`trak.dietStyle.v1.${userId}`);
+  if (userId) keys.push(`trak.dietStyle.v1.${userId}`, muscleScoreSettingsKey(userId));
   try {
     await AsyncStorage.multiRemove(keys);
   } catch {

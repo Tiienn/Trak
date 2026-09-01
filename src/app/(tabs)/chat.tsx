@@ -42,7 +42,7 @@ type UiMessage = {
 };
 
 type SuggestionGroup = {
-  id: 'dailyMeals' | 'forYou' | 'diveDeeper';
+  id: 'dailyMeals' | 'forYou' | 'coach' | 'diveDeeper';
   heading: string;
   helper?: string;
   items: DailyMealSuggestion[];
@@ -59,6 +59,18 @@ const ASK_GROUPS: SuggestionGroup[] = [
       'What can I eat with my calories left?',
       'Am I on track for protein?',
       'How balanced is today?',
+    ].map((label) => ({ label, prompt: label })),
+  },
+  {
+    id: 'coach',
+    heading: 'Coach',
+    items: [
+      'What workout should I do today?',
+      'How balanced is my training?',
+      'Which muscle group needs more work?',
+      'How should I structure my next workout?',
+      'Am I training consistently?',
+      'How can I progress my sets or weights?',
     ].map((label) => ({ label, prompt: label })),
   },
   {
@@ -176,6 +188,7 @@ export default function ChatScreen() {
   const [expandedSections, setExpandedSections] = useState({
     dailyMeals: true,
     forYou: true,
+    coach: true,
     diveDeeper: false,
   });
   const listRef = useRef<FlatList<UiMessage>>(null);
@@ -289,6 +302,7 @@ export default function ChatScreen() {
           meals: chatMealContext(todayMeals),
           recentDays: trackingContext.recentDays,
           personalRecords: trackingContext.personalRecords,
+          mode,
         },
         calorieBias,
         controller.signal
@@ -452,11 +466,11 @@ export default function ChatScreen() {
             <View style={[styles.empty, styles.emptyCenter]}>
               <RingMark size={36} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                {mode === 'ask' ? 'Ask Trak anything' : 'Tell me what you ate'}
+                {mode === 'ask' ? 'Ask about your progress' : 'Tell me what you ate'}
               </Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
                 {mode === 'ask'
-                  ? 'Trends, gaps, and patterns in your data — pick a question above or type your own.'
+                  ? 'Nutrition, workouts, recovery, and coaching based on your Trak data.'
                   : 'Describe a meal in plain words and I’ll estimate the calories.'}
               </Text>
             </View>

@@ -19,6 +19,9 @@ import { corsHeaders, json, jwtPayload } from '../_shared/nutrition.ts';
 // Children before parents. supplement_checks references supplements; the rest are
 // independent user-data tables. profiles last as the "parent" identity row.
 const USER_TABLES = [
+  'trak_reward_equipment',
+  'trak_reward_inventory',
+  'trak_point_ledger',
   'supplement_checks',
   'supplements',
   'body_analysis_reports',

@@ -1,7 +1,7 @@
 {
   "name": "trak",
   "main": "index.js",
-  "version": "1.1.15",
+  "version": "1.1.20",
   "dependencies": {
     "@expo-google-fonts/league-spartan": "^0.4.2",
     "@expo/ui": "~57.0.13",
@@ -62,7 +62,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "npm run test:unit && npm run test:eval",
-    "test:unit": "node --experimental-specifier-resolution=node --no-warnings --experimental-strip-types --test scripts/access.test.mjs scripts/body-analysis.test.mjs scripts/body-photo-store.test.mjs scripts/camera-permission.test.mjs scripts/chat-context.test.mjs scripts/exercise-score.test.mjs scripts/food-correction.test.mjs scripts/history.test.mjs scripts/meal-memory.test.mjs scripts/training-progress.test.mjs && deno test supabase/functions/_shared/chat-context.test.ts supabase/functions/analyze-body/body-analysis.test.ts",
+    "test:unit": "node --experimental-specifier-resolution=node --no-warnings --experimental-strip-types --test scripts/access.test.mjs scripts/barcode.test.mjs scripts/body-analysis.test.mjs scripts/body-photo-store.test.mjs scripts/camera-permission.test.mjs scripts/chat-context.test.mjs scripts/exercise-score.test.mjs scripts/food-correction.test.mjs scripts/food-servings.test.mjs scripts/history.test.mjs scripts/meal-memory.test.mjs scripts/missions.test.mjs scripts/training-progress.test.mjs scripts/workout-catalog.test.mjs && deno test supabase/functions/_shared/chat-context.test.ts supabase/functions/analyze-body/body-analysis.test.ts supabase/functions/trak-chat/scope.test.ts",
     "eval:nutrition": "node scripts/eval-nutrition.mjs",
     "test:eval": "node --test scripts/eval-nutrition.test.mjs"
   },

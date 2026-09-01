@@ -2,20 +2,9 @@ diff --git a/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/incl
 index 6115e87..957527c 100644
 --- a/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
 +++ b/node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
-@@ -50,7 +50,7 @@ public:
-    `scheduleTask` dispatches through `fn`, which the host implements against
-    the real react::RuntimeScheduler.
-    */
+@@ -53 +53 @@
 -  SWIFT_RETURNS_RETAINED RuntimeScheduler(void *scheduler, ScheduleFn fn) noexcept
 +  RuntimeScheduler(void *scheduler, ScheduleFn fn) noexcept
-       : nativeScheduler(scheduler), scheduleFn(fn) {}
-
-   /**
-@@ -58,7 +58,7 @@ public:
-    caller's thread — intended for standalone runtimes (e.g. tests) that have
-    no React scheduler.
-    */
+@@ -61 +61 @@
 -  SWIFT_RETURNS_RETAINED RuntimeScheduler() {}
 +  RuntimeScheduler() {}
-
-   RuntimeScheduler(const RuntimeScheduler &) = delete;

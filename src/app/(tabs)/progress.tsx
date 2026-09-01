@@ -40,9 +40,9 @@ function progressTimelineDates(today = new Date()): ProgressDate[] {
   });
 }
 
-function ProgressDateStrip({ colors, selectedDate, onSelectDate }: { colors: ThemeColors; selectedDate: string; onSelectDate: (date: string) => void }) {
+function ProgressDateStrip({ colors, today, selectedDate, onSelectDate }: { colors: ThemeColors; today: string; selectedDate: string; onSelectDate: (date: string) => void }) {
   const { width } = useWindowDimensions();
-  const dates = useMemo(() => progressTimelineDates(), []);
+  const dates = useMemo(() => progressTimelineDates(localDateFromKey(today)), [today]);
   const itemWidth = (width - Spacing.four * 2) / 7;
   const listRef = useRef<FlatList<ProgressDate>>(null);
   return (
@@ -228,8 +228,11 @@ export default function ProgressScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const [activeView, setActiveView] = useState<ProgressView>('overview');
-  const [selectedDate, setSelectedDate] = useState(() => dayKey());
-  const { scans, available } = useBodyAnalysis();
+  const { today } = useMeals();
+  // null follows the live day across midnight; explicitly selected history stays put.
+  const [dateSelection, setDateSelection] = useState<string | null>(null);
+  const selectedDate = dateSelection ?? today;
+  const { scans, available, preferences } = useBodyAnalysis();
   const scansThroughSelected = scans.filter((scan) => dayKey(new Date(scan.createdAt)) <= selectedDate);
   const latestScan = scansThroughSelected[0] ?? null;
   const currentLatestScan = scans[0] ?? null;
@@ -237,7 +240,7 @@ export default function ProgressScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}><View style={styles.logoRow}><RingMark size={30} /><TrakWordmark color={colors.text} size={28} /></View><ProfileAvatarButton colors={colors} /></View>
-        <ProgressDateStrip colors={colors} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+        <ProgressDateStrip colors={colors} today={today} selectedDate={selectedDate} onSelectDate={(date) => setDateSelection(date === today ? null : date)} />
         <View style={[styles.segmentWrap, { backgroundColor: colors.backgroundElement }]}>
           {PROGRESS_VIEWS.map((view) => {
             const selected = view.key === activeView;
@@ -246,7 +249,7 @@ export default function ProgressScreen() {
         </View>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {activeView === 'overview'
-            ? <ProgressOverview colors={colors} selectedDate={selectedDate} latestScan={latestScan} />
+            ? <ProgressOverview colors={colors} selectedDate={selectedDate} latestScan={latestScan} preferences={preferences} />
             : activeView === 'workouts'
               ? <Workouts colors={colors} latestScan={latestScan} />
               : activeView === 'challenges'
@@ -261,7 +264,9 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 }, safe: { flex: 1, paddingHorizontal: Spacing.four }, header: { paddingTop: Spacing.two, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   dateStrip: { height: 82, marginTop: Spacing.three }, dateItem: { height: 82, borderWidth: 1, borderColor: 'transparent', borderRadius: 22, paddingVertical: 9, alignItems: 'center', justifyContent: 'space-between' }, dateWeekday: { fontSize: 11, fontWeight: '700' }, dateWeekdaySelected: { fontWeight: '900' }, dateCircle: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }, dateNumber: { fontSize: 14, fontWeight: '800' },
-  segmentWrap: { width: '100%', flexDirection: 'row', alignSelf: 'center', borderRadius: 999, padding: 3, gap: 2, marginTop: Spacing.two }, segment: { flex: 1, paddingVertical: 8, paddingHorizontal: 3, borderRadius: 999, alignItems: 'center', justifyContent: 'center' }, segmentText: { fontSize: 12, fontWeight: '800' },
+  segmentWrap: { width: '100%', flexDirection: 'row', alignSelf: 'center', borderRadius: 999, padding: 3, gap: 2, marginTop: Spacing.two }, segment: { flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 3, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  // Center the full text box, including labels scaled to fit; omit Android's extra font padding.
+  segmentText: { width: '100%', textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, fontSize: 12, fontWeight: '800' },
   scroll: { paddingTop: Spacing.four, paddingBottom: 110 }, viewContent: { gap: Spacing.four }, section: { gap: Spacing.three }, sectionTitle: { fontFamily: Type.display, fontSize: 21, lineHeight: 26, fontWeight: '700' },
   emptyCard: { borderRadius: 20, padding: Spacing.four, alignItems: 'center', gap: Spacing.three }, emptyIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }, emptyTitle: { fontFamily: Type.display, fontSize: 21, lineHeight: 26, fontWeight: '700', textAlign: 'center' }, emptyBody: { fontSize: 14, lineHeight: 21, textAlign: 'center' }, primaryButton: { minHeight: 50, width: '100%', borderRadius: 16, backgroundColor: Brand.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three }, primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
   planCard: { borderRadius: 24, padding: Spacing.four, gap: Spacing.three }, planHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three }, planIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, planEyebrow: { color: Brand.greenDark, fontSize: 12, fontWeight: '800', letterSpacing: 1 }, planTitle: { fontFamily: Type.display, fontSize: 24, lineHeight: 30, fontWeight: '700' }, planMeta: { fontSize: 13, lineHeight: 19 },

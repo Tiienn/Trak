@@ -12,6 +12,8 @@ const CHANNELS = [
   { label: 'TikTok', href: '/tiktok' },
 ] as const;
 
+const SUPPORT_EMAIL = 'support.trakapp@gmail.com';
+
 function NavLink({ label, href, compact }: { label: string; href: string; compact: boolean }) {
   const pathname = usePathname();
   const active = pathname === href;
@@ -76,7 +78,12 @@ export function MarketingFooter({ dark = false }: { dark?: boolean }) {
         <RingMark size={22} color={dark ? C.mint : C.green} />
         <Text style={[styles.footerWordmark, { color: dark ? C.white : C.ink }]}>trak</Text>
       </View>
-      <Text style={[styles.footerCopy, { color: dark ? '#92A198' : C.muted }]}>Eat normally. Know more.</Text>
+      <Text style={[styles.footerCopy, { color: dark ? '#92A198' : C.muted }]}>Your health, connected.</Text>
+      <Link href={`mailto:${SUPPORT_EMAIL}` as Href} asChild>
+        <Pressable accessibilityRole="link" accessibilityLabel={`Email Trak support at ${SUPPORT_EMAIL}`} style={styles.footerEmailLink}>
+          <Text selectable style={[styles.footerEmail, { color: dark ? C.mint : C.greenDark }]}>{SUPPORT_EMAIL}</Text>
+        </Pressable>
+      </Link>
       <Text style={[styles.footerCopy, { color: dark ? '#92A198' : C.muted }]}>© 2026 Trak</Text>
     </View>
   );
@@ -145,6 +152,8 @@ const styles = StyleSheet.create({
   footerBrand: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   footerWordmark: { fontFamily: F.display, fontSize: 19, letterSpacing: -0.8 },
   footerCopy: { fontFamily: F.body, fontSize: 12 },
+  footerEmailLink: { paddingVertical: 8 },
+  footerEmail: { fontFamily: F.strong, fontSize: 12, textDecorationLine: 'underline' },
   eyebrow: {
     alignSelf: 'flex-start',
     borderWidth: 1,

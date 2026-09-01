@@ -24,7 +24,11 @@ const input = {
     meal('a', '2026-08-18', totals(900, 70, 100, 30)),
     meal('b', '2026-08-19', totals(1_500, 120, 160, 45)),
   ],
-  exercises: [{ id: 'run', date: '2026-08-19', createdAt: 1, name: 'Run', caloriesBurned: 400, durationMinutes: 30 }],
+  exercises: [{
+    id: 'run', date: '2026-08-19', createdAt: 1, name: 'Run', caloriesBurned: 400,
+    durationMinutes: 30, workoutSplits: ['cardio', 'legs'],
+    muscleSets: { chest: 0, legs: 4, back: 0, arms: 0, shoulders: 0, abs: 0, glutes: 0, other: 0 },
+  }],
   water: [{ date: '2026-08-19', glasses: 9 }],
   supplements: [{ id: 'vitamin', name: 'Vitamin D', createdAt: '2026-08-01T08:00:00Z' }],
   supplementChecks: [{ supplementId: 'vitamin', day: '2026-08-19' }],
@@ -53,5 +57,6 @@ test('personal record context is compact and contains no raw meal labels', () =>
   const context = askHistoryContext(days, records);
   assert.match(context.personalRecords, /Best Trak score/);
   assert.match(context.recentDays, /supplements 1\/1/);
+  assert.match(context.recentDays, /exercise 30 min, 400 kcal; focus cardio, legs; completed sets legs 4/);
   assert.doesNotMatch(context.recentDays, /Meal a|Meal b/);
 });

@@ -16,17 +16,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ServingInput } from '@/components/serving-input';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { foodServing, parseServingAmount, scaleFoodServing, servingAdjustedTotals } from '@/lib/food-servings';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
+import type { FoodItem } from '@/lib/types';
 
 function formatWhen(ms: number): string {
   const d = new Date(ms);
   return `${d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })} · ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function toInt(v: string): number {
-  const n = parseInt(v, 10);
+function toNutritionNumber(v: string): number {
+  const n = Number(v.trim().replace(',', '.'));
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
@@ -78,6 +81,10 @@ export default function MealDetailScreen() {
   const [protein, setProtein] = useState(String(meal?.total.protein_g ?? 0));
   const [carbs, setCarbs] = useState(String(meal?.total.carbs_g ?? 0));
   const [fat, setFat] = useState(String(meal?.total.fat_g ?? 0));
+  const [servingAmounts, setServingAmounts] = useState<string[]>([]);
+  const [originalItems, setOriginalItems] = useState<FoodItem[]>([]);
+  const [editedItems, setEditedItems] = useState<FoodItem[]>([]);
+  const validServings = servingAmounts.every((amount) => parseServingAmount(amount) != null);
 
   // The meal can vanish mid-view (deleted on another device, or just removed).
   if (!meal) {
@@ -101,21 +108,41 @@ export default function MealDetailScreen() {
     setProtein(String(meal!.total.protein_g));
     setCarbs(String(meal!.total.carbs_g));
     setFat(String(meal!.total.fat_g));
+    setOriginalItems(meal!.items);
+    setEditedItems(meal!.items);
+    setServingAmounts(meal!.items.map((item) => String(foodServing(item).amount)));
     setEditing(true);
+  }
+
+  function changeServing(index: number, draft: string) {
+    setServingAmounts((amounts) => amounts.map((value, i) => i === index ? draft : value));
+    const amount = parseServingAmount(draft);
+    if (amount == null) return;
+    const resized = scaleFoodServing(originalItems[index], amount);
+    const total = servingAdjustedTotals({
+      calories: toNutritionNumber(cals), protein_g: toNutritionNumber(protein),
+      carbs_g: toNutritionNumber(carbs), fat_g: toNutritionNumber(fat),
+    }, editedItems[index], resized);
+    setEditedItems((items) => items.map((item, i) => i === index ? resized : item));
+    setCals(String(total.calories));
+    setProtein(String(total.protein_g));
+    setCarbs(String(total.carbs_g));
+    setFat(String(total.fat_g));
   }
 
   async function saveEdit() {
     const trimmed = title.trim();
-    if (!trimmed || saving) return;
+    if (!trimmed || !validServings || saving) return;
     setSaving(true);
     try {
       await updateMeal(meal!.id, {
         title: trimmed,
+        items: editedItems,
         total: {
-          calories: toInt(cals),
-          protein_g: toInt(protein),
-          carbs_g: toInt(carbs),
-          fat_g: toInt(fat),
+          calories: toNutritionNumber(cals),
+          protein_g: toNutritionNumber(protein),
+          carbs_g: toNutritionNumber(carbs),
+          fat_g: toNutritionNumber(fat),
         },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -256,7 +283,26 @@ export default function MealDetailScreen() {
               )}
             </View>
 
-            {meal.items.length > 0 && !editing ? (
+            {editing && editedItems.length > 0 ? (
+              <View style={[styles.itemsCard, { backgroundColor: colors.backgroundElement }]}>
+                {editedItems.map((item, index) => (
+                  <View key={index} style={[
+                    styles.servingEditor,
+                    index < editedItems.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.backgroundSelected },
+                  ]}>
+                    <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
+                    <ServingInput
+                      amount={servingAmounts[index]}
+                      unit={foodServing(item).unit}
+                      onChangeAmount={(value) => changeServing(index, value)}
+                      colors={colors}
+                      disabled={saving}
+                      foodName={item.name}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : meal.items.length > 0 ? (
               <View style={[styles.itemsCard, { backgroundColor: colors.backgroundElement }]}>
                 {meal.items.map((it, i) => (
                   <View
@@ -317,9 +363,9 @@ export default function MealDetailScreen() {
 
           {editing ? (
             <Pressable
-              style={[styles.saveBtn, { opacity: title.trim() && !saving ? 1 : 0.5 }]}
+              style={[styles.saveBtn, { opacity: title.trim() && validServings && !saving ? 1 : 0.5 }]}
               onPress={saveEdit}
-              disabled={!title.trim() || saving}>
+              disabled={!title.trim() || !validServings || saving}>
               {saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.saveText}>Save changes</Text>}
             </Pressable>
           ) : (
@@ -373,6 +419,7 @@ const styles = StyleSheet.create({
   macroName: { fontSize: 12, fontWeight: '600', marginTop: 2 },
 
   itemsCard: { borderRadius: 16, paddingHorizontal: Spacing.three },
+  servingEditor: { paddingVertical: Spacing.three, gap: Spacing.two },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,98 +1,107 @@
-# Design QA — Progress training, overload, and supplements
+# Design QA — Daily Missions and Trak Rewards
+
+## Build 28 — rolling score and optional resets
+
+- Restored the default to today plus the previous six local calendar days. Monday is no longer an automatic reset unless the user selects it.
+- Added Profile → Settings → Weekly muscle score using the existing account cards, pills, colors, and type styles. Users can choose Last 7 days, one or more weekly reset days, Reset score now (with confirmation), or Undo last reset.
+- Reset weekdays use local midnight boundaries. Manual resets exclude earlier sets without changing workouts, calories, daily missions, or spendable Trak Points; sets logged afterward still count. Reset history remains available to historical date calculations.
+- Preferences persist per account in on-device storage, not the cloud. Writes report failures; loading failures offer Retry; account deletion cleans up the new preference key.
+- Fixed a cold-launch navigation regression caught during QA by preserving the navigator while account preferences load. Scheduled weekdays survived a full app restart.
+- Simulator checks: rolling scores show Chest 6 / Legs 24 / Back 6 / Arms 6; Monday+Thursday schedule shows zero on Monday; Reset now shows zero and its date; Undo removes the temporary reset. Wallet remains 20 points. Test preferences were returned to Last 7 days.
+- Light/dark standard-text settings inspected. Large-text full-scroll verification was limited by simulator scroll automation; original text size and appearance were restored.
+- TypeScript, lint, 42 Node tests, 6 Deno tests, and 3 evaluation tests pass. The 12 training/reset/storage tests pass in five timezones, including Mauritius and daylight-saving New York.
+- Evidence: `output/qa-v28/settings.png`, `reset-days.png`, `manual-reset.png`, and `settings-dark.png`.
+- Android test APK 1.1.19 (version code 28) built successfully for `arm64-v8a`. Archive integrity and signing checks pass; the application ID and signing certificate match build 27 for an in-place upgrade.
+
+## Build 27 — Monday weekly muscle reset
+
+- Root cause: Weekly muscle score reused the Workout Time chart's rolling seven-day window, so Sunday sets carried into Monday.
+- Scores now include only local Monday through the selected date. Workout history, the rolling Workout Time chart, point multipliers, weekly targets, and spendable Trak Points are unchanged.
+- Progress follows the existing shared calendar-day refresh (on foreground and once per minute while open). Today's selection and date ribbon advance together; explicitly selected historical dates remain selected.
+- Added a "Resets every Monday" explanation without changing the card layout.
+- Three regression tests failed before the fix and pass afterward. The six training-progress tests also pass in Indian/Mauritius, UTC, America/New_York, Pacific/Kiritimati, and Pacific/Pago_Pago, covering month/year boundaries and daylight-saving weeks.
+- TypeScript, lint, all 36 Node unit tests, 6 Deno tests, and 3 evaluation tests pass.
+- iPhone simulator: Monday Aug 31 shows zero weekly points; selecting Sunday Aug 30 restores Chest 6, Legs 24, Back 6, and Arms 6. The wallet remains 20 points. No workout data was created or deleted.
+- Evidence: `output/qa-v27/monday-reset.png` and `output/qa-v27/sunday-history.png`.
+- Android testing APK 1.1.18 (version code 27) built successfully. Archive integrity and APK signature checks pass; `com.tien.trak.testing` and the signing certificate match build 26 for an in-place upgrade.
+- Scope note: simulator date navigation and calculation tests are verified; a real device held open through midnight was not tested.
+
+## Build 26 — compact card follow-up
+
+- Replaced the large score ring and always-visible five-row list with a compact title/score/wallet header, slim score bar, five labeled indicators, and a View missions disclosure.
+- Standard-text collapsed height is approximately 252 pt, versus approximately 504 pt previously (about 50% shorter).
+- The shared component renders on both Home and Progress; mission targets, 20-point awards, wallet synchronization, and the separate weekly muscle score are unchanged.
+- Expanded targets, Hide missions, the workout logging shortcut, and wallet navigation were exercised in the iPhone simulator without saving test activity.
+- Enlarged accessibility text stacks the header and wraps indicators into multiple rows. The simulator's original text size and appearance were restored after inspection.
+- Progress pill text is centered within each equal-width segment, with Android font padding removed.
+- TypeScript, lint, 33 Node unit tests, 6 Deno tests, and 3 evaluation tests pass.
+- Android testing APK 1.1.17 (version code 26) builds successfully for `arm64-v8a`. Archive integrity and APK signature verification pass; the package and signing certificate match build 25 for an in-place test-app upgrade.
+- New screenshots: `output/qa-v26/progress-compact.png`, `output/qa-v26/progress-expanded.png`, `output/qa-v26/home-compact.png`, and `output/qa-v26/progress-large-text.png`.
+- Scope note: full Android device interaction testing and unrelated app-wide large-text layout issues are not covered by this simulator pass.
+
+The sections below document the original build-25 rewards implementation.
 
 ## Evidence
 
-- Source visual truth:
-  - `/Users/tien/trak/output/qa-v23/home.png` for Trak's current Home layout and canonical coach card.
-  - `/Users/tien/Downloads/Screenshot_2026-08-28-01-03-34-941_com.tien.trak.testing.jpg` for the reported Android supplements keyboard failure.
-- Implementation screenshots:
-  - `/Users/tien/trak/output/qa-v23/progress-top.png`
-  - `/Users/tien/trak/output/qa-v23/training-plan.png`
-  - `/Users/tien/trak/output/qa-v23/training-cardio-saved.png`
-  - `/Users/tien/trak/output/qa-v23/workout-log-top.png`
-  - `/Users/tien/trak/output/qa-v23/workout-options-mid.png`
-  - `/Users/tien/trak/output/qa-v23/supplements-keyboard.png`
-- Combined comparison inputs inspected together:
-  - `/Users/tien/trak/output/qa-v23/coach-home-progress-compare.png`
-  - `/Users/tien/trak/output/qa-v23/supplements-keyboard-compare.png`
-- Implementation viewport: iPhone 17 Pro Max simulator, 440 × 956 logical points, 1320 × 2868 px at 3× density.
-- Android source viewport: 1200 × 2608 px. It was proportionally normalized to 1320 × 2868 px for the combined comparison because both captures have the same portrait aspect ratio.
-- State: light theme, signed-in test account, Aug 28, 2026.
+- Source visual truth: `/Users/tien/trak/output/qa-v24/home.png` — the shipped Trak Home hierarchy, typography, palette, cards, header, date ribbon, and navigation.
+- Rendered implementation:
+  - `/Users/tien/trak/output/qa-v25/home.png`
+  - `/Users/tien/trak/output/qa-v25/progress.png`
+  - `/Users/tien/trak/output/qa-v25/rewards-fixed.png`
+- Combined comparison inspected: `/Users/tien/trak/output/qa-v25/home-comparison.png`.
+- Viewport: iPhone 17 Pro Max simulator, 440 × 956 logical points.
+- Source and implementation: 1320 × 2868 px at 3× density. Both were normalized to 540 px wide in the combined comparison without cropping.
+- State: light theme, authenticated account, zero completed missions, zero wallet balance.
 
 ## Full-view comparison
 
-The Home/Progress comparison confirms that the Progress coach card now uses the shared Home component with the same height, padding, 36 pt icon tile, text hierarchy, chevron placement, corner radius, and page gutters. Progress retains the Trak logo, date ribbon, cream canvas, white surfaces, forest actions, editorial headings, and existing navigation.
+The Home header, date ribbon, cream canvas, page gutters, white cards, forest actions, fixed scan controls, and bottom navigation remain unchanged. The old opaque 40-point score card is intentionally replaced by a larger Daily Missions card because the approved product direction makes five daily achievements the score itself. Progress renders the same shared component and the Weekly Muscle Score remains a separate section below it.
 
-The supplements comparison confirms the reported failure is removed. In the source, the Android keyboard opens while no input is visible. In the implementation, the list scrolls, the active input and Cancel/Add actions remain fully visible above the keyboard, and the top safe area is respected. Keyboard artwork itself is platform-owned and excluded from fidelity judgment.
+The reward catalog uses the same editorial serif headings, heavy sans labels, 20–24 pt radii, cream/white/forest hierarchy, and existing Trak icon set. No device chrome or visible asset was recreated in app code.
 
 ## Focused region comparison
 
-- Training balance: eight equal rings use distinct, persistent colors for Chest, Legs, Back, Arms, Shoulders, Abs, Glutes, and Other. Each shows points plus completed sets without relying on color alone.
-- Customise training: the strength/cardio switch, eight muscle choices, sets/reps, kg/lb load selector, time target, and calorie target use Trak's existing fields, pills, spacing, and rounded surfaces.
-- Progressive overload: saved strength items show the current load and a visible comparison to the previous recorded load once updated.
-- Workout logger: all muscle groups plus Full body and Cardio are available. The completed-set rows mirror the same eight-group catalog; duration uses user-entered hours/minutes and calorie burn explicitly syncs to Home.
-- No new raster artwork was introduced. Existing Trak logo and library icons remain crisp; no improvised image assets or placeholders were used.
+- Daily Missions: the card presents the wallet, 0–100 score ring, exactly five rows, current progress, and a visible +20 value per mission. Labels and values remain readable without truncation at 440 pt width.
+- Rewards: the catalog distinguishes utility, badge, avatar frame, and mission theme rewards with consistent icon tiles and explicit prices. Unaffordable actions are visibly muted.
+- Header safe area: the first rewards capture placed the title under the status area. The corrected capture moves the entire header below the Dynamic Island while preserving Trak’s top rhythm.
+- A separate focused crop was unnecessary because the combined full-density captures keep all card labels, wallet values, row states, and navigation affordances legible.
 
 ## Required fidelity surfaces
 
-- Fonts and typography: passed. Existing display serif and sans weights are retained; no clipping or awkward wrapping appears at 440 pt width.
-- Spacing and layout rhythm: passed. Page gutters, card padding, section gaps, tap targets, safe areas, and bottom action clearance are consistent.
-- Colors and visual tokens: passed. Existing cream, white, forest, sage, terracotta, lime, gold, blue, rose, purple, and teal tokens are reused.
-- Copy and content: passed. “Customise training” is distinct from “Log workout”; Chest, Legs, and Back state their 2-point rate; the weekly target is expressed as 12 points.
-- Accessibility and interaction: passed for the primary path. Focus cards expose checkbox state; key inputs have labels; numeric/form keyboards can be dismissed by dragging; supplement fields remain visible while typing.
+- Fonts and typography: passed. Trak’s serif display face and existing sans weights are preserved; headings, mission labels, metadata, and wallet numerals establish a clear hierarchy.
+- Spacing and layout rhythm: passed. Existing gutters, card padding, row separators, radii, and tap-target heights are reused. The taller score card is an intentional information-priority change.
+- Colors and visual tokens: passed. Cream, white, forest, sage, terracotta, and gold reuse the current token language; completed states do not rely on color alone.
+- Image quality and asset fidelity: passed. Existing vector icon components are reused; no new raster assets, placeholders, emoji, or improvised decorative art were added.
+- Copy and content: passed. The interface consistently says “Daily Missions,” “Trak Score,” “Trak Points,” and “Weekly muscle score,” keeping daily currency separate from weekly training points.
+- Accessibility and interaction: passed for the primary visible path. Wallet and close controls have labels; completed states use ticks and text; mission rows disable unavailable navigation.
 
 ## Interaction and data checks
 
-- Saved and removed a cardio target through the signed-in app, verifying the authenticated remote round trip.
-- Saved and removed a strength item with a kg load, verifying the initial progressive-overload history entry and cascade cleanup.
-- Verified every workout focus and every completed-set muscle row in the rendered form; Full body and Cardio can be selected together.
-- Verified the full-body/cardio summary recalculates duration, calories, and total sets without saving test workout data.
-- Opened the supplement add form, entered `QA visible field`, confirmed it remained visible above the keyboard, then cancelled without creating data.
-- Type checking, lint, 28 Node unit tests, 6 Deno tests, 3 evaluation tests, linked Supabase schema lint, and local/remote migration alignment all passed.
+- Home, Progress, and Rewards rendered from the signed-in app with no React errors.
+- Rewards safe-area behavior was re-captured after the fix.
+- Remote RLS denies anonymous catalog and wallet RPC access with HTTP 401.
+- The linked database migration applied successfully; remote database lint reports no schema errors.
+- TypeScript, Expo lint, 30 Node unit tests, 6 Deno tests, and 3 nutrition evaluation tests pass.
+- Android testing APK 1.1.16 (version code 25) builds successfully for `arm64-v8a`; its signing certificate matches build 24, so it supports an in-place test-app upgrade.
 
 ## Comparison history
 
 ### Iteration 1
 
-- [P2] Supplements title overlapped the iOS status safe area when opened by deep link.
-  - Fix: applied the measured safe-area inset explicitly while preserving bottom safe-area handling.
-  - Post-fix evidence: `/Users/tien/trak/output/qa-v23/supplements-safe.png`.
+- [P2] Rewards title overlapped the iOS status area when the screen was opened directly.
+  - Fix: applied the measured top safe-area inset explicitly and retained bottom safe-area handling.
+  - Post-fix evidence: `/Users/tien/trak/output/qa-v25/rewards-fixed.png`.
 
-- [P2] Numeric training fields had no practical keyboard-dismiss path on iOS.
-  - Fix: added drag-to-dismiss behavior to training and workout forms; Android retains resize behavior.
+No actionable P0, P1, or P2 findings remain. A P3 follow-up is to evaluate a slightly denser mission card on the smallest supported Android viewport after device feedback; the current layout is fully readable and scrollable.
 
-No P0, P1, or P2 findings remain.
+## Implementation checklist
 
-## Android test artifact
-
-- APK: `/Users/tien/trak/output/trak-test-1.1.15-v23.apk` (61 MB).
-- Verified package `com.tien.trak.testing`, version `1.1.15`, version code `23`, and arm64-v8a architecture.
-- Verified the APK archive has no compressed-data errors.
-- Verified its signing certificate matches build 22, allowing an in-place update of the existing Trak Test installation.
-- SHA-256: `539f7c9c15bd98ad67ca7ac03f6437725b426bc3642e5a3ccabd3c19b41ee57d`.
-
-## Iteration 2 — Planned completion and 28-day Body Analysis cadence
-
-- Today’s training now supports a 450 ms hold gesture. The confirmation names the planned item and explains that completion adds it to today’s workout log and updates the weekly muscle score.
-- The completion path was exercised against the signed-in data store: a temporary 3-set chest plan produced 6 chest points, displayed the completed state, and prevented duplicate completion. The temporary workout and plan were then removed through the UI.
-- “Training balance” is now “Weekly muscle score.” The card keeps eight color-distinct muscle rings and states the 12-point weekly target and 2-point rate for chest, legs, and back.
-- “What did you train?” now puts Upper body, Lower body, Push, Pull, Full body, and Cardio in a compact two-row quick-select grid, followed by a compact three-column muscle grid. All labels remain visible at the tested viewport without requiring a long option-list scroll.
-- Body Analysis is now a fourth item in the existing Progress pill, using the full label “Body Analysis.” Its empty state explains the 28-day cadence; completed analyses show the due date and notification state.
-- A completed analysis schedules one device-local notification exactly 28 days later. A newer analysis replaces the prior reminder; deleting the latest analysis re-targets the next result or cancels it; tapping the notification opens Body Analysis.
-- Visual evidence:
-  - `/Users/tien/trak/output/qa-v24/progress-pill.png`
-  - `/Users/tien/trak/output/qa-v24/workout-picker-fixed.png`
-  - `/Users/tien/trak/output/qa-v24/score-updated.png`
-  - `/Users/tien/.maestro/tests/2026-08-28_024006/analysis-tab/screenshots/step-007-assertCondition-Body_Analysis.png`
-- TypeScript, Expo lint, 28 Node unit tests, 6 Deno tests, and 3 evaluation tests passed after the final changes.
-
-## Android test artifact — build 24
-
-- APK: `/Users/tien/trak/output/trak-test-1.1.15-v24.apk` (63,863,701 bytes).
-- Verified package `com.tien.trak.testing`, version `1.1.15`, version code `24`, and arm64-v8a architecture.
-- Verified the APK archive has no compressed-data errors.
-- Verified its signing certificate exactly matches build 23, allowing an in-place update without uninstalling the current Trak Test app.
-- Signing certificate SHA-256: `b4848fc5d54ce665e52e9a74feadcea4cdca8ba7a2febbfaef4a25f56d3f4687`.
-- APK SHA-256: `1405a24af654a9c37f80d72414b3226074259b9773c26e504948d52f0025b0fe`.
+- [x] Shared five-mission score card on Home and Progress.
+- [x] Persistent, server-validated point ledger with one award per mission/day.
+- [x] Transactional reward purchasing and saved inventory/equipment.
+- [x] Visible equipped avatar frame, badge, and mission theme treatments.
+- [x] Calorie input can be cleared without restoring the estimate.
+- [x] Weekly muscle scoring remains independent.
+- [x] Signed Android upgrade build verified.
 
 final result: passed

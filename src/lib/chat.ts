@@ -28,6 +28,8 @@ export async function askTrak(
     meals?: ChatMealContext[];
     recentDays?: string;
     personalRecords?: string;
+    /** Helps the server interpret short follow-ups; never grants scope by itself. */
+    mode?: 'chat' | 'ask';
   },
   biasPct = 0,
   signal?: AbortSignal,

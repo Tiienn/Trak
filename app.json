@@ -2,7 +2,7 @@
   "expo": {
     "name": "Trak",
     "slug": "trak",
-    "version": "1.1.15",
+    "version": "1.1.20",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "trak",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tien.trak",
-      "buildNumber": "8",
+      "buildNumber": "13",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.tien.trak",
-      "versionCode": 24,
+      "versionCode": 29,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.health.WRITE_NUTRITION",

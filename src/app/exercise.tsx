@@ -106,6 +106,7 @@ export default function ExerciseScreen() {
   const [hours, setHours] = useState('0');
   const [minutes, setMinutes] = useState('30');
   const [caloriesText, setCaloriesText] = useState('');
+  const [caloriesEdited, setCaloriesEdited] = useState(false);
   const [customName, setCustomName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -113,7 +114,7 @@ export default function ExerciseScreen() {
   const activeMuscles = useMemo(() => selectedMuscles(splits), [splits]);
   const intensity = splits.includes('cardio') ? 9 : splits.includes('legs') || splits.includes('full_body') ? 8 : splits.length > 1 ? 7.5 : 7;
   const estimatedCalories = Math.max(0, Math.round(duration * intensity));
-  const calories = caloriesText === '' ? estimatedCalories : Math.max(0, Number(caloriesText) || 0);
+  const calories = caloriesEdited ? Math.max(0, Number(caloriesText) || 0) : estimatedCalories;
   const totalMinutes = todayExercises.reduce((sum, item) => sum + item.durationMinutes, 0);
 
   function toggleSplit(key: WorkoutSplit) {
@@ -154,6 +155,10 @@ export default function ExerciseScreen() {
     }
     if (duration < 1) {
       Alert.alert('Add a duration', 'Enter how many hours and minutes you trained.');
+      return;
+    }
+    if (caloriesEdited && caloriesText.trim() === '') {
+      Alert.alert('Add calories burned', 'Enter your calorie burn, or enter 0 if you do not want to estimate it.');
       return;
     }
     if (activeMuscles.size > 0 && [...activeMuscles].every((muscle) => sets[muscle] === 0)) {
@@ -240,7 +245,16 @@ export default function ExerciseScreen() {
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Calories burned</Text>
               <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>This updates your exercise credit and calorie budget on Home.</Text>
-              <NumberField label="CALORIE BURN" value={caloriesText || String(estimatedCalories)} onChange={setCaloriesText} suffix="kcal" colors={colors} />
+              <NumberField
+                label="CALORIE BURN"
+                value={caloriesEdited ? caloriesText : String(estimatedCalories)}
+                onChange={(value) => {
+                  setCaloriesEdited(true);
+                  setCaloriesText(value);
+                }}
+                suffix="kcal"
+                colors={colors}
+              />
             </View>
 
             <View style={styles.section}>

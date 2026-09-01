@@ -57,7 +57,7 @@ const PAGE = `<!DOCTYPE html>
     <p>Open Trak and go to <strong>Profile &rarr; Delete account</strong>. This permanently erases your account and all logged data immediately. This cannot be undone.</p>
 
     <h2>2. If you can't access the app</h2>
-    <p>Email <a href="mailto:tien820@gmail.com">tien820@gmail.com</a> from the email address on your account and we'll delete it for you.</p>
+    <p>Email <a href="mailto:support.trakapp@gmail.com">support.trakapp@gmail.com</a> from the email address on your account and we'll delete it for you.</p>
 
     <h2>What gets deleted</h2>
     <ul>

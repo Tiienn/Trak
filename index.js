@@ -1,11 +1,5 @@
-// Custom entry: load expo-router's app entry, then register the Android
-// widget task handler so the home-screen widget can render in the background.
+// Metro selects the Android implementation only for Android builds. Keeping
+// registration in a platform-specific module prevents Android widget code
+// from being included in the iOS bundle.
+import './src/register-widget';
 import 'expo-router/entry';
-
-import { registerWidgetTaskHandler } from 'react-native-android-widget';
-
-import { widgetTaskHandler } from './src/widgets/widget-task-handler';
-
-if (process.env.EXPO_OS === 'android') {
-  registerWidgetTaskHandler(widgetTaskHandler);
-}

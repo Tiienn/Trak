@@ -14,7 +14,10 @@ import {
   openHealthSettings,
 } from '@/lib/health';
 import { useSubscription } from '@/lib/purchases';
-import { useMeals } from '@/lib/store';
+import { dayKey, useMeals } from '@/lib/store';
+import { useMuscleScorePreferences } from '@/lib/muscle-score-preferences';
+import { muscleScoreScheduleLabel, RESET_WEEKDAYS, type MuscleScoreSettings } from '@/lib/muscle-score-settings';
+import { CheckIcon } from '@/components/icons';
 
 type HealthState = 'hidden' | 'off' | 'on';
 
@@ -280,6 +283,65 @@ function AppearanceCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+function MuscleScoreSettingsCard({ colors }: { colors: ThemeColors }) {
+  const { settings, loaded, saving, error, retry, save } = useMuscleScorePreferences();
+  const [expanded, setExpanded] = useState(false);
+  const disabled = !loaded || saving || error;
+  const scheduled = settings.resetWeekdays.length > 0;
+  const latestReset = settings.manualResets.at(-1);
+
+  async function persist(next: MuscleScoreSettings) {
+    try { await save(next); }
+    catch (e) { Alert.alert('Not saved', e instanceof Error ? e.message : 'Please try again.'); }
+  }
+
+  function resetNow() {
+    Alert.alert('Reset muscle score?', 'Start counting sets from now. No workouts or Trak Points will be deleted. You can undo this reset here.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset score', onPress: () => { const now = new Date(); void persist({ ...settings, manualResets: [...settings.manualResets, { day: dayKey(now), at: now.getTime() }] }); } },
+    ]);
+  }
+
+  return (
+    <View style={[styles.healthCard, styles.muscleSettings, { backgroundColor: colors.backgroundElement }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Weekly muscle score settings" accessibilityState={{ expanded }} onPress={() => setExpanded((value) => !value)} style={({ pressed }) => [styles.muscleSettingsHeading, pressed && styles.pressed]}>
+        <View style={styles.healthInfo}>
+          <Text style={[styles.healthTitle, { color: colors.text }]}>Weekly muscle score</Text>
+          <Text style={[styles.healthBody, { color: colors.textSecondary }]}>{!loaded ? 'Loading…' : error ? 'Could not load settings' : muscleScoreScheduleLabel(settings)}</Text>
+        </View>
+        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+      </Pressable>
+      {expanded && <>
+        {error ? <Pressable accessibilityRole="button" onPress={retry} style={({ pressed }) => [styles.muscleAction, { backgroundColor: colors.backgroundSelected }, pressed && styles.pressed]}><Text style={[styles.healthTitle, { color: colors.text }]}>Try again</Text></Pressable> : null}
+        <View style={[styles.segmentWrap, { backgroundColor: colors.background }]}>
+          {[{ label: 'Last 7 days', active: !scheduled, weekdays: [] }, { label: 'Reset days', active: scheduled, weekdays: [1] }].map((option) => (
+            <Pressable key={option.label} accessibilityRole="radio" accessibilityState={{ checked: option.active, disabled }} disabled={disabled} onPress={() => { if (!option.active) void persist({ ...settings, resetWeekdays: option.weekdays }); }} style={({ pressed }) => [styles.segment, styles.muscleMode, option.active && { backgroundColor: colors.greenTint }, disabled && styles.disabled, pressed && styles.pressed]}>
+              <Text style={[styles.segmentText, styles.centerText, { color: colors.text }]}>{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>{scheduled ? 'Choose one or more days. Scores restart at midnight on those days, using your phone’s local time.' : 'Counts today and the previous 6 days. Older sets drop off each day; there is no weekly reset.'}</Text>
+        {scheduled && <View style={styles.resetDays}>
+          {RESET_WEEKDAYS.map((day) => {
+            const selected = settings.resetWeekdays.includes(day.value);
+            return <Pressable key={day.value} accessibilityRole="checkbox" accessibilityLabel={`Reset every ${day.label}`} accessibilityState={{ checked: selected, disabled }} disabled={disabled} onPress={() => void persist({ ...settings, resetWeekdays: selected ? settings.resetWeekdays.filter((value) => value !== day.value) : [...settings.resetWeekdays, day.value] })} style={({ pressed }) => [styles.resetDay, { backgroundColor: selected ? colors.greenTint : colors.background, borderColor: selected ? Brand.green : colors.backgroundSelected }, disabled && styles.disabled, pressed && styles.pressed]}>
+              {selected && <CheckIcon size={14} color={colors.text} />}<Text style={[styles.segmentText, { color: colors.text }]}>{day.short}</Text>
+            </Pressable>;
+          })}
+        </View>}
+        <Pressable accessibilityRole="button" disabled={disabled} accessibilityState={{ disabled }} onPress={resetNow} style={({ pressed }) => [styles.muscleAction, { backgroundColor: colors.greenTint }, disabled && styles.disabled, pressed && styles.pressed]}>
+          <Text style={[styles.healthTitle, { color: colors.text }]}>{saving ? 'Saving…' : 'Reset score now'}</Text>
+        </Pressable>
+        {latestReset && <>
+          <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Last manual reset: {new Date(latestReset.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</Text>
+          <Pressable accessibilityRole="button" disabled={disabled} onPress={() => void persist({ ...settings, manualResets: settings.manualResets.slice(0, -1) })} style={({ pressed }) => [styles.muscleAction, { backgroundColor: colors.background }, disabled && styles.disabled, pressed && styles.pressed]}><Text style={[styles.healthTitle, { color: colors.text }]}>Undo last reset</Text></Pressable>
+        </>}
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Only muscle scores change—not workout history, calorie burn, or Trak Points. Saved for this account on this device.</Text>
+      </>}
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
@@ -319,6 +381,8 @@ export default function ProfileScreen() {
           <InsightsCard colors={colors} />
           <HistoryCard colors={colors} />
           <AchievementsCard colors={colors} />
+          <Text style={[styles.settingsLabel, { color: colors.textSecondary }]}>Settings</Text>
+          <MuscleScoreSettingsCard colors={colors} />
           <RemindersCard colors={colors} />
           <HealthCard colors={colors} />
           <ProCard colors={colors} />
@@ -375,4 +439,14 @@ const styles = StyleSheet.create({
   segment: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 9 },
   segmentText: { fontSize: 13, fontWeight: '700' },
   chevron: { fontSize: 20, fontWeight: '600', marginLeft: 2 },
+  settingsLabel: { fontSize: 13, fontWeight: '700', marginTop: Spacing.three, marginBottom: Spacing.two },
+  muscleSettings: { flexDirection: 'column', alignItems: 'stretch', gap: Spacing.three },
+  muscleSettingsHeading: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  muscleMode: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  centerText: { textAlign: 'center' },
+  resetDays: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  resetDay: { minHeight: 44, minWidth: 68, paddingHorizontal: Spacing.two, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.one },
+  muscleAction: { minHeight: 48, padding: Spacing.two, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.5 },
 });

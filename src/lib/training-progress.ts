@@ -1,4 +1,5 @@
 import type { ExerciseEntry, MuscleGroup } from './types';
+import { DEFAULT_MUSCLE_SCORE_SETTINGS, type MuscleScoreSettings } from './muscle-score-settings.ts';
 
 export type { MuscleGroup } from './types';
 
@@ -64,6 +65,18 @@ export function trainingDayKeys(anchorKey: string, count = 7): string[] {
   });
 }
 
+/** Rolling seven days, optionally shortened by the user's most recent reset. */
+export function muscleScoreWindow(anchorKey: string, settings = DEFAULT_MUSCLE_SCORE_SETTINGS) {
+  let days = trainingDayKeys(anchorKey);
+  const scheduledStart = days.findLast((day) => settings.resetWeekdays.includes(dateFromKey(day).getDay()));
+  if (scheduledStart) days = days.filter((day) => day >= scheduledStart);
+  const manualReset = settings.manualResets
+    .filter((reset) => reset.day >= days[0] && reset.day <= anchorKey)
+    .sort((a, b) => b.day.localeCompare(a.day) || b.at - a.at)[0] ?? null;
+  if (manualReset) days = days.filter((day) => day >= manualReset.day);
+  return { days, manualReset };
+}
+
 export function groupsForExercise(name: string): MuscleGroup[] {
   const normalized = name.toLowerCase();
   const explicit = (Object.keys(GROUP_WORDS) as MuscleGroup[]).filter((group) =>
@@ -76,13 +89,15 @@ export function groupsForExercise(name: string): MuscleGroup[] {
   return [];
 }
 
-/** Transparent training balance: completed sets become points toward a weekly target. */
+/** Default: last seven local calendar days. Resets affect only this derived score. */
 export function muscleScores(
   exercises: ExerciseEntry[],
   anchorKey: string,
-  targetSets = WEEKLY_SET_TARGET
+  targetSets = WEEKLY_SET_TARGET,
+  settings: MuscleScoreSettings = DEFAULT_MUSCLE_SCORE_SETTINGS
 ): MuscleScore[] {
-  const days = new Set(trainingDayKeys(anchorKey));
+  const window = muscleScoreWindow(anchorKey, settings);
+  const days = new Set(window.days);
   const sets: Record<MuscleGroup, number> = {
     chest: 0,
     legs: 0,
@@ -95,6 +110,7 @@ export function muscleScores(
   };
   for (const exercise of exercises) {
     if (!days.has(exercise.date)) continue;
+    if (window.manualReset && exercise.date === window.manualReset.day && exercise.createdAt <= window.manualReset.at) continue;
     for (const group of Object.keys(sets) as MuscleGroup[]) {
       sets[group] += Math.max(0, exercise.muscleSets?.[group] || 0);
     }

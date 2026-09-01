@@ -27,7 +27,7 @@ test('totals exercise calories only for the requested local day', () => {
   assert.equal(caloriesBurnedForDay(exercises, '2026-07-24'), 0);
 });
 
-test('exercise credit can improve but never directly awards calorie points', () => {
+test('exercise credit raises the calorie mission target while workout minutes earn their own mission', () => {
   const input = {
     totals: { calories: 2_050, protein_g: 0, carbs_g: 0, fat_g: 0 },
     targets: { calories: 2_000, protein_g: 100, carbs_g: 200, fat_g: 60 },
@@ -37,11 +37,12 @@ test('exercise credit can improve but never directly awards calorie points', () 
     streak: 0,
   };
 
-  const withoutWorkout = computeScore({ ...input, calorieBudget: 2_000 });
-  const withWorkout = computeScore({ ...input, calorieBudget: calorieBudgetForDay(2_000, 200) });
-  assert.equal(withoutWorkout.parts.find((part) => part.key === 'calories')?.earned, 5);
-  assert.equal(withWorkout.parts.find((part) => part.key === 'calories')?.earned, 10);
-  assert.equal(withWorkout.value - withoutWorkout.value, 5);
+  const withoutWorkout = computeScore({ ...input, mealsLogged: 3, calorieBudget: 2_000 });
+  const withWorkout = computeScore({ ...input, mealsLogged: 3, calorieBudget: calorieBudgetForDay(2_000, 200), workoutMinutes: 30 });
+  assert.equal(withoutWorkout.parts.find((part) => part.key === 'calories')?.earned, 20);
+  assert.equal(withWorkout.parts.find((part) => part.key === 'calories')?.earned, 20);
+  assert.equal(withWorkout.parts.find((part) => part.key === 'workout')?.earned, 20);
+  assert.equal(withWorkout.value - withoutWorkout.value, 20);
 
   const noMeals = computeScore({ ...input, mealsLogged: 0, calorieBudget: 2_100 });
   assert.equal(noMeals.parts.find((part) => part.key === 'calories')?.earned, 0);

@@ -12,6 +12,7 @@ import { AppState } from 'react-native';
 
 import { useAuth } from './auth';
 import { calorieBudgetForDay, creditedExerciseCalories } from './exercise';
+import { prepareMealNutrition } from './food-servings';
 import {
   removeExerciseFromHealth,
   removeMealFromHealth,
@@ -87,10 +88,8 @@ function computeStreak(meals: LoggedMeal[]): number {
 }
 
 /**
- * Diet style lives on-device (like the water unit) rather than in the profiles
- * table, so no DB migration is needed. Keyed BY USER so a shared device never
- * leaks one account's macro split into another. Merged into the profile after
- * load (the un-namespaced v1 key is read once as a legacy fallback).
+ * Diet style was originally device-only. Keep the per-user cache as an offline
+ * fallback and legacy bridge; current accounts also sync it through profiles.
  */
 const dietKey = (userId: string) => `trak.dietStyle.v1.${userId}`;
 const LEGACY_DIET_KEY = 'trak.dietStyle.v1';
@@ -125,6 +124,7 @@ function rowToProfile(r: any): UserProfile {
     weightKg: Number(r.weight_kg),
     goal: r.goal,
     activity: r.activity,
+    diet: isDiet(r.diet) ? r.diet : undefined,
     createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
     waterGoal: r.water_goal != null ? Number(r.water_goal) : undefined,
     calorieBias: r.calorie_bias != null ? Number(r.calorie_bias) : undefined,
@@ -230,6 +230,8 @@ function rowToMeal(r: any): LoggedMeal {
 }
 
 type MealsContextValue = {
+  /** Local calendar day, refreshed on foreground and across midnight. */
+  today: string;
   loaded: boolean;
   /** True when the cloud load failed (e.g. offline) — show a retry, never onboarding. */
   loadError: boolean;
@@ -292,8 +294,8 @@ type MealsContextValue = {
   /** Log a saved/recent meal to today with one tap. */
   quickLog: (meal: { title: string; total: FoodTotals; items: FoodItem[] }) => Promise<void>;
   removeMeal: (id: string) => Promise<void>;
-  /** Edit a logged meal's title/totals (correct an AI estimate). */
-  updateMeal: (id: string, patch: { title: string; total: FoodTotals }) => Promise<void>;
+  /** Edit a logged meal's title, serving amounts and/or nutrition totals. */
+  updateMeal: (id: string, patch: { title: string; total: FoodTotals; items?: FoodItem[] }) => Promise<void>;
   saveProfile: (profile: UserProfile) => Promise<void>;
   /** Log (or overwrite) a day's weight; the newest entry also updates the profile weight. */
   logWeight: (weightKg: number, date?: string) => Promise<void>;
@@ -498,17 +500,18 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const addMeal = useCallback(
     async (analysis: FoodAnalysis, photoUri?: string) => {
       if (!user) return;
+      const nutrition = prepareMealNutrition(analysis.items, analysis.total);
       const { data, error } = await supabase
         .from('meals')
         .insert({
           user_id: user.id,
           day: dayKey(),
           title: analysis.title,
-          calories: analysis.total.calories,
-          protein_g: analysis.total.protein_g,
-          carbs_g: analysis.total.carbs_g,
-          fat_g: analysis.total.fat_g,
-          items: analysis.items,
+          calories: nutrition.total.calories,
+          protein_g: nutrition.total.protein_g,
+          carbs_g: nutrition.total.carbs_g,
+          fat_g: nutrition.total.fat_g,
+          items: nutrition.items,
           confidence: analysis.confidence,
           notes: analysis.notes ?? null,
           photo_uri: photoUri ?? null,
@@ -613,52 +616,40 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   // The item breakdown is scaled proportionally so it can't contradict the
   // edited totals (an 800-kcal item list under a 500-kcal total).
   const updateMeal = useCallback(
-    async (id: string, patch: { title: string; total: FoodTotals }) => {
-      let previous: LoggedMeal | undefined;
-      let scaledItems: FoodItem[] | undefined;
+    async (id: string, patch: { title: string; total: FoodTotals; items?: FoodItem[] }) => {
+      const previous = meals.find((meal) => meal.id === id);
+      if (!user || !previous) throw new Error('This meal is no longer available. Please refresh your log.');
+      // Prepare the full update BEFORE setState: React may defer or replay its
+      // updater. Never rely on that updater to populate a database payload.
+      const { items: scaledItems, total } = prepareMealNutrition(patch.items ?? previous.items, patch.total);
       setMeals((prev) =>
-        prev.map((m) => {
-          if (m.id !== id) return m;
-          previous = m;
-          const factor = (oldTotal: number, newTotal: number) =>
-            oldTotal > 0 ? newTotal / oldTotal : 1;
-          const fCal = factor(m.total.calories, patch.total.calories);
-          const fPro = factor(m.total.protein_g, patch.total.protein_g);
-          const fCarb = factor(m.total.carbs_g, patch.total.carbs_g);
-          const fFat = factor(m.total.fat_g, patch.total.fat_g);
-          scaledItems = m.items.map((it) => ({
-            ...it,
-            calories: Math.round(it.calories * fCal),
-            protein_g: Math.round(it.protein_g * fPro),
-            carbs_g: Math.round(it.carbs_g * fCarb),
-            fat_g: Math.round(it.fat_g * fFat),
-          }));
-          return { ...m, title: patch.title, total: patch.total, items: scaledItems };
-        })
+        prev.map((m) => m.id === id ? { ...m, title: patch.title, total, items: scaledItems } : m)
       );
       const update: Record<string, unknown> = {
         title: patch.title,
-        calories: patch.total.calories,
-        protein_g: patch.total.protein_g,
-        carbs_g: patch.total.carbs_g,
-        fat_g: patch.total.fat_g,
+        calories: total.calories,
+        protein_g: total.protein_g,
+        carbs_g: total.carbs_g,
+        fat_g: total.fat_g,
+        items: scaledItems,
       };
-      if (scaledItems) update.items = scaledItems;
-      const { error } = await supabase.from('meals').update(update).eq('id', id);
-      if (error && previous) {
-        const prevMeal = previous;
-        setMeals((prev) => prev.map((m) => (m.id === id ? prevMeal : m)));
+      try {
+        const { error } = await supabase.from('meals').update(update)
+          .eq('id', id).eq('user_id', user.id).select('id').single();
+        if (error) throw error;
+      } catch {
+        setMeals((prev) => prev.map((m) => (m.id === id ? previous : m)));
         throw new Error('Could not save your changes. Check your connection and try again.');
       }
       // A successful user correction is valuable evaluation ground truth.
       // Store only before/after totals and version metadata—never photos,
       // meal names, chat text, or profile fields. Failure is non-blocking so a
       // missing/new migration never makes the user's edit appear unsuccessful.
-      if (!error && user && previous) {
+      if (user) {
         const before = previous.total;
         const calorieDeltaPct =
           before.calories > 0
-            ? ((patch.total.calories - before.calories) / before.calories) * 100
+            ? ((total.calories - before.calories) / before.calories) * 100
             : null;
         supabase
           .from('meal_corrections')
@@ -666,7 +657,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
             user_id: user.id,
             meal_id: id,
             before_totals: before,
-            after_totals: patch.total,
+            after_totals: total,
             calorie_delta_pct: calorieDeltaPct,
             analysis_meta: previous.analysisMeta ?? null,
           })
@@ -677,13 +668,13 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         writeMealToHealth(
           previous.id,
           patch.title,
-          patch.total,
+          total,
           previous.createdAt,
           Date.now()
         );
       }
     },
-    [user]
+    [user, meals]
   );
 
   const saveProfile = useCallback(
@@ -703,6 +694,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         weight_kg: next.weightKg,
         goal: next.goal,
         activity: next.activity,
+        diet: next.diet ?? 'balanced',
       });
       if (error) {
         setProfile(previous); // roll back so the UI doesn't lie
@@ -894,6 +886,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
     const targets = profile ? computeTargets(profile) : DEFAULT_TARGETS;
     const exerciseCreditToday = creditedExerciseCalories(burnedToday);
     return {
+      today,
       loaded,
       loadError,
       retryLoad,

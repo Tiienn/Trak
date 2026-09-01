@@ -115,7 +115,7 @@ const PAGE = `<!DOCTYPE html>
     <p>We'll update this page when our practices change.</p>
 
     <h2>Contact</h2>
-    <p>Questions? Email <a href="mailto:tien820@gmail.com">tien820@gmail.com</a>.</p>
+    <p>Questions? Email <a href="mailto:support.trakapp@gmail.com">support.trakapp@gmail.com</a>.</p>
   </main>
 </body>
 </html>`;

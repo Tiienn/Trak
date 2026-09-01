@@ -2,7 +2,7 @@ import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,13 +42,18 @@ export default function BarcodeScreen() {
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const busyRef = useRef(false); // guard against the camera firing repeatedly
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   async function handleCode(code: string) {
     if (busyRef.current) return;
     busyRef.current = true;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setPhase('looking');
     try {
-      const p = await lookupBarcode(code);
+      const p = await lookupBarcode(code, controller.signal);
+      if (controller.signal.aborted) return;
       if (!p) {
         setPhase('notfound');
         return;
@@ -57,8 +62,11 @@ export default function BarcodeScreen() {
       setServings(1);
       setPhase('result');
     } catch (e: any) {
+      if (controller.signal.aborted) return;
       setErrorMsg(e?.message ?? 'Something went wrong. Please try again.');
       setPhase('error');
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
     }
   }
 
@@ -79,6 +87,7 @@ export default function BarcodeScreen() {
   }
 
   function reset() {
+    abortRef.current?.abort();
     busyRef.current = false;
     setProduct(null);
     setErrorMsg('');

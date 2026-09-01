@@ -25,6 +25,7 @@ import {
   ScaleIcon,
   SparklesIcon,
 } from '@/components/icons';
+import { DailyMissionsCard } from '@/components/daily-missions-card';
 import { useSupplements } from '@/lib/supplements';
 import { RingMark, TrakWordmark } from '@/components/logo';
 import { ProfileAvatarButton } from '@/components/profile-avatar-button';
@@ -38,7 +39,6 @@ import {
 } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { dailyHistoryFor } from '@/lib/history';
-import { scoreCaption } from '@/lib/score';
 import { dayKey, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import { LoggedMeal } from '@/lib/types';
@@ -167,70 +167,6 @@ function WeekDateStrip({
         )}
       />
     </View>
-  );
-}
-
-/* ------------------------------- Trak Score ------------------------------ */
-
-const SCORE_SIZE = 132;
-const SCORE_STROKE = 11;
-const SCORE_R = (SCORE_SIZE - SCORE_STROKE) / 2;
-const SCORE_C = 2 * Math.PI * SCORE_R;
-
-function ScoreCard({
-  value,
-  caption,
-  colors,
-  onPress,
-}: {
-  value: number;
-  caption: string;
-  colors: ThemeColors;
-  onPress?: () => void;
-}) {
-  const pct = Math.min(1, value / 100);
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.scoreCard,
-        { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-      ]}
-      disabled={!onPress}
-      onPress={onPress}>
-      <View style={styles.scoreRingWrap}>
-        <Svg width={SCORE_SIZE} height={SCORE_SIZE}>
-          <Circle
-            cx={SCORE_SIZE / 2}
-            cy={SCORE_SIZE / 2}
-            r={SCORE_R}
-            stroke={colors.backgroundSelected}
-            strokeWidth={SCORE_STROKE}
-            fill="none"
-          />
-          <Circle
-            cx={SCORE_SIZE / 2}
-            cy={SCORE_SIZE / 2}
-            r={SCORE_R}
-            stroke={Brand.green}
-            strokeWidth={SCORE_STROKE}
-            strokeLinecap="round"
-            fill="none"
-            strokeDasharray={`${SCORE_C} ${SCORE_C}`}
-            strokeDashoffset={SCORE_C * (1 - pct)}
-            transform={`rotate(-90 ${SCORE_SIZE / 2} ${SCORE_SIZE / 2})`}
-          />
-        </Svg>
-        <View style={styles.scoreCenter}>
-          <Text style={[styles.scoreValue, { color: colors.text }]}>{value}</Text>
-        </View>
-        <View style={[styles.scoreBadge, { backgroundColor: colors.background }]}>
-          <Text style={[styles.scoreBadgeText, { color: colors.text }]}>
-            {onPress ? 'Trak Score ›' : 'Trak Score'}
-          </Text>
-        </View>
-      </View>
-      <Text style={[styles.scoreCaption, { color: colors.textSecondary }]}>{caption}</Text>
-    </Pressable>
   );
 }
 
@@ -668,8 +604,9 @@ export default function HomeScreen() {
         supplementChecks: checks,
         targets,
         waterGoal,
+        goal: profile?.goal,
       }),
-    [selectedDate, meals, exercises, waterHistory, supplements, checks, targets, waterGoal]
+    [selectedDate, meals, exercises, waterHistory, supplements, checks, targets, waterGoal, profile?.goal]
   );
   const viewingToday = selectedDate === today;
   const hasQuickAdd = viewingToday && (recentMeals.length > 0 || savedMeals.length > 0);
@@ -762,13 +699,7 @@ export default function HomeScreen() {
           {/* The selected date controls every daily detail below without leaving Home. */}
           <WeekDateStrip colors={colors} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
-          {/* Trak Score hero */}
-          <ScoreCard
-            value={selectedDay.score}
-            caption={scoreCaption(selectedDay.score)}
-            colors={colors}
-            onPress={viewingToday ? () => router.push('/score') : undefined}
-          />
+          <DailyMissionsCard missions={selectedDay.missions} selectedDate={selectedDate} colors={colors} />
 
           {/* Daily coaching nudge — always visible, opens Chat's Ask panel */}
           {viewingToday ? <CoachCard tip={tip} colors={colors} /> : null}
@@ -1021,34 +952,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateNumber: { fontSize: 14, fontWeight: '800' },
-
-  /* Trak Score */
-  scoreCard: {
-    borderRadius: 28,
-    padding: Spacing.four,
-    paddingBottom: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-  },
-  scoreRingWrap: { alignItems: 'center' },
-  scoreCenter: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreValue: { fontSize: 46, fontFamily: Type.display, fontWeight: '700', letterSpacing: -1 },
-  scoreBadge: {
-    marginTop: -16,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  scoreBadgeText: { fontSize: 12, fontWeight: '700' },
-  scoreCaption: { fontSize: 13, textAlign: 'center', lineHeight: 19, maxWidth: 300 },
 
   /* Coaching nudge */
   tipCard: {

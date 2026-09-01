@@ -20,10 +20,12 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BarcodeIcon } from '@/components/icons';
+import { ServingInput } from '@/components/serving-input';
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { askTrak } from '@/lib/chat';
 import { foodCorrectionPrompt, replaceFoodItem } from '@/lib/food-correction';
+import { correctFoodServing, foodServing, formatServingQuantity, parseServingAmount } from '@/lib/food-servings';
 import { loadGameStats, recordScanGuess } from '@/lib/game';
 import { photoMealMemory } from '@/lib/meal-memory';
 import { useSubscription } from '@/lib/purchases';
@@ -105,6 +107,13 @@ export default function ScanScreen() {
     if (!analysis || correcting) return;
     const current = analysis.items[index];
     if (!current) return;
+
+    const resized = correctFoodServing(analysis, index, name, quantity);
+    if (resized) {
+      setAnalysis(resized);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      return;
+    }
 
     setCorrecting(true);
     try {
@@ -423,14 +432,18 @@ function ResultSheet({
   const insets = useSafeAreaInsets();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
-  const [editQuantity, setEditQuantity] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editUnit, setEditUnit] = useState('');
+  const validServing = parseServingAmount(editAmount) != null && !!editUnit.trim();
 
   function startEditing(index: number) {
     const item = analysis.items[index];
     if (!item || saving || correcting) return;
     setEditingIndex(index);
     setEditName(item.name);
-    setEditQuantity(item.quantity);
+    const serving = foodServing(item);
+    setEditAmount(String(serving.amount));
+    setEditUnit(serving.unit);
   }
 
   function cancelEditing() {
@@ -438,17 +451,20 @@ function ResultSheet({
     Keyboard.dismiss();
     setEditingIndex(null);
     setEditName('');
-    setEditQuantity('');
+    setEditAmount('');
+    setEditUnit('');
   }
 
   async function saveCorrection() {
-    if (editingIndex == null || !editName.trim() || correcting) return;
+    const amount = parseServingAmount(editAmount);
+    if (editingIndex == null || !editName.trim() || !validServing || amount == null || correcting) return;
     try {
-      await onCorrectItem(editingIndex, editName.trim(), editQuantity.trim());
+      await onCorrectItem(editingIndex, editName.trim(), formatServingQuantity(amount, editUnit));
       Keyboard.dismiss();
       setEditingIndex(null);
       setEditName('');
-      setEditQuantity('');
+      setEditAmount('');
+      setEditUnit('');
     } catch {
       // The parent shows the actionable error and keeps the editor open.
     }
@@ -519,7 +535,7 @@ function ResultSheet({
                     { borderBottomColor: colors.backgroundSelected },
                     i === analysis.items.length - 1 && styles.itemRowLast,
                   ]}>
-                  <Text style={[styles.editorLabel, { color: colors.textSecondary }]}>Correct food</Text>
+                  <Text style={[styles.editorLabel, { color: colors.textSecondary }]}>Edit food & serving</Text>
                   <TextInput
                     accessibilityLabel="Food name"
                     autoFocus
@@ -536,19 +552,14 @@ function ResultSheet({
                     onChangeText={setEditName}
                     editable={!correcting}
                   />
-                  <TextInput
-                    accessibilityLabel="Serving size"
-                    autoCapitalize="none"
-                    maxLength={50}
-                    placeholder="Serving, e.g. 100 g"
-                    placeholderTextColor={colors.textSecondary}
-                    style={[
-                      styles.editorInput,
-                      { color: colors.text, backgroundColor: colors.backgroundSelected },
-                    ]}
-                    value={editQuantity}
-                    onChangeText={setEditQuantity}
-                    editable={!correcting}
+                  <ServingInput
+                    amount={editAmount}
+                    unit={editUnit}
+                    onChangeAmount={setEditAmount}
+                    onChangeUnit={setEditUnit}
+                    colors={colors}
+                    disabled={correcting}
+                    foodName={it.name}
                   />
                   <View style={styles.editorActions}>
                     <Pressable
@@ -562,10 +573,10 @@ function ResultSheet({
                       accessibilityRole="button"
                       style={[
                         styles.editorSave,
-                        (!editName.trim() || correcting) && styles.btnBusy,
+                        (!editName.trim() || !validServing || correcting) && styles.btnBusy,
                       ]}
                       onPress={saveCorrection}
-                      disabled={!editName.trim() || correcting}>
+                      disabled={!editName.trim() || !validServing || correcting}>
                       {correcting ? (
                         <ActivityIndicator size="small" color="#ffffff" />
                       ) : (
@@ -596,7 +607,7 @@ function ResultSheet({
                   </View>
                   <View style={styles.itemMeta}>
                     <Text style={[styles.itemCals, { color: colors.text }]}>{it.calories} cal</Text>
-                    <Text style={styles.itemEdit}>Edit</Text>
+                    <Text style={styles.itemEdit}>Edit serving / food</Text>
                   </View>
                 </Pressable>
               ),
