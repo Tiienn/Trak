@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { foodCorrectionPrompt, replaceFoodItem } from '../src/lib/food-correction.ts';
+import { foodCorrectionPrompt, removeFoodItem, replaceFoodItem } from '../src/lib/food-correction.ts';
 
 const scan = {
   isFood: true,
@@ -56,4 +56,16 @@ test('replaces a detected food and recalculates the meal totals and title', () =
 
 test('uses the scanned gram estimate when the serving field is empty', () => {
   assert.equal(foodCorrectionPrompt('fish', '', 100), 'I ate 100 g of fish');
+});
+
+test('removes one mistaken scan item and recalculates totals', () => {
+  const corrected = removeFoodItem(scan, 0);
+  assert.deepEqual(corrected.items.map((item) => item.name), ['chicken breast, cooked']);
+  assert.deepEqual(corrected.total, { calories: 165, protein_g: 31, carbs_g: 0, fat_g: 4 });
+  assert.match(corrected.notes, /Removed white rice/);
+});
+
+test('does not leave a scanned meal with no food items', () => {
+  const oneItem = { ...scan, items: [scan.items[0]], total: { calories: 205, protein_g: 4, carbs_g: 45, fat_g: 0 } };
+  assert.equal(removeFoodItem(oneItem, 0), oneItem);
 });

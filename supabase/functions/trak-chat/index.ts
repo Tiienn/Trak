@@ -9,6 +9,7 @@
 
 import {
   corsHeaders,
+  consumeDailyAiUsage,
   enrichMeal,
   fetchWithTimeout,
   GEMINI_URL,
@@ -21,8 +22,8 @@ import {
   PIPELINE_VERSION,
   recordAiRun,
   stripFences,
-  underDailyLimit,
 } from '../_shared/nutrition.ts';
+import { authorizeAiAccess } from '../_shared/ai-access.ts';
 import { todayMealsNote } from '../_shared/chat-context.ts';
 import {
   gateChatOutput,
@@ -191,9 +192,22 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Please sign in to chat.' }, 401);
     }
 
-    // Per-user daily cap on the paid AI endpoints (fails open if unavailable).
-    if (!(await underDailyLimit(userId))) {
-      return json({ error: 'Daily AI limit reached — resets tomorrow.' }, 429);
+    const { messages, context } = await req.json().catch(() => ({}));
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return json({ error: 'No message provided.' }, 400);
+    }
+
+    const access = await authorizeAiAccess(
+      userId,
+      (context as any)?.mode === 'ask' ? 'coach' : 'nutrition',
+    );
+    if (!access.allowed) {
+      if (access.reason === 'adult_required') {
+        return json({ error: 'Trak is currently available to adults aged 18 and over.' }, 403);
+      }
+      return access.reason === 'pro_required'
+        ? json({ error: 'Chat and Ask require Trak Pro.' }, 403)
+        : json({ error: 'Could not verify Trak Pro right now. Please try again shortly.' }, 503);
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY') ?? '';
@@ -201,9 +215,12 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Server is missing its Gemini key.' }, 500);
     }
 
-    const { messages, context } = await req.json().catch(() => ({}));
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return json({ error: 'No message provided.' }, 400);
+    const usageDecision = await consumeDailyAiUsage(userId);
+    if (usageDecision === 'limited') {
+      return json({ error: 'Daily AI limit reached — resets tomorrow.' }, 429);
+    }
+    if (usageDecision === 'unavailable') {
+      return json({ error: 'Could not verify AI usage right now. Please try again shortly.' }, 503);
     }
 
     // Abuse guards: bound history length and message size.

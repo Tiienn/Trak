@@ -109,7 +109,7 @@ const PAGE = `<!DOCTYPE html>
     <p>You can delete individual Body Analysis photos or results, erase all Body Analysis data, or delete your account in-app. Account deletion is available at <strong>Profile &rarr; Delete account</strong> and permanently erases your account and server-side account data. Trak also attempts to remove local Body Analysis photos from the current device. You can also see <a href="https://tqhgdnmzhuczuyyrmvzx.supabase.co/functions/v1/deletion-info">our account-deletion page</a>.</p>
 
     <h2>Children</h2>
-    <p>Trak is not directed at children under 18. Calorie tracking is not appropriate for young children.</p>
+    <p>Trak is currently available only to adults aged 18 and over. Accounts that do not meet this requirement cannot access Trak's calorie, weight, workout, or AI coaching features and can request deletion of their data in the app.</p>
 
     <h2>Changes</h2>
     <p>We'll update this page when our practices change.</p>

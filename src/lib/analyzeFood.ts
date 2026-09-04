@@ -77,7 +77,7 @@ export function normalizeFoodJson(parsed: any): FoodAnalysis {
   const isFood = typeof parsed.isFood === 'boolean' ? parsed.isFood : items.length > 0;
   const rawMeta = parsed.analysisMeta ?? parsed.pipeline;
   const rawInputSource = rawMeta?.inputSource ?? rawMeta?.input_source;
-  const inputSource = ['text', 'photo', 'barcode', 'quick_log'].includes(rawInputSource)
+  const inputSource = ['text', 'photo', 'barcode', 'quick_log', 'manual'].includes(rawInputSource)
     ? rawInputSource
     : undefined;
   const analysisMeta = rawMeta

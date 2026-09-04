@@ -1,5 +1,7 @@
 module.exports = ({ config }) => {
-  const isTesting = process.env.APP_VARIANT === 'testing';
+  const variant = process.env.APP_VARIANT;
+  const isTesting = variant === 'testing';
+  const isE2E = variant === 'e2e';
   const plugins = isTesting
     ? config.plugins?.map((plugin) => {
         if (!Array.isArray(plugin) || plugin[0] !== 'expo-build-properties') return plugin;
@@ -20,11 +22,19 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
-    name: isTesting ? 'Trak Test' : config.name,
+    name: isE2E ? 'Trak E2E' : isTesting ? 'Trak Test' : config.name,
     plugins,
+    ios: {
+      ...config.ios,
+      bundleIdentifier: isE2E ? 'com.tien.trak.e2e' : config.ios?.bundleIdentifier,
+    },
     android: {
       ...config.android,
-      package: isTesting ? 'com.tien.trak.testing' : config.android?.package,
+      package: isE2E
+        ? 'com.tien.trak.e2e'
+        : isTesting
+          ? 'com.tien.trak.testing'
+          : config.android?.package,
     },
   };
 };

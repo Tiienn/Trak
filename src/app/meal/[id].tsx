@@ -130,6 +130,36 @@ export default function MealDetailScreen() {
     setFat(String(total.fat_g));
   }
 
+  function removeEditedItem(index: number) {
+    const item = editedItems[index];
+    if (!item) return;
+    if (editedItems.length === 1) {
+      confirmDelete();
+      return;
+    }
+    Alert.alert('Remove food?', `Remove ${item.name} from this meal? Calories and macros will be updated.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          const total = servingAdjustedTotals({
+            calories: toNutritionNumber(cals), protein_g: toNutritionNumber(protein),
+            carbs_g: toNutritionNumber(carbs), fat_g: toNutritionNumber(fat),
+          }, item, { ...item, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+          setOriginalItems((items) => items.filter((_, itemIndex) => itemIndex !== index));
+          setEditedItems((items) => items.filter((_, itemIndex) => itemIndex !== index));
+          setServingAmounts((amounts) => amounts.filter((_, itemIndex) => itemIndex !== index));
+          setCals(String(total.calories));
+          setProtein(String(total.protein_g));
+          setCarbs(String(total.carbs_g));
+          setFat(String(total.fat_g));
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        },
+      },
+    ]);
+  }
+
   async function saveEdit() {
     const trimmed = title.trim();
     if (!trimmed || !validServings || saving) return;
@@ -173,10 +203,10 @@ export default function MealDetailScreen() {
   }
 
   function confirmDelete() {
-    Alert.alert('Remove meal?', `Remove "${meal!.title}" from your log?`, [
+    Alert.alert('Delete meal?', `Delete "${meal!.title}" from your log?`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Remove',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           // Close first: the optimistic removal empties this screen instantly,
@@ -290,7 +320,19 @@ export default function MealDetailScreen() {
                     styles.servingEditor,
                     index < editedItems.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.backgroundSelected },
                   ]}>
-                    <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
+                    <View style={styles.itemEditHeader}>
+                      <Text style={[styles.itemName, { color: colors.text }]}>{item.name}</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={editedItems.length === 1 ? 'Delete meal' : `Remove ${item.name} from meal`}
+                        hitSlop={8}
+                        onPress={() => removeEditedItem(index)}
+                        disabled={saving}>
+                        <Text style={styles.itemRemoveText}>
+                          {editedItems.length === 1 ? 'Delete meal' : 'Remove food'}
+                        </Text>
+                      </Pressable>
+                    </View>
                     <ServingInput
                       amount={servingAmounts[index]}
                       unit={foodServing(item).unit}
@@ -376,7 +418,7 @@ export default function MealDetailScreen() {
                 <Text style={[styles.editText, { color: colors.text }]}>Edit</Text>
               </Pressable>
               <Pressable style={styles.deleteBtn} onPress={confirmDelete}>
-                <Text style={styles.deleteText}>Remove</Text>
+                <Text style={styles.deleteText}>Delete meal</Text>
               </Pressable>
             </View>
           )}
@@ -420,6 +462,8 @@ const styles = StyleSheet.create({
 
   itemsCard: { borderRadius: 16, paddingHorizontal: Spacing.three },
   servingEditor: { paddingVertical: Spacing.three, gap: Spacing.two },
+  itemEditHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
+  itemRemoveText: { color: '#D84A4A', fontSize: 12, fontWeight: '800' },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',

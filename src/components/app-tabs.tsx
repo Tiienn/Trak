@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { StyleSheet, useWindowDimensions, View, type ColorValue } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,16 +58,18 @@ export default function AppTabs() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const insets = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const largeTextExtra = Math.min(24, Math.max(0, fontScale - 1) * 22);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Brand.green,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: 62 + insets.bottom,
+          height: 62 + insets.bottom + largeTextExtra,
           paddingTop: 7,
           paddingBottom: Math.max(insets.bottom, 7),
           backgroundColor: colors.background,
@@ -82,6 +84,8 @@ export default function AppTabs() {
         name="index"
         options={{
           title: 'Home',
+          tabBarAccessibilityLabel: 'Home tab',
+          tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ color, focused }) => <TabIcon name="home" color={color} focused={focused} />,
         }}
       />
@@ -89,6 +93,8 @@ export default function AppTabs() {
         name="chat"
         options={{
           title: 'Chat',
+          tabBarAccessibilityLabel: 'Chat tab',
+          tabBarButtonTestID: 'tab-chat',
           tabBarIcon: ({ color, focused }) => <TabIcon name="chat" color={color} focused={focused} />,
         }}
       />
@@ -96,6 +102,7 @@ export default function AppTabs() {
         name="scan-tab"
         options={{
           title: 'Scan',
+          tabBarAccessibilityLabel: 'Scan a meal',
           tabBarLabel: () => null,
           tabBarIcon: () => (
             <View style={[styles.scanButton, { borderColor: colors.background }]}>
@@ -109,6 +116,8 @@ export default function AppTabs() {
         name="games"
         options={{
           title: 'Games',
+          tabBarAccessibilityLabel: 'Games tab',
+          tabBarButtonTestID: 'tab-games',
           tabBarIcon: ({ color, focused }) => <TabIcon name="games" color={color} focused={focused} />,
         }}
       />
@@ -116,6 +125,8 @@ export default function AppTabs() {
         name="progress"
         options={{
           title: 'Progress',
+          tabBarAccessibilityLabel: 'Progress tab',
+          tabBarButtonTestID: 'tab-progress',
           tabBarIcon: ({ color, focused }) => <TabIcon name="progress" color={color} focused={focused} />,
         }}
       />

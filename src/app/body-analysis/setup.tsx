@@ -36,7 +36,7 @@ import { useSubscription } from '@/lib/purchases';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
-const EQUIPMENT = ['None', 'Dumbbells', 'Barbell', 'Machines', 'Bands', 'Pull-up bar', 'Bench'];
+const EQUIPMENT = ['None', 'Dumbbells', 'Barbell', 'Machines', 'Bands', 'Pull-up bar', 'Bench', 'Backpack'];
 
 export default function BodyAnalysisSetupScreen() {
   const colors = Colors[useAppScheme()];
@@ -162,7 +162,7 @@ export default function BodyAnalysisSetupScreen() {
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CURRENT WEIGHT</Text>
               <Text style={[styles.inlineValue, { color: colors.text }]}>{latestWeight ?? profile?.weightKg ?? '—'} kg</Text>
             </View>
-            <Text style={[styles.edit, { color: Brand.green }]}>Update</Text>
+            <Text style={[styles.edit, { color: colors.accent }]}>Update</Text>
           </Pressable>
           {!editing ? (
             <>
@@ -245,16 +245,16 @@ export default function BodyAnalysisSetupScreen() {
             <BodySectionTitle>Before you continue</BodySectionTitle>
             <Text style={[styles.body, { color: colors.textSecondary }]}>
               {bodyAnalysisDemoEnabled
-                ? 'This local demo uses placeholder photos and mock guidance. Nothing is sent to Gemini or the live Body Analysis backend.'
+                ? 'This preview uses placeholder photos and sample guidance. It does not perform a real Body Analysis.'
                 : 'Your three photos are sent securely to Trak’s AI provider for this analysis. Trak does not store them on its server. If you keep progress copies, they stay only on this device and do not sync.'}
             </Text>
             <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: consented }} onPress={() => setConsented((value) => !value)} style={styles.consentRow}>
               <View style={[styles.checkbox, { borderColor: consented ? Brand.green : colors.textSecondary, backgroundColor: consented ? Brand.green : 'transparent' }]}>
                 {consented ? <Text style={styles.check}>✓</Text> : null}
               </View>
-              <Text style={[styles.consentText, { color: colors.text }]}>{bodyAnalysisDemoEnabled ? 'I’m 18 or older and want to test the local demo flow.' : 'I’m 18 or older and consent to this photo analysis.'}</Text>
+              <Text style={[styles.consentText, { color: colors.text }]}>{bodyAnalysisDemoEnabled ? 'I’m 18 or older and want to try this preview.' : 'I’m 18 or older and consent to this photo analysis.'}</Text>
             </Pressable>
-            <Pressable onPress={() => router.push('/body-analysis/privacy')}><Text style={[styles.privacyLink, { color: Brand.green }]}>Read photo privacy details</Text></Pressable>
+            <Pressable accessibilityRole="link" accessibilityLabel="Read photo privacy details" onPress={() => router.push('/body-analysis/privacy')}><Text style={[styles.privacyLink, { color: colors.accent }]}>Read photo privacy details</Text></Pressable>
           </BodyCard>
         ) : null}
 

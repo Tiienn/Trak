@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AdultOnlyNotice } from '@/components/adult-eligibility-gate';
 import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
 import { Brand, Colors, MacroColors, Spacing, Type, type ThemeColors } from '@/constants/theme';
+import { adultEligibilityForAge, MAXIMUM_TRAK_AGE } from '@/lib/adult-eligibility';
 import { computeTargets, DIETS } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -146,10 +148,11 @@ export default function OnboardingScreen() {
   const [heightFt, setHeightFt] = useState('');
   const [heightIn, setHeightIn] = useState('');
   const [weight, setWeight] = useState(''); // kg or lb depending on unit
+  const [ageRestricted, setAgeRestricted] = useState(false);
 
   // Validate only the numeric body-stat fields (independent of goal/sex/activity).
   function parseStats(): { age: number; weightKg: number; heightCm: number } | null {
-    const ageN = parseInt(age, 10);
+    const ageN = Number(age);
     let weightKg: number;
     let hCm: number;
     if (unit === 'metric') {
@@ -159,7 +162,7 @@ export default function OnboardingScreen() {
       weightKg = parseFloat(weight) * 0.453592;
       hCm = (parseInt(heightFt || '0', 10) * 12 + parseInt(heightIn || '0', 10)) * 2.54;
     }
-    if (!Number.isFinite(ageN) || ageN < 10 || ageN > 100) return null;
+    if (!Number.isInteger(ageN) || ageN < 1 || ageN > MAXIMUM_TRAK_AGE) return null;
     // Plausibility bounds keep a typo from silently corrupting all targets.
     if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) return null;
     if (!Number.isFinite(hCm) || hCm < 90 || hCm > 250) return null;
@@ -192,6 +195,10 @@ export default function OnboardingScreen() {
   }
 
   function next() {
+    if (step === 2 && adultEligibilityForAge(Number(age)) === 'underage') {
+      setAgeRestricted(true);
+      return;
+    }
     if (step < STEP_COUNT - 1) setStep(step + 1);
   }
   function back() {
@@ -215,6 +222,8 @@ export default function OnboardingScreen() {
 
   const completeProfile = buildProfile(0);
   const preview = completeProfile ? computeTargets(completeProfile) : null;
+
+  if (ageRestricted) return <AdultOnlyNotice />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -413,7 +422,7 @@ export default function OnboardingScreen() {
               <>
                 <Text style={[styles.title, { color: colors.text }]}>Your daily target</Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  Based on your goal and body. You can rescan any time.
+                  Based on your goal and body. You can update these details any time.
                 </Text>
                 <View style={[styles.targetCard, { backgroundColor: colors.backgroundElement }]}>
                   <Text style={[styles.targetCals, { color: colors.text }]}>

@@ -11,7 +11,7 @@ import {
   BodySegment,
   BodyState,
 } from '@/components/body-analysis-ui';
-import { Brand, Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import { canShowVisualEstimate, daysUntilNextCheckIn, type BodyPose } from '@/lib/body-analysis';
 import { useBodyAnalysis } from '@/lib/body-analysis-store';
 import { bodyAnalysisDemoEnabled } from '@/lib/body-analysis-demo';
@@ -25,7 +25,7 @@ function List({ items, color }: { items: string[]; color: string }) {
     <View style={styles.list}>
       {items.map((item, index) => (
         <View key={`${index}-${item}`} style={styles.listRow}>
-          <Text style={[styles.bullet, { color: Brand.green }]}>•</Text>
+          <Text style={[styles.bullet, { color }]}>•</Text>
           <Text selectable style={[styles.listText, { color }]}>{item}</Text>
         </View>
       ))}
@@ -113,13 +113,13 @@ export default function BodyAnalysisResultScreen() {
       />
       {bodyAnalysisDemoEnabled ? (
         <BodyCard style={{ backgroundColor: colors.greenTint }}>
-          <Text style={[styles.eyebrow, { color: Brand.greenDark }]}>LOCAL DEMO · NOT AI OUTPUT</Text>
+          <Text style={[styles.eyebrow, { color: colors.accentStrong }]}>LOCAL DEMO · NOT AI OUTPUT</Text>
           <Text style={[styles.body, { color: colors.textSecondary }]}>This deterministic result tests the interface only. It was not generated from your photos.</Text>
         </BodyCard>
       ) : null}
 
       <BodyCard>
-        <Text style={[styles.eyebrow, { color: Brand.green }]}>CURRENT DIRECTION</Text>
+        <Text style={[styles.eyebrow, { color: colors.accent }]}>CURRENT DIRECTION</Text>
         <BodySectionTitle>{result.summary}</BodySectionTitle>
         <Text selectable style={[styles.body, { color: colors.textSecondary }]}>{result.progress.summary}</Text>
         <List items={result.progress.changes} color={colors.textSecondary} />
@@ -170,7 +170,7 @@ export default function BodyAnalysisResultScreen() {
         <BodySectionTitle>Your two priorities</BodySectionTitle>
         {result.focusAreas.map((focus, index) => (
           <View key={focus.id} style={styles.focusBlock}>
-            <Text style={[styles.focusNumber, { color: Brand.green }]}>{index + 1}</Text>
+            <Text style={[styles.focusNumber, { color: colors.accent }]}>{index + 1}</Text>
             <View style={styles.focusText}>
               <Text style={[styles.focusTitle, { color: colors.text }]}>{focus.title}</Text>
               <Text selectable style={[styles.body, { color: colors.textSecondary }]}>{focus.reason}</Text>
@@ -183,12 +183,12 @@ export default function BodyAnalysisResultScreen() {
       <BodyCard>
         <BodySectionTitle>Training focus</BodySectionTitle>
         <Text selectable style={[styles.body, { color: colors.textSecondary }]}>{result.training.weeklyFocus}</Text>
-        <Text style={[styles.planMeta, { color: Brand.green }]}>{result.training.daysPerWeek} days per week</Text>
+        <Text style={[styles.planMeta, { color: colors.accent }]}>{result.training.daysPerWeek} days per week</Text>
         {result.training.exercises.map((exercise) => (
           <View key={`${exercise.name}-${exercise.sets}`} style={[styles.exercise, { backgroundColor: colors.background }]}>
             <View style={styles.exerciseTop}>
               <Text style={[styles.exerciseName, { color: colors.text }]}>{exercise.name}</Text>
-              <Text style={[styles.exerciseDose, { color: Brand.greenDark }]}>{exercise.sets} × {exercise.reps}</Text>
+              <Text style={[styles.exerciseDose, { color: colors.accentStrong }]}>{exercise.sets} × {exercise.reps}</Text>
             </View>
             <Text selectable style={[styles.photoNote, { color: colors.textSecondary }]}>{exercise.reason}{exercise.equipment ? ` · ${exercise.equipment}` : ''}</Text>
           </View>
@@ -199,7 +199,7 @@ export default function BodyAnalysisResultScreen() {
         <BodySectionTitle>Nutrition direction</BodySectionTitle>
         <Text style={[styles.focusTitle, { color: colors.text }]}>{targetLabel}</Text>
         {result.nutrition.calorieAdjustment ? (
-          <Text style={[styles.planMeta, { color: Brand.green }]}>{result.nutrition.calorieAdjustment > 0 ? '+' : ''}{result.nutrition.calorieAdjustment} kcal/day</Text>
+          <Text style={[styles.planMeta, { color: colors.accent }]}>{result.nutrition.calorieAdjustment > 0 ? '+' : ''}{result.nutrition.calorieAdjustment} kcal/day</Text>
         ) : null}
         {result.nutrition.proteinTargetG ? <Text style={[styles.body, { color: colors.textSecondary }]}>Protein guide: {result.nutrition.proteinTargetG} g/day</Text> : null}
         <List items={result.nutrition.habits} color={colors.textSecondary} />

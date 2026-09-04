@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { higherLowerAnsweredRounds } from './game-rules';
 import { dayKey } from './store';
+import { supabase } from './supabase';
 
 /**
  * The calorie target challenge — a built-in game that trains calorie
@@ -408,7 +410,7 @@ export function scoreRound(totals: PlateTotals, challenge: Challenge): RoundResu
   return { stars, diffPct, proteinMet, headline };
 }
 
-/** Lifetime game stats, device-local. */
+/** Lifetime game stats, cached locally and synced to the signed-in account. */
 export type GameStats = {
   played: number;
   threeStar: number;
@@ -432,6 +434,10 @@ export type GameStats = {
 
 const STATS_KEY = 'trak.game.v1';
 
+export function gameStatsStorageKey(userId?: string | null): string {
+  return userId ? `${STATS_KEY}.${userId}` : STATS_KEY;
+}
+
 export const EMPTY_STATS: GameStats = {
   played: 0,
   threeStar: 0,
@@ -447,22 +453,68 @@ export const EMPTY_STATS: GameStats = {
   foodMastery: {},
 };
 
-export async function loadGameStats(): Promise<GameStats> {
+function normalizeGameStats(value: unknown): GameStats {
+  const parsed = value && typeof value === 'object' ? value as Partial<GameStats> : {};
+  const count = (candidate: unknown) => Math.max(0, Math.floor(Number(candidate) || 0));
+  return {
+    ...EMPTY_STATS,
+    played: count(parsed.played),
+    threeStar: count(parsed.threeStar),
+    dailyStreak: count(parsed.dailyStreak),
+    lastDailyDay: typeof parsed.lastDailyDay === 'string' ? parsed.lastDailyDay : null,
+    bestDiffPct: parsed.bestDiffPct == null ? null : count(parsed.bestDiffPct),
+    hlBest: count(parsed.hlBest),
+    hlRounds: count(parsed.hlRounds),
+    guessCount: count(parsed.guessCount),
+    guessErrSum: count(parsed.guessErrSum),
+    portionRounds: count(parsed.portionRounds),
+    portionCorrect: count(parsed.portionCorrect),
+    foodMastery: parsed.foodMastery && typeof parsed.foodMastery === 'object'
+      ? Object.fromEntries(Object.entries(parsed.foodMastery).map(([key, amount]) => [key, count(amount)]))
+      : {},
+  };
+}
+
+async function loadLocalStats(userId?: string | null): Promise<GameStats> {
   try {
-    const raw = await AsyncStorage.getItem(STATS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        ...EMPTY_STATS,
-        ...parsed,
-        foodMastery:
-          parsed.foodMastery && typeof parsed.foodMastery === 'object' ? parsed.foodMastery : {},
-      };
+    if (userId) {
+      const scoped = await AsyncStorage.getItem(gameStatsStorageKey(userId));
+      if (scoped) return normalizeGameStats(JSON.parse(scoped));
+      // Claim the old unscoped cache once, then remove it so a second account
+      // on the same phone can never inherit the first player's progress.
+      const legacy = await AsyncStorage.getItem(STATS_KEY);
+      if (legacy) {
+        const migrated = normalizeGameStats(JSON.parse(legacy));
+        await AsyncStorage.setItem(gameStatsStorageKey(userId), JSON.stringify(migrated));
+        await AsyncStorage.removeItem(STATS_KEY);
+        return migrated;
+      }
+    } else {
+      const raw = await AsyncStorage.getItem(STATS_KEY);
+      if (raw) return normalizeGameStats(JSON.parse(raw));
     }
   } catch {
     // Fall through to fresh stats.
   }
   return EMPTY_STATS;
+}
+
+export async function loadGameStats(userId?: string | null): Promise<GameStats> {
+  const local = await loadLocalStats(userId);
+  if (!userId) return local;
+  try {
+    const { data, error } = await supabase.from('game_stats').select('stats').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    const next = data?.stats ? normalizeGameStats(data.stats) : local;
+    await AsyncStorage.setItem(gameStatsStorageKey(userId), JSON.stringify(next));
+    if (!data) {
+      await supabase.from('game_stats').upsert({ user_id: userId, stats: next, updated_at: new Date().toISOString() });
+    }
+    return next;
+  } catch {
+    // Older/offline backends keep games fully usable from the account-scoped cache.
+    return local;
+  }
 }
 
 function yesterdayKey(): string {
@@ -476,7 +528,8 @@ export async function recordRound(
   result: RoundResult,
   isDaily: boolean,
   stats: GameStats,
-  foodIds: string[] = []
+  foodIds: string[] = [],
+  userId?: string | null,
 ): Promise<GameStats> {
   const today = dayKey();
   const next: GameStats = {
@@ -493,12 +546,7 @@ export async function recordRound(
     next.dailyStreak = stats.lastDailyDay === yesterdayKey() ? stats.dailyStreak + 1 : 1;
     next.lastDailyDay = today;
   }
-  try {
-    await AsyncStorage.setItem(STATS_KEY, JSON.stringify(next));
-  } catch {
-    // Non-critical; stats just won't persist.
-  }
-  return next;
+  return saveStats(next, userId);
 }
 
 function addFoodMastery(current: Record<string, number>, foodIds: string[]): Record<string, number> {
@@ -511,11 +559,22 @@ export function masteredFoodCount(foods: Ingredient[], stats: GameStats): number
   return foods.filter((food) => (stats.foodMastery[food.id] ?? 0) >= 2).length;
 }
 
-async function saveStats(next: GameStats): Promise<GameStats> {
+async function saveStats(next: GameStats, userId?: string | null): Promise<GameStats> {
   try {
-    await AsyncStorage.setItem(STATS_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(gameStatsStorageKey(userId), JSON.stringify(next));
   } catch {
     // Non-critical; stats just won't persist.
+  }
+  if (userId) {
+    try {
+      await supabase.from('game_stats').upsert({
+        user_id: userId,
+        stats: next,
+        updated_at: new Date().toISOString(),
+      });
+    } catch {
+      // The local account-scoped cache remains the offline fallback.
+    }
   }
   return next;
 }
@@ -524,37 +583,39 @@ async function saveStats(next: GameStats): Promise<GameStats> {
 export async function recordHigherLower(
   run: number,
   stats: GameStats,
-  correctFoodIds: string[] = []
+  correctFoodIds: string[] = [],
+  userId?: string | null,
 ): Promise<GameStats> {
   return saveStats({
     ...stats,
-    hlRounds: stats.hlRounds + run,
+    hlRounds: stats.hlRounds + higherLowerAnsweredRounds(run),
     hlBest: Math.max(stats.hlBest, run),
     foodMastery: addFoodMastery(stats.foodMastery, correctFoodIds),
-  });
+  }, userId);
 }
 
 /** Record one answer in the portion-estimation game. */
 export async function recordPortionGuess(
   correct: boolean,
   foodId: string,
-  stats: GameStats
+  stats: GameStats,
+  userId?: string | null,
 ): Promise<GameStats> {
   return saveStats({
     ...stats,
     portionRounds: stats.portionRounds + 1,
     portionCorrect: stats.portionCorrect + (correct ? 1 : 0),
     foodMastery: correct ? addFoodMastery(stats.foodMastery, [foodId]) : stats.foodMastery,
-  });
+  }, userId);
 }
 
 /** Record a guess-before-you-scan miss (absolute percent error). */
-export async function recordScanGuess(errPct: number, stats: GameStats): Promise<GameStats> {
+export async function recordScanGuess(errPct: number, stats: GameStats, userId?: string | null): Promise<GameStats> {
   return saveStats({
     ...stats,
     guessCount: stats.guessCount + 1,
     guessErrSum: stats.guessErrSum + Math.max(0, Math.round(errPct)),
-  });
+  }, userId);
 }
 
 /** The nutrient Higher-or-Lower compares in a given round. */

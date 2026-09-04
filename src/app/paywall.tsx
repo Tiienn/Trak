@@ -48,7 +48,7 @@ const PERKS: [IconCmp, string, string][] = [
 /** Everything below stays free with or without a subscription. */
 const FREE: [IconCmp, string][] = [
   [BarcodeIcon, 'Barcode scan and quick-add'],
-  [PlateIcon, 'Manual and text meal logging'],
+  [PlateIcon, 'Manual meal entry and editable logs'],
   [ScaleIcon, 'Water, weight, exercise, and supplements'],
   [TrendUpIcon, 'History, insights, reminders, and games'],
 ];
@@ -188,7 +188,7 @@ export default function PaywallScreen() {
           <View style={styles.brandLockup}>
             <RingMark size={30} />
             <TrakWordmark color={colors.text} size={28} />
-            <Text style={[styles.brandSuffix, { color: Brand.green }]}>Pro</Text>
+            <Text style={[styles.brandSuffix, { color: colors.accent }]}>Pro</Text>
           </View>
           <Text style={[styles.title, { color: colors.text }]}>{header.title}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{header.body}</Text>
@@ -197,7 +197,7 @@ export default function PaywallScreen() {
               and burying it under explainer cards pushed it off-screen. */}
           {isPro ? (
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
-              <CheckIcon size={18} color={Brand.green} />
+              <CheckIcon size={18} color={colors.accent} />
               <Text style={[styles.proBoxText, { color: colors.text }]}>
                 {Platform.OS === 'ios'
                   ? 'Subscribed. Manage or cancel any time in Settings › Apple Account › Subscriptions.'
@@ -205,7 +205,7 @@ export default function PaywallScreen() {
               </Text>
             </View>
           ) : packages === null ? (
-            <ActivityIndicator style={styles.loader} color={Brand.green} />
+            <ActivityIndicator style={styles.loader} color={colors.accent} />
           ) : packages.length === 0 ? (
             <View style={[styles.proBox, { backgroundColor: colors.backgroundElement }]}>
               <Text style={[styles.proBoxText, { color: colors.textSecondary }]}>
@@ -226,7 +226,7 @@ export default function PaywallScreen() {
                     style={[
                       styles.pkg,
                       { backgroundColor: colors.backgroundElement, borderColor: 'transparent' },
-                      active && { borderColor: Brand.green, backgroundColor: `${Brand.green}22` },
+                      active && { borderColor: colors.accent, backgroundColor: `${Brand.green}22` },
                     ]}>
                     <View style={styles.pkgInfo}>
                       <Text style={[styles.pkgTitle, { color: colors.text }]}>{title}</Text>
@@ -273,7 +273,7 @@ export default function PaywallScreen() {
             {PERKS.map(([Icon, name, detail]) => (
               <View key={name} style={styles.perkRow}>
                 <View style={[styles.perkIcon, { backgroundColor: colors.greenTint }]}>
-                  <Icon size={18} color={Brand.green} />
+                  <Icon size={18} color={colors.accent} />
                 </View>
                 <View style={styles.perkInfo}>
                   <Text style={[styles.perkName, { color: colors.text }]}>{name}</Text>
@@ -283,13 +283,17 @@ export default function PaywallScreen() {
             ))}
           </View>
 
+          <Text style={[styles.fairUse, { color: colors.textSecondary }]}>
+            Fair-use safeguards: up to 150 combined AI photo and Chat/Ask requests, plus 3 Body Analysis attempts, per day.
+          </Text>
+
           <View style={[styles.card, { backgroundColor: colors.backgroundElement }]}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Free forever, no subscription</Text>
             {FREE.map(([Icon, text]) => (
               <View key={text} style={styles.freeRow}>
                 <Icon size={16} color={colors.textSecondary} />
                 <Text style={[styles.freeText, { color: colors.text }]}>{text}</Text>
-                <CheckIcon size={14} color={Brand.green} />
+                <CheckIcon size={14} color={colors.accent} />
               </View>
             ))}
           </View>
@@ -444,5 +448,6 @@ const styles = StyleSheet.create({
 
   secondary: { paddingVertical: Spacing.three },
   secondaryText: { fontSize: 14, fontWeight: '600' },
+  fairUse: { fontSize: 12, textAlign: 'center', lineHeight: 17, marginTop: Spacing.three },
   fine: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
 });

@@ -409,6 +409,5 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: '#111111', fontSize: 16, fontWeight: '700' },
   linkBtn: { paddingVertical: 8 },
-  link: { color: Brand.green, fontSize: 15, fontWeight: '600' },
   linkMuted: { color: '#8A8F98', fontSize: 15 },
 });

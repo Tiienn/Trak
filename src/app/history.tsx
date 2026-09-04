@@ -10,6 +10,7 @@ import { buildDailyHistory, dailyHistoryFor, personalRecords } from '@/lib/histo
 import { dayKey, useMeals } from '@/lib/store';
 import { useSupplements } from '@/lib/supplements';
 import { useAppScheme } from '@/lib/theme';
+import { workoutFocusLabel } from '@/lib/training-catalog';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -70,10 +71,9 @@ export default function HistoryScreen() {
     setSelectedDate(dayKey(next));
   }
 
-  const entries = [
-    ...selected.meals.map((meal) => ({ kind: 'meal' as const, at: meal.createdAt, meal })),
-    ...selected.exercises.map((exercise) => ({ kind: 'exercise' as const, at: exercise.createdAt, exercise })),
-  ].sort((a, b) => b.at - a.at);
+  const workoutEntries = [...selected.exercises].sort((a, b) => b.createdAt - a.createdAt);
+  const mealEntries = [...selected.meals].sort((a, b) => b.createdAt - a.createdAt);
+  const workoutMinutes = selected.exercises.reduce((sum, exercise) => sum + Math.max(0, exercise.durationMinutes || 0), 0);
   const dateLabel = localDate(selectedDate).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 
   return (
@@ -81,7 +81,7 @@ export default function HistoryScreen() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.eyebrow}>YOUR TIMELINE</Text>
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>YOUR TIMELINE</Text>
             <Text style={[styles.title, { color: colors.text }]}>History</Text>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close history" onPress={() => router.back()} hitSlop={12}>
@@ -133,7 +133,7 @@ export default function HistoryScreen() {
 
           <View style={styles.sectionHeader}>
             <Text style={[styles.dateTitle, { color: colors.text }]}>{dateLabel}</Text>
-            {selectedDate === today ? <Text style={[styles.todayBadge, { color: Brand.greenDark, backgroundColor: colors.greenTint }]}>TODAY</Text> : null}
+            {selectedDate === today ? <Text style={[styles.todayBadge, { color: colors.accentStrong, backgroundColor: colors.greenTint }]}>TODAY</Text> : null}
           </View>
 
           <View style={styles.scoreCard}>
@@ -162,46 +162,66 @@ export default function HistoryScreen() {
           </View>
 
           <View style={[styles.habitsCard, { backgroundColor: colors.backgroundElement }]}>
-            <Habit icon={<DropletIcon size={20} color={Brand.green} />} value={`${selected.waterGlasses}/${selected.waterGoal}`} label="water" colors={colors} />
+            <Habit icon={<DropletIcon size={20} color={colors.accent} />} value={`${selected.waterGlasses}/${selected.waterGoal}`} label="water" colors={colors} />
             <View style={[styles.habitDivider, { backgroundColor: colors.backgroundSelected }]} />
-            <Habit icon={<PillIcon size={20} color={Brand.green} />} value={`${selected.supplementsTaken.length}/${selected.supplementsPlanned}`} label="supplements" colors={colors} />
+            <Habit icon={<PillIcon size={20} color={colors.accent} />} value={`${selected.supplementsTaken.length}/${selected.supplementsPlanned}`} label="supplements" colors={colors} />
             <View style={[styles.habitDivider, { backgroundColor: colors.backgroundSelected }]} />
-            <Habit icon={<DumbbellIcon size={20} color={Brand.green} />} value={`${Math.round(selected.caloriesBurned)}`} label="kcal burned" colors={colors} />
+            <Habit icon={<DumbbellIcon size={20} color={colors.accent} />} value={`${workoutMinutes}`} label="workout min" colors={colors} />
           </View>
           {selected.supplementsTaken.length > 0 ? (
             <Text style={[styles.supplementNames, { color: colors.textSecondary }]}>Taken: {selected.supplementsTaken.map((item) => item.name).join(' · ')}</Text>
           ) : null}
 
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Day log</Text>
-          {entries.length === 0 ? (
+          <View style={styles.sectionTitleRow}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Workouts</Text>
+            {workoutEntries.length > 0 ? (
+              <Text style={[styles.sectionSummary, { color: colors.textSecondary }]}>
+                {workoutEntries.length} logged · {workoutMinutes} min · {Math.round(selected.caloriesBurned)} kcal
+              </Text>
+            ) : null}
+          </View>
+          {workoutEntries.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
-              <PlateIcon size={28} color={colors.textSecondary} />
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No meals or workouts logged on this day.</Text>
+              <DumbbellIcon size={28} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No workout logged on this day.</Text>
             </View>
           ) : (
             <View style={[styles.logCard, { backgroundColor: colors.backgroundElement }]}>
-              {entries.map((entry, index) => {
-                const border = index < entries.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.backgroundSelected } : undefined;
-                if (entry.kind === 'exercise') {
-                  return (
-                    <View key={`exercise-${entry.exercise.id}`} style={[styles.logRow, border]}>
-                      <DumbbellIcon size={20} color={Brand.green} />
-                      <View style={styles.logInfo}>
-                        <Text style={[styles.logTitle, { color: colors.text }]} numberOfLines={1}>{entry.exercise.name}</Text>
-                        <Text style={[styles.logMeta, { color: colors.textSecondary }]}>{formatTime(entry.exercise.createdAt)} · {entry.exercise.durationMinutes} min</Text>
-                      </View>
-                      <Text style={[styles.logValue, { color: Brand.green }]}>-{entry.exercise.caloriesBurned}</Text>
-                    </View>
-                  );
-                }
+              {workoutEntries.map((exercise, index) => {
+                const border = index < workoutEntries.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.backgroundSelected } : undefined;
+                const focuses = [...new Set(exercise.workoutSplits.map(workoutFocusLabel))].join(' · ');
                 return (
-                  <Pressable key={`meal-${entry.meal.id}`} onPress={() => router.push(`/meal/${entry.meal.id}`)} style={({ pressed }) => [styles.logRow, border, pressed && { backgroundColor: colors.backgroundSelected }]}>
+                  <View key={`exercise-${exercise.id}`} style={[styles.logRow, border]}>
+                    <DumbbellIcon size={20} color={colors.accent} />
+                    <View style={styles.logInfo}>
+                      <Text style={[styles.logTitle, { color: colors.text }]} numberOfLines={1}>{exercise.name}</Text>
+                      <Text style={[styles.logMeta, { color: colors.textSecondary }]}>{formatTime(exercise.createdAt)} · {exercise.durationMinutes} min{focuses ? ` · ${focuses}` : ''}</Text>
+                    </View>
+                    <Text style={[styles.logValue, { color: colors.accent }]}>{Math.round(exercise.caloriesBurned)} kcal</Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Meals</Text>
+          {mealEntries.length === 0 ? (
+            <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
+              <PlateIcon size={28} color={colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No meals logged on this day.</Text>
+            </View>
+          ) : (
+            <View style={[styles.logCard, { backgroundColor: colors.backgroundElement }]}>
+              {mealEntries.map((meal, index) => {
+                const border = index < mealEntries.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.backgroundSelected } : undefined;
+                return (
+                  <Pressable key={`meal-${meal.id}`} onPress={() => router.push(`/meal/${meal.id}`)} style={({ pressed }) => [styles.logRow, border, pressed && { backgroundColor: colors.backgroundSelected }]}>
                     <PlateIcon size={20} color={colors.textSecondary} />
                     <View style={styles.logInfo}>
-                      <Text style={[styles.logTitle, { color: colors.text }]} numberOfLines={1}>{entry.meal.title}</Text>
-                      <Text style={[styles.logMeta, { color: colors.textSecondary }]}>{formatTime(entry.meal.createdAt)} · {Math.round(entry.meal.total.protein_g)}g protein</Text>
+                      <Text style={[styles.logTitle, { color: colors.text }]} numberOfLines={1}>{meal.title}</Text>
+                      <Text style={[styles.logMeta, { color: colors.textSecondary }]}>{formatTime(meal.createdAt)} · {Math.round(meal.total.protein_g)}g protein</Text>
                     </View>
-                    <Text style={[styles.logValue, { color: colors.text }]}>{Math.round(entry.meal.total.calories)}</Text>
+                    <Text style={[styles.logValue, { color: colors.text }]}>{Math.round(meal.total.calories)}</Text>
                     <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
                   </Pressable>
                 );
@@ -212,7 +232,7 @@ export default function HistoryScreen() {
           {records.length > 0 ? (
             <>
               <View style={styles.recordsTitleRow}>
-                <TrophyIcon size={19} color={Brand.green} />
+                <TrophyIcon size={19} color={colors.accent} />
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal records</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recordsRow}>
@@ -220,7 +240,7 @@ export default function HistoryScreen() {
                   <View key={record.key} style={[styles.recordCard, { backgroundColor: colors.backgroundElement }]}>
                     <Text style={[styles.recordLabel, { color: colors.textSecondary }]}>{record.label}</Text>
                     <Text style={[styles.recordValue, { color: colors.text }]}>{record.value.toLocaleString()} <Text style={styles.recordUnit}>{record.unit}</Text></Text>
-                    <Text style={styles.recordDate}>{localDate(record.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                    <Text style={[styles.recordDate, { color: colors.accent }]}>{localDate(record.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                   </View>
                 ))}
               </ScrollView>
@@ -239,7 +259,7 @@ function Habit({ icon, value, label, colors }: { icon: ReactNode; value: string;
 const styles = StyleSheet.create({
   container: { flex: 1 }, safe: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.four, paddingTop: Spacing.two, paddingBottom: Spacing.three },
-  eyebrow: { color: Brand.green, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
+  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   title: { fontFamily: Type.display, fontSize: 35, fontWeight: '700', letterSpacing: -0.8 }, closeText: { fontSize: 20, fontWeight: '600' },
   scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six, gap: Spacing.three },
   calendarCard: { borderRadius: 24, padding: Spacing.three }, monthRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.two },
@@ -254,8 +274,8 @@ const styles = StyleSheet.create({
   macroRow: { flexDirection: 'row', gap: Spacing.two }, macroCard: { flex: 1, borderRadius: 18, padding: Spacing.three }, macroDot: { width: 7, height: 7, borderRadius: 4, marginBottom: Spacing.two },
   macroValue: { fontSize: 19, fontWeight: '800' }, macroLabel: { fontSize: 11, marginTop: 2 }, habitsCard: { borderRadius: 20, paddingVertical: Spacing.three, flexDirection: 'row', alignItems: 'stretch' },
   habitItem: { flex: 1, alignItems: 'center', gap: 3 }, habitDivider: { width: StyleSheet.hairlineWidth }, habitValue: { fontSize: 15, fontWeight: '800' }, habitLabel: { fontSize: 10, textAlign: 'center' },
-  supplementNames: { fontSize: 12, lineHeight: 18, marginTop: -Spacing.two }, sectionTitle: { fontSize: 18, fontWeight: '800' }, empty: { borderRadius: 20, padding: Spacing.four, alignItems: 'center', gap: Spacing.two }, emptyText: { fontSize: 13, textAlign: 'center' },
+  supplementNames: { fontSize: 12, lineHeight: 18, marginTop: -Spacing.two }, sectionTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: Spacing.two }, sectionTitle: { fontSize: 18, fontWeight: '800' }, sectionSummary: { flexShrink: 1, fontSize: 11, lineHeight: 15, fontWeight: '700', textAlign: 'right' }, empty: { borderRadius: 20, padding: Spacing.four, alignItems: 'center', gap: Spacing.two }, emptyText: { fontSize: 13, textAlign: 'center' },
   logCard: { borderRadius: 20, paddingHorizontal: Spacing.three, overflow: 'hidden' }, logRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: Spacing.two }, logInfo: { flex: 1 }, logTitle: { fontSize: 14, fontWeight: '700' }, logMeta: { fontSize: 11, marginTop: 3 }, logValue: { fontSize: 15, fontWeight: '800' }, chevron: { fontSize: 20 },
   recordsTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.two }, recordsRow: { gap: Spacing.two, paddingRight: Spacing.four }, recordCard: { width: 166, minHeight: 112, borderRadius: 18, padding: Spacing.three, justifyContent: 'space-between' },
-  recordLabel: { fontSize: 11, fontWeight: '700' }, recordValue: { fontSize: 20, fontWeight: '900' }, recordUnit: { fontSize: 10, fontWeight: '600' }, recordDate: { color: Brand.green, fontSize: 11, fontWeight: '700' },
+  recordLabel: { fontSize: 11, fontWeight: '700' }, recordValue: { fontSize: 20, fontWeight: '900' }, recordUnit: { fontSize: 10, fontWeight: '600' }, recordDate: { fontSize: 11, fontWeight: '700' },
 });

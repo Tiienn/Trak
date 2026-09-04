@@ -36,7 +36,7 @@ function titleKey(title: string): string {
 function sourceFor(meal: LoggedMeal): 'text' | 'photo' | 'other' {
   const source = meal.analysisMeta?.inputSource;
   if (source === 'text' || source === 'photo') return source;
-  if (source === 'barcode' || source === 'quick_log') return 'other';
+  if (source === 'barcode' || source === 'quick_log' || source === 'manual') return 'other';
   if (
     meal.analysisMeta?.pipelineVersion?.startsWith('open-food-facts') ||
     meal.notes?.startsWith('From barcode ')

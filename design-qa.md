@@ -1,4 +1,199 @@
-# Design QA — Daily Missions and Trak Rewards
+# Design QA — Trak
+
+## Progress muscle focus + Body Analysis preview copy — Sep 3, 2026
+
+### Visual source and normalized comparison
+
+- Visual sources: the user-provided Progress screenshots at `/var/folders/ch/mqhz5ht92w9cfx5w3bw8_6rm0000gn/T/TemporaryItems/NSIRD_screencaptureui_g07vhq/Screenshot 2026-09-03 at 00.30.27.png` and `/var/folders/ch/mqhz5ht92w9cfx5w3bw8_6rm0000gn/T/TemporaryItems/NSIRD_screencaptureui_yfqTID/Screenshot 2026-09-03 at 00.31.31.png`.
+- Rendered implementation: `/Users/tien/trak/output/qa-muscle-focus-layout/progress-chest-focus.png` and `/Users/tien/trak/output/qa-muscle-focus-layout/body-analysis-preview-copy.png`.
+- Side-by-side comparisons inspected: `/Users/tien/trak/output/qa-muscle-focus-layout/comparison-progress.png` and `/Users/tien/trak/output/qa-muscle-focus-layout/comparison-body-analysis-copy.png`.
+- The implementation is captured on the same iPhone 17 Pro Max simulator and in the same dark appearance and authenticated Chest-focus state as the reference.
+
+### Findings and fidelity surfaces
+
+- No actionable P0, P1, or P2 findings remain.
+- Hierarchy: passed. Muscle focus is now an independent compact row between the weekly cards and Today’s Training; the training card no longer nests an unrelated settings control.
+- Density: passed. The separate focus row is 78 pt tall, preserves a full-size touch target, and shortens the training card without changing the plan, completion gesture, feedback actions, or safe-effort guidance.
+- Typography, color, spacing, and assets: passed. The row reuses Trak’s existing eyebrow, card radius, cream/forest palette, gutters, and dumbbell icon rather than introducing a new visual language.
+- Copy: passed. The demo-only card now says “Preview mode” and explains that sample content stays on-device and does not perform a real analysis. Gemini and backend implementation details are absent from the user-facing preview. Production consent/privacy copy remains separate and accurate.
+- Muscle-score meaning: passed. The universal 12-set “Target met” threshold remains unchanged; selecting Chest changes recommendations without moving the score goalpost.
+
+### Interaction and accessibility verification
+
+- Selecting Chest, saving, returning to Progress, and re-opening the focus flow passed on the iOS simulator.
+- The saved focus is loaded before the selector can be saved, preventing a temporary default from clearing an existing choice.
+- The compact row announces its muscle, block week, recommendation use, and Change/Choose action.
+- Body Analysis preview copy passed presence checks; “Gemini” and “backend” passed absence checks.
+- TypeScript, Expo lint, 108 Node tests, and 12 Deno tests pass.
+
+final result: passed
+
+---
+
+## Home → Weight and Exercise — Sep 2, 2026
+
+### Visual source and normalized comparison
+
+- Visual truth: the user-provided Home screenshot at `/Users/tien/trak/output/audits/home-body-activity-2026-09-01/source-home-weight-exercise.png`.
+- Rendered implementation: `/Users/tien/trak/output/audits/home-body-activity-2026-09-01/implementation-home-body-activity.png`.
+- Same-viewport comparison inspected: `/Users/tien/trak/output/audits/home-body-activity-2026-09-01/comparison-home-full.png`.
+- The source app interior and implementation are both normalized to the same 440 × 956 logical-point viewport. State differs only because the verification crossed midnight: the reference has Sep 1 meal/workout data, while the final simulator capture shows the Sep 2 empty-day state.
+
+### Findings and fidelity surfaces
+
+- No actionable P0, P1, or P2 findings remain.
+- Hierarchy: passed. Two disconnected utility rows are now one compact Body + Activity card, with equally weighted Weight and Exercise actions.
+- Typography: passed. Labels use the existing secondary 13 pt treatment, values use the existing strong 20 pt dashboard treatment, and supporting details remain deliberately smaller.
+- Color and assets: passed. Existing Trak scale, dumbbell, and chevron icons are reused with the same white, cream, sage, and forest tokens as Water and Activity.
+- Spacing and shape: passed. Both halves share aligned icon headers, value baselines, metadata lines, a subtle divider, 44+ pt touch targets, and the Home card's existing 20 pt radius.
+- Empty and populated states: passed. A populated card shows weight change plus calories/minutes; a new day exposes “Log weight”/“Log workout” actions without inventing values.
+
+### Interaction and accessibility verification
+
+- Weight opens the existing app-wide weigh-in screen and the close control returns to Home.
+- Exercise opens the existing “What did you train?” logger.
+- Each half exposes a stable, descriptive accessibility label in both populated and empty states.
+- Maestro verified both routes on the iPhone 17 Pro Max simulator.
+
+### Verification
+
+- TypeScript: passed (`npx tsc --noEmit`).
+- Expo lint: passed.
+- Full automated suite: passed — 83 Node unit tests, 12 Deno tests, and 15 evaluation tests.
+- Maestro iOS flow: passed for Home visibility, both card actions, and both destination screens.
+
+final result: passed
+
+---
+
+## Progress → Weight progress — Sep 1, 2026
+
+### Visual source and normalized comparison
+
+- Visual truth: the user-provided CalAI Progress screenshot at `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/source-calai-weight-progress.jpg`.
+- Rendered Trak implementation: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/implementation-weight-progress.png`.
+- Horizontally revealed range state: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/implementation-weight-progress-more-ranges.png`.
+- Combined focused comparison inspected: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/comparison-source-vs-trak.png`.
+- Source screenshot: 1200 × 2608 px. Implementation screenshot: 1320 × 2868 px from the iPhone 17 Pro Max simulator, representing 440 × 956 logical points at 3× density.
+- Both full screens were normalized to 1200 × 2608 px and compared side by side, with the Weight progress card visible in each.
+- State: authenticated test account, light appearance, gain goal, one visible 71 kg weigh-in, 7D selected.
+
+### Findings and fidelity surfaces
+
+- No actionable P0, P1, or P2 findings remain.
+- Hierarchy: passed. Trak follows the reference card’s title/goal chip, spacious line chart, four-visible-item range picker, and a single full-width logging action.
+- Typography and color: passed. The structure is faithful while Trak’s editorial serif, cream canvas, white card, forest line, and sage action surface remain unchanged.
+- Chart: passed. Five labelled dashed grid lines, first/latest date labels, historical points, a stronger latest point, flat-line handling, and an explicit empty state are legible without clipping.
+- Spacing and shape: passed. The 24 pt card radius, equal-width range segments, 40+ pt controls, and aligned card edges fit the existing Progress screen.
+- Copy: passed. The goal chip uses the profile’s real lose/maintain/gain goal rather than inventing a target-weight percentage Trak does not store. The reference’s ranges were intentionally replaced by the user-requested 7D through ALL sequence.
+- Assets: passed. The goal chip keeps only the existing chevron, as requested; the chart is data-driven and no placeholder, emoji, or copied CalAI asset was introduced.
+
+### Interaction and accessibility verification
+
+- 7D, 1M, 2M, and 3M are visible initially. A horizontal swipe reveals 4M, 5M, 6M, 1Y, and ALL without increasing card height.
+- 7D is an exact seven-day window; 1M–6M and 1Y use calendar-month boundaries with month-end clamping. Every range exposes selected accessibility state.
+- The chart announces its first date, latest date, and latest kilogram value as one image description.
+- The goal chip opens the existing profile editor; Log weight opens the existing app-wide weigh-in flow for the selected date.
+- Trak Score trend and the separate duplicate Weight tile are absent. Progress retains Weekly muscle score, Today’s training, and Workout Time.
+- Maestro exercised all nine filters, swiped through both selector states, verified the old trend is absent, opened the weigh-in flow, and confirmed “What is your weight?” is visible.
+
+### Comparison history
+
+#### Iteration 1
+
+- [P2] The first Trak pass added a large “latest weight” readout that was not present in the reference and made the card unnecessarily tall.
+  - Fix: removed the extra readout and let the labelled chart carry the current value, restoring the reference’s clean title → chart → range → message sequence.
+  - Post-fix evidence: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/comparison-source-vs-trak.png`.
+
+#### Iteration 2
+
+- [P2] The first 7D state repeated the same date at both chart edges when only one weigh-in was in range.
+  - Fix: a single-point chart now places one centered date label below the point; multi-point charts retain first/latest edge labels.
+  - Post-fix evidence: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/implementation-weight-progress.png`.
+
+#### Iteration 3
+
+- [P2] The progress message and nested green action made the footer busier than the Activity card below, and the goal flag duplicated the chip's meaning.
+  - Fix: replaced the footer with one full-width `LOG WEIGHT` button matching `LOG A WORKOUT`, and removed the flag while retaining the goal label and chevron.
+  - Post-fix evidence: `/Users/tien/trak/output/audits/weight-progress-calai-2026-09-01/comparison-source-vs-trak.png`.
+
+### Verification
+
+- TypeScript: passed (`npx tsc --noEmit`).
+- Expo lint: passed.
+- Full automated suite: passed — 83 Node unit tests, 12 Deno tests, and 15 evaluation tests.
+- Maestro iOS flow: passed all hierarchy, filter, absence, and weigh-in navigation checks.
+
+final result: passed
+
+---
+
+## Chat → Ask streamlined interface — Sep 1, 2026 follow-up
+
+### Visual source and normalized comparison
+
+- Visual truth: stable crops of the two user-provided simulator screenshots at `/Users/tien/trak/output/audits/chat-ask-2026-09-01/source-chat-before-v2.png` and `/Users/tien/trak/output/audits/chat-ask-2026-09-01/source-ask-before-v2.png`, together with the explicit deletion instructions in the same request.
+- Rendered Ask implementation: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/ask-spacing-expanded-v3.png` and `/Users/tien/trak/output/audits/chat-ask-2026-09-01/ask-spacing-collapsed-v3.png`.
+- Rendered Chat implementation: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/chat-clean-v2.png`.
+- Full Ask comparison: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/comparison-ask-cleanup-v2.png`.
+- Focused Chat-header comparison: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/comparison-chat-header-v2.png`.
+- Chat/Ask spacing comparison: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/comparison-chat-ask-spacing-v3.png`.
+- Source screenshots: 606 × 1166 px including simulator frame. The app-owned interior was cropped to 440 × 956 px at 1× for comparison.
+- Implementation screenshots: 1320 × 2868 px from the iPhone 17 Pro Max simulator, representing 440 × 956 logical points at 3× density; normalized to 440 × 956 px.
+- State: authenticated test account, light appearance. Ask is empty. Chat retains its existing conversation; the focused comparison isolates the unchanged Daily meals state that this request modifies.
+
+### Findings and fidelity surfaces
+
+- No actionable P0, P1, or P2 findings remain.
+- Fonts and typography: passed. “Suggested for you” and “Daily meals” now use the exact same `suggestionHeading` style, including size and weight.
+- Spacing and layout rhythm: passed. Ask now reuses Chat's 40 pt header row, 30 pt circular disclosure control, 8 pt section gap, and matching top/bottom padding. The prompt rail and browse action collapse together without leaving an accidental spacer.
+- Colors and visual tokens: passed. The cleanup uses the existing cream, white, forest, and text tokens with no new hardcoded visual system.
+- Image quality and asset fidelity: passed. No image or icon assets changed, and existing Trak logo/profile/navigation assets remain sharp and unchanged.
+- Copy and content: passed. Ask no longer shows “Ask about your progress,” its personal-answer subtitle, or the Trak Coach card. Chat no longer shows “Your most logged meals appear first.” Prompt text, logged-meal counts, and the broader question library remain intact.
+
+### Interaction and accessibility verification
+
+- Chat and Ask tab switching passed.
+- Daily meals remains collapsible and retains its accessible expanded state.
+- Suggested for you now has matching accessible expanded/collapsed states and `−`/`+` controls.
+- Suggested question selection continues through the existing Ask send path.
+- Browse more questions still opens the Today, Coach, Nutrition, and Trends sheet; backdrop dismissal passed.
+- The removed copy is absent from the rendered accessibility hierarchy, not merely hidden visually.
+- No change-related runtime errors were observed. The existing development-only RevenueCat cached-user warning remains unrelated.
+
+### Comparison history
+
+#### Iteration 1
+
+- [P2] The previous compact Ask build still carried an introduction and coach card, making the top state denser than the user's refined direction. Chat also retained an unnecessary helper line.
+  - Fix: removed all three Ask elements, removed Chat's helper line, and reused the Daily meals heading style for Suggested for you.
+  - Post-fix evidence: `/Users/tien/trak/output/audits/chat-ask-2026-09-01/comparison-ask-cleanup-v2.png` and `/Users/tien/trak/output/audits/chat-ask-2026-09-01/comparison-chat-header-v2.png`.
+
+#### Iteration 2
+
+- The normalized comparisons show the requested copy and card removed with the remaining controls aligned and intact. No actionable P0, P1, or P2 findings remain.
+
+### Verification
+
+- TypeScript: passed (`npx tsc --noEmit`).
+- Expo lint for the changed screen: passed.
+- Full automated suite: passed — 80 Node unit tests, 12 Deno tests, and 15 evaluation tests.
+- Maestro iOS flow: passed all Chat/Ask presence, absence, question-browser, and dismissal checks.
+
+### Implementation checklist
+
+- [x] Remove the Ask title and descriptive subtitle.
+- [x] Remove the Ask Trak Coach card.
+- [x] Match Suggested for you typography to Daily meals.
+- [x] Match Suggested for you disclosure control and spacing to Daily meals.
+- [x] Remove the Daily meals helper sentence from Chat.
+- [x] Preserve prompt selection, question browsing, meal shortcuts, and conversations.
+
+final result: passed
+
+---
+
+## Daily Missions and Trak Rewards
 
 ## Build 28 — rolling score and optional resets
 

@@ -92,7 +92,7 @@ function DateModal({ visible, selectedDate, onSelect, onClose, colors }: {
           keyExtractor={(item) => item}
           renderItem={({ item }) => {
             const selected = item === selectedDate;
-            return <Pressable onPress={() => { onSelect(item); onClose(); }} style={[styles.dateOption, selected && { backgroundColor: colors.greenTint }]}><CalendarIcon size={20} color={selected ? Brand.green : colors.textSecondary} /><Text style={[styles.dateOptionText, { color: colors.text }]}>{item === dayKey() ? 'Today' : formatDate(item)}</Text>{selected ? <Text style={styles.selectedLabel}>Selected</Text> : null}</Pressable>;
+            return <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} accessibilityLabel={item === dayKey() ? 'Today' : formatDate(item)} onPress={() => { onSelect(item); onClose(); }} style={[styles.dateOption, selected && { backgroundColor: colors.greenTint }]}><CalendarIcon size={20} color={selected ? colors.accent : colors.textSecondary} /><Text style={[styles.dateOptionText, { color: colors.text }]}>{item === dayKey() ? 'Today' : formatDate(item)}</Text>{selected ? <Text style={[styles.selectedLabel, { color: colors.accentStrong }]}>Selected</Text> : null}</Pressable>;
           }}
         />
       </SafeAreaView>
@@ -147,7 +147,7 @@ export default function WeightScreen() {
     }
   }
 
-  if (!loaded) return <View style={[styles.centered, { backgroundColor: colors.background }]}><ActivityIndicator color={Brand.green} /><Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your weight…</Text></View>;
+  if (!loaded) return <View style={[styles.centered, { backgroundColor: colors.background }]}><ActivityIndicator color={colors.accent} /><Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your weight…</Text></View>;
   if (loadError) return <View style={[styles.centered, { backgroundColor: colors.background }]}><Text style={[styles.errorTitle, { color: colors.text }]}>Couldn&apos;t load your weight</Text><Pressable style={styles.addButton} onPress={retryLoad}><Text style={styles.addButtonText}>Try again</Text></Pressable></View>;
 
   const wholeValues = unit === 'kg' ? KG_VALUES : LB_VALUES;
@@ -182,10 +182,10 @@ export default function WeightScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 }, safe: { flex: 1, paddingHorizontal: Spacing.four }, centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four, gap: Spacing.three }, loadingText: { fontSize: 14 }, errorTitle: { fontSize: 20, fontWeight: '800' },
-  header: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerSpacer: { width: 48 }, headerLabel: { fontSize: 17, fontWeight: '700' }, closeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  header: { minHeight: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerSpacer: { width: 48 }, headerLabel: { fontSize: 17, fontWeight: '700' }, closeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   title: { marginTop: Spacing.four, fontFamily: Type.display, fontSize: 36, lineHeight: 42, fontWeight: '700', textAlign: 'center' },
   dateRow: { minHeight: 66, borderRadius: 20, marginTop: Spacing.five, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, dateLabel: { fontSize: 15, fontWeight: '700' }, dateValueRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two }, dateValue: { fontSize: 15, fontWeight: '600' },
   pickerArea: { flex: 1, minHeight: 280, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }, selectionBand: { position: 'absolute', left: 0, right: 0, top: ITEM_HEIGHT, height: ITEM_HEIGHT, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth }, pickerItem: { height: ITEM_HEIGHT, alignItems: 'center', justifyContent: 'center' }, pickerText: { fontSize: 23, fontWeight: '500' }, pickerTextSelected: { fontSize: 27, fontWeight: '700' }, decimalPoint: { marginHorizontal: -4, fontSize: 30, lineHeight: 34 },
   bottomArea: { gap: Spacing.three, paddingBottom: Spacing.two }, helperText: { fontSize: 12, lineHeight: 17, textAlign: 'center' }, addButton: { minHeight: 58, borderRadius: 29, backgroundColor: Brand.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.five }, addButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '800', letterSpacing: 0.4 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }, dateSheet: { maxHeight: '62%', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.four }, sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.three }, sheetTitle: { fontFamily: Type.display, fontSize: 25, fontWeight: '700' }, sheetCaption: { marginTop: 2, fontSize: 12 }, dateOption: { minHeight: 54, borderRadius: 15, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.three }, dateOptionText: { flex: 1, fontSize: 15, fontWeight: '700' }, selectedLabel: { color: Brand.greenDark, fontSize: 12, fontWeight: '800' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }, dateSheet: { maxHeight: '62%', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: Spacing.four }, sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.three }, sheetTitle: { fontFamily: Type.display, fontSize: 25, fontWeight: '700' }, sheetCaption: { marginTop: 2, fontSize: 12 }, dateOption: { minHeight: 54, borderRadius: 15, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.three }, dateOptionText: { flex: 1, fontSize: 15, fontWeight: '700' }, selectedLabel: { fontSize: 12, fontWeight: '800' },
 });

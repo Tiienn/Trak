@@ -24,9 +24,10 @@ import { ServingInput } from '@/components/serving-input';
 import { Brand, Colors, type ThemeColors } from '@/constants/theme';
 import { analyzeFood } from '@/lib/analyzeFood';
 import { askTrak } from '@/lib/chat';
-import { foodCorrectionPrompt, replaceFoodItem } from '@/lib/food-correction';
+import { foodCorrectionPrompt, removeFoodItem, replaceFoodItem } from '@/lib/food-correction';
 import { correctFoodServing, foodServing, formatServingQuantity, parseServingAmount } from '@/lib/food-servings';
 import { loadGameStats, recordScanGuess } from '@/lib/game';
+import { useAuth } from '@/lib/auth';
 import { photoMealMemory } from '@/lib/meal-memory';
 import { useSubscription } from '@/lib/purchases';
 import { useMeals } from '@/lib/store';
@@ -44,6 +45,7 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const insets = useSafeAreaInsets();
   const { addMeal, calorieBias, meals } = useMeals();
+  const { user } = useAuth();
   const { capabilities } = useSubscription();
   const cameraRef = useRef<CameraView>(null);
   const [phase, setPhase] = useState<Phase>('camera');
@@ -163,8 +165,8 @@ export default function ScanScreen() {
       const g = guessRef.current;
       if (g != null && result.isFood && result.total.calories > 0) {
         const errPct = Math.round((Math.abs(g - result.total.calories) / result.total.calories) * 100);
-        loadGameStats()
-          .then((s) => recordScanGuess(errPct, s))
+        loadGameStats(user?.id)
+          .then((s) => recordScanGuess(errPct, s, user?.id))
           .catch(() => {});
       }
     } catch (e: any) {
@@ -244,7 +246,7 @@ export default function ScanScreen() {
             accessibilityRole="button"
             style={styles.linkBtn}
             onPress={() => router.push('/barcode')}>
-            <Text style={styles.linkText}>Scan a barcode instead</Text>
+            <Text style={[styles.linkText, { color: colors.accent }]}>Scan a barcode instead</Text>
           </Pressable>
         </View>
       </View>
@@ -395,6 +397,7 @@ export default function ScanScreen() {
           onRetake={reset}
           onDone={onAddToToday}
           onCorrectItem={onCorrectItem}
+          onRemoveItem={(index) => setAnalysis((latest) => latest ? removeFoodItem(latest, index) : latest)}
         />
       )}
     </View>
@@ -419,6 +422,7 @@ function ResultSheet({
   onRetake,
   onDone,
   onCorrectItem,
+  onRemoveItem,
 }: {
   analysis: FoodAnalysis;
   guess: number | null;
@@ -428,6 +432,7 @@ function ResultSheet({
   onRetake: () => void;
   onDone: () => void;
   onCorrectItem: (index: number, name: string, quantity: string) => Promise<void>;
+  onRemoveItem: (index: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -468,6 +473,31 @@ function ResultSheet({
     } catch {
       // The parent shows the actionable error and keeps the editor open.
     }
+  }
+
+  function confirmRemoveCurrent() {
+    if (editingIndex == null) return;
+    const item = analysis.items[editingIndex];
+    if (!item) return;
+    const discardScan = analysis.items.length === 1;
+    Alert.alert(
+      discardScan ? 'Discard scan?' : 'Remove food?',
+      discardScan
+        ? `Discard the ${item.name} result and take another photo?`
+        : `Remove ${item.name} from this scan? Calories and macros will be updated.`,
+      [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: discardScan ? 'Discard' : 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          if (discardScan) onRetake();
+          else onRemoveItem(editingIndex);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          cancelEditing();
+        },
+      },
+    ]);
   }
   // How the user's quick guess compares to the AI estimate.
   const actual = analysis.total.calories;
@@ -564,6 +594,16 @@ function ResultSheet({
                   <View style={styles.editorActions}>
                     <Pressable
                       accessibilityRole="button"
+                      accessibilityLabel={analysis.items.length === 1 ? 'Discard scan' : `Remove ${it.name} from scan`}
+                      style={styles.editorRemove}
+                      onPress={confirmRemoveCurrent}
+                      disabled={correcting}>
+                      <Text style={styles.editorRemoveText}>
+                        {analysis.items.length === 1 ? 'Discard scan' : 'Remove food'}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
                       style={styles.editorCancel}
                       onPress={cancelEditing}
                       disabled={correcting}>
@@ -607,7 +647,7 @@ function ResultSheet({
                   </View>
                   <View style={styles.itemMeta}>
                     <Text style={[styles.itemCals, { color: colors.text }]}>{it.calories} cal</Text>
-                    <Text style={styles.itemEdit}>Edit serving / food</Text>
+                    <Text style={[styles.itemEdit, { color: colors.accent }]}>Edit serving / food</Text>
                   </View>
                 </Pressable>
               ),
@@ -798,7 +838,7 @@ const styles = StyleSheet.create({
   itemQty: { fontSize: 13, color: '#8A8F98', marginTop: 2 },
   itemCals: { fontSize: 15, fontWeight: '700', color: '#111111' },
   itemMeta: { alignItems: 'flex-end', gap: 3 },
-  itemEdit: { color: Brand.green, fontSize: 12, fontWeight: '700' },
+  itemEdit: { fontSize: 12, fontWeight: '700' },
   itemEditor: {
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -814,6 +854,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   editorActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
+  editorRemove: { minHeight: 42, justifyContent: 'center', paddingHorizontal: 4, marginRight: 'auto' },
+  editorRemoveText: { color: '#D84A4A', fontSize: 13, fontWeight: '800' },
   editorCancel: { paddingHorizontal: 10, paddingVertical: 10 },
   editorCancelText: { fontSize: 14, fontWeight: '700' },
   editorSave: {
@@ -865,6 +907,6 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: '#111111', fontSize: 16, fontWeight: '700' },
   linkBtn: { paddingVertical: 8 },
-  linkText: { color: Brand.green, fontSize: 15, fontWeight: '600' },
+  linkText: { fontSize: 15, fontWeight: '600' },
   linkTextMuted: { color: '#8A8F98', fontSize: 15 },
 });

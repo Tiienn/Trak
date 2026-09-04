@@ -1,0 +1,37 @@
+appId: com.tien.trak.e2e
+name: Sign in and navigate primary tabs
+tags:
+  - navigation
+---
+- launchApp:
+    clearState: true
+- assertVisible: Welcome
+- tapOn:
+    id: auth-email
+- inputText: ${MAESTRO_TEST_EMAIL}
+- tapOn:
+    id: auth-password
+- inputText: ${MAESTRO_TEST_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth-submit
+- extendedWaitUntil:
+    visible:
+      id: screen-home
+    timeout: 20000
+- tapOn:
+    id: tab-chat
+- assertVisible:
+    id: screen-chat
+- tapOn:
+    id: tab-games
+- assertVisible:
+    id: screen-games
+- tapOn:
+    id: tab-progress
+- assertVisible:
+    id: screen-progress
+- tapOn:
+    id: tab-home
+- assertVisible:
+    id: screen-home

@@ -143,7 +143,7 @@ export default function SupplementsScreen() {
         {streak > 0 || allDone ? (
           <View style={styles.statusRow}>
             {streak > 0 ? (
-              <Text style={[styles.streakText, { color: Brand.greenDark }]}>{streak}-day streak</Text>
+              <Text style={[styles.streakText, { color: colors.accentStrong }]}>{streak}-day streak</Text>
             ) : null}
             {allDone ? (
               <Text style={[styles.allDoneText, { color: colors.textSecondary }]}>All done today</Text>
@@ -164,7 +164,7 @@ export default function SupplementsScreen() {
           {loaded && supplements.length === 0 ? (
             <View style={styles.emptyWrap}>
               <View style={[styles.emptyTile, { backgroundColor: colors.greenTint }]}>
-                <PillIcon size={28} color={Brand.greenDark} />
+                <PillIcon size={28} color={colors.accentStrong} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing here yet</Text>
               <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
@@ -244,7 +244,7 @@ export default function SupplementsScreen() {
                 <Pressable
                   style={[styles.addConfirm, { backgroundColor: colors.greenTint }]}
                   onPress={submitAdd}>
-                  <Text style={[styles.addConfirmText, { color: Brand.greenDark }]}>Add</Text>
+                  <Text style={[styles.addConfirmText, { color: colors.accentStrong }]}>Add</Text>
                 </Pressable>
               </View>
             </View>
@@ -252,7 +252,7 @@ export default function SupplementsScreen() {
             <Pressable
               style={[styles.addBtn, { borderColor: colors.backgroundSelected }]}
               onPress={() => setAdding(true)}>
-              <Text style={[styles.addText, { color: Brand.greenDark }]}>＋ Add supplement</Text>
+              <Text style={[styles.addText, { color: colors.accentStrong }]}>＋ Add supplement</Text>
             </Pressable>
           )}
 

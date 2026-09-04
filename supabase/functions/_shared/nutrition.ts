@@ -8,8 +8,8 @@ export const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 // Keep the production model explicit and benchmark changes with the eval suite.
 export const MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash';
-export const PROMPT_VERSION = '2026-07-30.1';
-export const PIPELINE_VERSION = 'fdc-off3-exa-v1';
+export const PROMPT_VERSION = '2026-09-04.1';
+export const PIPELINE_VERSION = 'fdc-off3-exa-v2-validated';
 
 const OFF_SEARCH = 'https://world.openfoodfacts.org/cgi/search.pl';
 const FDC_SEARCH = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -103,35 +103,39 @@ export function jwtPayload(token: string): any {
   return JSON.parse(atob(padded));
 }
 
+export type DailyAiUsageDecision = 'allowed' | 'limited' | 'unavailable';
+
+/** Convert the RPC envelope into an explicit fail-closed decision. */
+export function dailyAiUsageDecision(data: unknown, error: unknown): DailyAiUsageDecision {
+  if (error) return 'unavailable';
+  if (data === true) return 'allowed';
+  if (data === false) return 'limited';
+  return 'unavailable';
+}
+
 /**
- * Per-user daily request cap on the paid AI endpoints. Counts one unit per
- * client request in the `ai_usage` table (service role only; no RLS policies).
- * FAILS OPEN: if the table is missing or the write errors, the request is
- * allowed — the limiter is cost protection, not an availability risk.
+ * Atomically consumes one daily nutrition/chat request. Database failures and
+ * malformed RPC responses are unavailable, never permission to spend AI cost.
  */
-export async function underDailyLimit(userId: string, limit = 150): Promise<boolean> {
+export async function consumeDailyAiUsage(userId: string, limit = 150): Promise<DailyAiUsageDecision> {
   try {
-    if (!userId) return true;
+    if (!userId || !Number.isInteger(limit) || limit < 1) return 'unavailable';
     const url = Deno.env.get('SUPABASE_URL');
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!url || !key) return true;
+    if (!url || !key) return 'unavailable';
     const { createClient } = await import('jsr:@supabase/supabase-js@2');
     const admin = createClient(url, key);
     const day = new Date().toISOString().slice(0, 10);
-    const { data } = await admin
-      .from('ai_usage')
-      .select('count')
-      .eq('user_id', userId)
-      .eq('day', day)
-      .maybeSingle();
-    const current = data?.count ?? 0;
-    if (current >= limit) return false;
-    await admin
-      .from('ai_usage')
-      .upsert({ user_id: userId, day, count: current + 1 }, { onConflict: 'user_id,day' });
-    return true;
-  } catch {
-    return true;
+    const { data, error } = await admin.rpc('consume_ai_usage_request', {
+      p_user_id: userId,
+      p_day: day,
+      p_limit: limit,
+    });
+    if (error) console.warn('AI usage RPC failed', error.code ?? 'unknown');
+    return dailyAiUsageDecision(data, error);
+  } catch (error) {
+    console.warn('AI usage RPC failed', (error as Error)?.message ?? 'unknown');
+    return 'unavailable';
   }
 }
 
@@ -212,6 +216,52 @@ function scaleMacro(per100g: Macro, grams: number): Macro {
     carbs_g: Math.round(per100g.carbs_g * scale),
     fat_g: Math.round(per100g.fat_g * scale),
   };
+}
+
+/**
+ * Reject nutrition that cannot plausibly describe the requested edible portion.
+ * These checks are deliberately food-agnostic: they work for solids, drinks,
+ * oils, supplements, and alcohol without relying on category-specific calorie
+ * ceilings. A null result means the candidate is safe to use.
+ */
+export function nutritionCandidateIssue(
+  macro: Macro,
+  grams: number,
+  baselineCalories?: number | null,
+): string | null {
+  const values = [macro.calories, macro.protein_g, macro.carbs_g, macro.fat_g];
+  if (!values.every((value) => Number.isFinite(value) && value >= 0)) {
+    return 'invalid_value';
+  }
+  if (!Number.isFinite(grams) || grams <= 0) return 'invalid_portion';
+
+  // Protein, carbohydrate, and fat are part of the food's mass. A little
+  // headroom covers independently rounded labels and an approximate portion.
+  const macroGrams = macro.protein_g + macro.carbs_g + macro.fat_g;
+  if (macroGrams > grams * 1.15 + 10) return 'macros_exceed_portion';
+
+  // Even pure fat is about 9 kcal/g. The margin covers label rounding and
+  // estimated serving weights without imposing a coffee/meal-specific limit.
+  if (macro.calories > grams * 10 + 20) return 'energy_exceeds_portion';
+
+  // Calories may exceed 4/4/9 macro energy (notably alcohol), but they should
+  // not be far below it. A wide allowance accommodates fibre and sugar alcohols.
+  const macroCalories =
+    macro.protein_g * 4 + macro.carbs_g * 4 + macro.fat_g * 9;
+  if (macroCalories > macro.calories * 1.5 + 50) return 'calorie_macro_mismatch';
+
+  // A source that moves a non-trivial estimate by more than 3x is more likely
+  // to be the wrong product, preparation, or serving basis. Keep the estimate.
+  const baseline = baselineCalories ?? 0;
+  if (
+    Number.isFinite(baseline) &&
+    baseline >= 20 &&
+    (macro.calories > baseline * 3 || macro.calories * 3 < baseline)
+  ) {
+    return 'diverges_from_estimate';
+  }
+
+  return null;
 }
 
 function foodTokens(value: string): string[] {
@@ -393,14 +443,21 @@ async function exaSearch(query: string): Promise<string | null> {
 async function geminiScale(
   apiKey: string,
   reference: string,
-  items: { name: string; grams: number }[],
+  items: { name: string; quantity: string; grams: number }[],
 ): Promise<Record<number, Macro> | null> {
-  const list = items.map((it, i) => `${i}: ${it.name} — ${it.grams} g`).join('\n');
+  const list = items
+    .map((it, i) => `${i}: ${it.name} — ${it.quantity || 'unspecified serving'} — ${it.grams} g`)
+    .join('\n');
   const prompt =
     `Web nutrition reference:\n${reference}\n\n` +
-    `For each food below, read the reference's per-100 g (or per-serving) values ` +
-    `and scale them to the given grams. If the reference doesn't cover a food, use ` +
-    `your best general knowledge.\nFoods (index: name — grams):\n${list}\n\n` +
+    `For each food below, use values only when the reference clearly covers the ` +
+    `same food or named product. If an unbranded request has only unrelated branded ` +
+    `examples, omit it instead of choosing a brand. Use exact per-serving values as-is ` +
+    `when that serving matches the requested quantity; do not scale them again by the ` +
+    `target grams. Scale only when the reference explicitly gives per-100 g, per-100 ml, ` +
+    `or a source serving weight/volume. If the source basis is ambiguous or the reference ` +
+    `doesn't cover a food, omit that item; do not use general knowledge.\n` +
+    `Foods (index: name — requested quantity — estimated edible grams):\n${list}\n\n` +
     `Respond ONLY JSON: {"items":[{"index":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}]} with whole numbers.`;
   try {
     const res = await fetchWithTimeout(GEMINI_URL, {
@@ -419,7 +476,7 @@ async function geminiScale(
           {
             role: 'system',
             content:
-              'You are a precise nutrition calculator. Scale per-100 g values to the requested grams. Output only the requested JSON.',
+              'You are a precise nutrition calculator. Never treat per-serving nutrition as per-100 g, never double-scale a serving, and omit ambiguous source matches. Output only the requested JSON.',
           },
           { role: 'user', content: prompt },
         ],
@@ -471,18 +528,13 @@ export async function enrichMeal(apiKey: string, meal: any): Promise<any> {
       return fdcLookup(name, grams);
     }),
   );
-  // Sanity gate: a database match whose calories diverge >3x from the model's
-  // estimate is likely the wrong food or preparation — keep the estimate.
+  // Sanity gate: reject wrong foods, impossible portions, inconsistent macros,
+  // and serving-unit mistakes before any source can overwrite the model estimate.
   const structuredHits = rawHits.map((hit, i) => {
     if (!hit) return null;
     const est = num(items[i]?.calories) ?? 0;
-    if (
-      est > 0 &&
-      (hit.macro.calories > est * 3 || hit.macro.calories * 3 < est)
-    ) {
-      return null;
-    }
-    return hit;
+    const grams = num(items[i]?.grams) ?? 0;
+    return nutritionCandidateIssue(hit.macro, grams, est) ? null : hit;
   });
   const fdcSourced: string[] = [];
   const offSourced: string[] = [];
@@ -511,11 +563,13 @@ export async function enrichMeal(apiKey: string, meal: any): Promise<any> {
   if (missedIdx.length > 0) {
     const missed = missedIdx.map((i) => ({
       name: String(items[i]?.name ?? ''),
+      quantity: String(items[i]?.quantity ?? ''),
       grams: num(items[i]?.grams) ?? 0,
     }));
     const query =
       `Nutrition facts — calories, protein grams, carbohydrate grams, fat grams, ` +
-      `per 100 grams — for each of: ${missed.map((m) => m.name).filter(Boolean).join('; ')}`;
+      `including whether values are per serving or per 100 grams/ml and the source ` +
+      `serving size — for each of: ${missed.map((m) => m.name).filter(Boolean).join('; ')}`;
     const reference = await exaSearch(query);
     if (reference) {
       const scaled = await geminiScale(apiKey, reference, missed);
@@ -524,6 +578,9 @@ export async function enrichMeal(apiKey: string, meal: any): Promise<any> {
           const m = scaled[localIdx];
           if (!m) return;
           const it = items[itemIdx];
+          const grams = num(it?.grams) ?? 0;
+          const estimate = num(it?.calories) ?? 0;
+          if (nutritionCandidateIssue(m, grams, estimate)) return;
           it.calories = m.calories;
           it.protein_g = m.protein_g;
           it.carbs_g = m.carbs_g;

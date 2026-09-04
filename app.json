@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.tien.trak",
-      "versionCode": 29,
+      "versionCode": 30,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.health.WRITE_NUTRITION",
@@ -101,7 +101,8 @@
       "expo-image",
       "expo-apple-authentication",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

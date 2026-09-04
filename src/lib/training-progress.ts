@@ -4,6 +4,28 @@ import { DEFAULT_MUSCLE_SCORE_SETTINGS, type MuscleScoreSettings } from './muscl
 export type { MuscleGroup } from './types';
 
 export const WEEKLY_SET_TARGET = 12;
+export const RECOVERY_CHECK_SET_THRESHOLD = 16;
+export const HIGH_VOLUME_SET_THRESHOLD = 20;
+export const FAT_LOSS_CARDIO_BASELINE = 150;
+export const FAT_LOSS_CARDIO_MILESTONES = [60, 90, 120, FAT_LOSS_CARDIO_BASELINE] as const;
+
+export const SCORED_MUSCLE_GROUPS: MuscleGroup[] = [
+  'chest',
+  'legs',
+  'back',
+  'arms',
+  'shoulders',
+  'abs',
+  'glutes',
+];
+
+export type MuscleScoreGuidance =
+  | 'No working sets yet'
+  | 'Some stimulus'
+  | 'Building toward target'
+  | 'Target met'
+  | 'Check recovery'
+  | 'High volume';
 
 export type MuscleScore = {
   key: MuscleGroup;
@@ -12,6 +34,21 @@ export type MuscleScore = {
   points: number;
   pointsPerSet: number;
   score: number;
+  guidance: MuscleScoreGuidance;
+};
+
+export type WeeklyActivitySummary = {
+  strengthSessions: number;
+  cardioSessions: number;
+  vigorousCardioSessions: number;
+  strengthMinutes: number;
+  cardioMinutes: number;
+  lightCardioMinutes: number;
+  moderateCardioMinutes: number;
+  vigorousCardioMinutes: number;
+  /** Moderate minutes plus twice the completed vigorous minutes. */
+  cardioEquivalentMinutes: number;
+  totalMinutes: number;
 };
 
 const GROUP_LABELS: Record<MuscleGroup, string> = {
@@ -25,17 +62,27 @@ const GROUP_LABELS: Record<MuscleGroup, string> = {
   other: 'Other',
 };
 
-/** Large compound areas earn two points per completed set; all others earn one. */
+/** Every completed working set for a scored muscle earns one weekly muscle point. */
 export const MUSCLE_POINTS_PER_SET: Record<MuscleGroup, number> = {
-  chest: 2,
-  legs: 2,
-  back: 2,
+  chest: 1,
+  legs: 1,
+  back: 1,
   arms: 1,
   shoulders: 1,
   abs: 1,
   glutes: 1,
-  other: 1,
+  // "Other" remains loggable, but a catch-all category has no meaningful universal target.
+  other: 0,
 };
+
+export function muscleScoreGuidance(sets: number): MuscleScoreGuidance {
+  if (sets >= HIGH_VOLUME_SET_THRESHOLD) return 'High volume';
+  if (sets >= RECOVERY_CHECK_SET_THRESHOLD) return 'Check recovery';
+  if (sets >= WEEKLY_SET_TARGET) return 'Target met';
+  if (sets >= 6) return 'Building toward target';
+  if (sets >= 1) return 'Some stimulus';
+  return 'No working sets yet';
+}
 
 const GROUP_WORDS: Record<MuscleGroup, string[]> = {
   chest: ['chest', 'bench', 'push-up', 'pushup', 'pec'],
@@ -115,7 +162,7 @@ export function muscleScores(
       sets[group] += Math.max(0, exercise.muscleSets?.[group] || 0);
     }
   }
-  return (Object.keys(sets) as MuscleGroup[]).map((key) => {
+  return SCORED_MUSCLE_GROUPS.map((key) => {
     const pointsPerSet = MUSCLE_POINTS_PER_SET[key];
     const points = sets[key] * pointsPerSet;
     return {
@@ -125,6 +172,7 @@ export function muscleScores(
       points,
       pointsPerSet,
       score: targetSets > 0 ? Math.min(100, Math.round((points / targetSets) * 100)) : 0,
+      guidance: muscleScoreGuidance(sets[key]),
     };
   });
 }
@@ -136,4 +184,82 @@ export function workoutMinutesByDay(exercises: ExerciseEntry[], anchorKey: strin
       .filter((exercise) => exercise.date === date)
       .reduce((sum, exercise) => sum + Math.max(0, exercise.durationMinutes || 0), 0),
   }));
+}
+
+/**
+ * Distinct training days completed for one customised plan item in the rolling
+ * week. New logs use the durable plan id; unlinked legacy logs fall back to an
+ * exact normalized exercise name so existing progress is not lost.
+ */
+export function plannedTrainingCompletionDays(
+  exercises: ExerciseEntry[],
+  anchorKey: string,
+  trainingPlanItemId: string,
+  exerciseName: string
+): string[] {
+  const days = new Set(trainingDayKeys(anchorKey));
+  const normalizedName = exerciseName.trim().toLowerCase();
+  return Array.from(new Set(
+    exercises
+      .filter((exercise) => days.has(exercise.date))
+      .filter((exercise) => exercise.trainingPlanItemId === trainingPlanItemId
+        || (!exercise.trainingPlanItemId && exercise.name.trim().toLowerCase() === normalizedName))
+      .map((exercise) => exercise.date)
+  )).sort();
+}
+
+/** Goal-facing weekly activity totals derived from the same durable workout logs. */
+export function weeklyActivitySummary(
+  exercises: ExerciseEntry[],
+  anchorKey: string
+): WeeklyActivitySummary {
+  const days = new Set(trainingDayKeys(anchorKey));
+  const strengthDays = new Set<string>();
+  const cardioDays = new Set<string>();
+  let vigorousCardioSessions = 0;
+  let strengthMinutes = 0;
+  let cardioMinutes = 0;
+  let lightCardioMinutes = 0;
+  let moderateCardioMinutes = 0;
+  let vigorousCardioMinutes = 0;
+  let totalMinutes = 0;
+
+  for (const exercise of exercises) {
+    if (!days.has(exercise.date)) continue;
+    const duration = Math.max(0, exercise.durationMinutes || 0);
+    const hasLoggedSets = Object.values(exercise.muscleSets ?? {}).some((sets) => sets > 0);
+    const hasStrengthFocus = exercise.workoutSplits.some((split) => split !== 'cardio');
+    const inferredStrength = groupsForExercise(exercise.name).length > 0;
+    const isStrength = hasLoggedSets || hasStrengthFocus || inferredStrength;
+    const isCardio = exercise.workoutSplits.includes('cardio') || /\b(cardio|walk|walking|run|running|cycle|cycling|elliptical|swim|swimming)\b/i.test(exercise.name);
+
+    if (isStrength) {
+      strengthDays.add(exercise.date);
+      strengthMinutes += duration;
+    }
+    if (isCardio) {
+      cardioDays.add(exercise.date);
+      cardioMinutes += duration;
+      const intensity = exercise.cardioIntensity ?? 'moderate';
+      if (intensity === 'light') lightCardioMinutes += duration;
+      else if (intensity === 'vigorous') {
+        vigorousCardioSessions += 1;
+        vigorousCardioMinutes += duration;
+      } else moderateCardioMinutes += duration;
+    }
+    totalMinutes += duration;
+  }
+
+  return {
+    strengthSessions: strengthDays.size,
+    cardioSessions: cardioDays.size,
+    vigorousCardioSessions,
+    strengthMinutes,
+    cardioMinutes,
+    lightCardioMinutes,
+    moderateCardioMinutes,
+    vigorousCardioMinutes,
+    cardioEquivalentMinutes: moderateCardioMinutes + vigorousCardioMinutes * 2,
+    totalMinutes,
+  };
 }

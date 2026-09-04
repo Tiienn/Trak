@@ -25,6 +25,7 @@ test('daily meals rank frequent text logs first and always return five options',
     meal('Cappuccino', 3, 'text'),
     meal('Latte', 2, 'text'),
     meal('Protein bar', 1, 'barcode'),
+    meal('Manual oats', 0.5, 'manual'),
     {
       ...meal('Legacy barcode', 0),
       notes: 'From barcode 1234',
@@ -42,6 +43,7 @@ test('daily meals rank frequent text logs first and always return five options',
     ],
   );
   assert.ok(!suggestions.some((item) => item.label === 'Protein bar'));
+  assert.ok(!suggestions.some((item) => item.label === 'Manual oats'));
   assert.ok(!suggestions.some((item) => item.label === 'Legacy barcode'));
 });
 
@@ -63,6 +65,7 @@ test('photo memory uses both sources and weighs repeated scans more strongly', (
     meal('Latte', 2, 'text'),
     meal('Latte', 1, 'text'),
     meal('Saved breakfast', 0, 'quick_log'),
+    meal('Manual oats', -1, 'manual'),
   ]);
 
   assert.deepEqual(hints.slice(0, 2), [
@@ -70,4 +73,5 @@ test('photo memory uses both sources and weighs repeated scans more strongly', (
     { title: 'Latte', textCount: 2, photoCount: 0 },
   ]);
   assert.ok(!hints.some((hint) => hint.title === 'Saved breakfast'));
+  assert.ok(!hints.some((hint) => hint.title === 'Manual oats'));
 });

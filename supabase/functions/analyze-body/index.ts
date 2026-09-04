@@ -12,6 +12,7 @@ import {
   recordAiRun,
   stripFences,
 } from '../_shared/nutrition.ts';
+import { authorizeAiAccess } from '../_shared/ai-access.ts';
 import {
   BODY_ANALYSIS_SYSTEM_PROMPT,
   deriveNutritionEvidence,
@@ -108,6 +109,16 @@ Deno.serve(async (req: Request) => {
       telemetryUserId = userId;
     } catch {
       return bodyJson({ error: 'Please sign in to use Body Analysis.' }, 401);
+    }
+
+    const access = await authorizeAiAccess(userId, 'body_analysis');
+    if (!access.allowed) {
+      if (access.reason === 'adult_required') {
+        return bodyJson({ error: 'Trak is currently available to adults aged 18 and over.' }, 403);
+      }
+      return access.reason === 'pro_required'
+        ? bodyJson({ error: 'Body Analysis requires Trak Pro.' }, 403)
+        : bodyJson({ error: 'Could not verify Trak Pro right now. Please try again shortly.' }, 503);
     }
 
     const input = await req.json().catch(() => null) as Record<string, unknown> | null;

@@ -6,6 +6,7 @@ import type { DailyMissionKey } from './missions';
 import { supabase } from './supabase';
 
 export type RewardKind = 'shield' | 'badge' | 'frame' | 'theme';
+export type GamePointKey = 'compare' | 'portion' | 'build' | 'daily_build';
 
 export type RewardCatalogItem = {
   key: string;
@@ -20,10 +21,11 @@ export type RewardCatalogItem = {
 export type PointLedgerEntry = {
   id: string;
   amount: number;
-  source: 'mission' | 'reward';
+  source: 'mission' | 'reward' | 'game';
   missionKey: DailyMissionKey | null;
   day: string | null;
   rewardKey: string | null;
+  gameKey: GamePointKey | null;
   createdAt: string;
 };
 
@@ -46,6 +48,7 @@ type TrakPointsContextValue = {
   inventory: RewardInventoryItem[];
   equipment: RewardEquipment;
   syncDaily: (day: string, completedKeys: DailyMissionKey[]) => Promise<void>;
+  awardGame: (gameKey: GamePointKey) => Promise<number>;
   purchase: (rewardKey: string) => Promise<void>;
   equip: (rewardKey: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -53,6 +56,23 @@ type TrakPointsContextValue = {
 
 const EMPTY_EQUIPMENT: RewardEquipment = { badgeKey: null, frameKey: null, themeKey: null };
 const TrakPointsContext = createContext<TrakPointsContextValue | null>(null);
+
+async function loadPointLedger() {
+  const current = await supabase
+    .from('trak_point_ledger')
+    .select('id, amount, source, mission_key, day, reward_key, game_key, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (!current.error) return current;
+
+  // Keep point history working while an existing backend is waiting for the
+  // game-reward migration that adds game_key.
+  return supabase
+    .from('trak_point_ledger')
+    .select('id, amount, source, mission_key, day, reward_key, created_at')
+    .order('created_at', { ascending: false })
+    .limit(100);
+}
 
 export function TrakPointsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -78,7 +98,7 @@ export function TrakPointsProvider({ children }: { children: ReactNode }) {
     }
     const [catalogResult, ledgerResult, inventoryResult, equipmentResult, balanceResult] = await Promise.all([
       supabase.from('trak_reward_catalog').select('key, kind, title, description, cost, accent, tint').eq('active', true).order('cost'),
-      supabase.from('trak_point_ledger').select('id, amount, source, mission_key, day, reward_key, created_at').order('created_at', { ascending: false }).limit(100),
+      loadPointLedger(),
       supabase.from('trak_reward_inventory').select('reward_key, quantity'),
       supabase.from('trak_reward_equipment').select('badge_key, frame_key, theme_key').maybeSingle(),
       supabase.rpc('get_trak_points_balance'),
@@ -94,6 +114,7 @@ export function TrakPointsProvider({ children }: { children: ReactNode }) {
         missionKey: row.mission_key,
         day: row.day,
         rewardKey: row.reward_key,
+        gameKey: row.game_key ?? null,
         createdAt: row.created_at,
       })));
     }
@@ -138,6 +159,18 @@ export function TrakPointsProvider({ children }: { children: ReactNode }) {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }, [refresh]);
 
+  const awardGame = useCallback(async (gameKey: GamePointKey) => {
+    if (!user) return 0;
+    const { data, error } = await supabase.rpc('award_game_trak_points', { p_game_key: gameKey });
+    if (error) return 0;
+    const amount = Number(data?.amount) || 0;
+    if (amount > 0) {
+      await refresh();
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    return amount;
+  }, [refresh, user]);
+
   const equip = useCallback(async (rewardKey: string) => {
     const { error } = await supabase.rpc('equip_trak_reward', { p_reward_key: rewardKey });
     if (error) throw new Error(error.message || 'Could not equip this reward.');
@@ -154,10 +187,11 @@ export function TrakPointsProvider({ children }: { children: ReactNode }) {
     inventory: sessionMatches ? inventory : [],
     equipment: sessionMatches ? equipment : EMPTY_EQUIPMENT,
     syncDaily,
+    awardGame,
     purchase,
     equip,
     refresh,
-  }), [loaded, sessionMatches, balance, catalog, ledger, inventory, equipment, syncDaily, purchase, equip, refresh]);
+  }), [loaded, sessionMatches, balance, catalog, ledger, inventory, equipment, syncDaily, awardGame, purchase, equip, refresh]);
 
   return <TrakPointsContext.Provider value={value}>{children}</TrakPointsContext.Provider>;
 }

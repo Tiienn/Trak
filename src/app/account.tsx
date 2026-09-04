@@ -18,6 +18,11 @@ import { dayKey, useMeals } from '@/lib/store';
 import { useMuscleScorePreferences } from '@/lib/muscle-score-preferences';
 import { muscleScoreScheduleLabel, RESET_WEEKDAYS, type MuscleScoreSettings } from '@/lib/muscle-score-settings';
 import { CheckIcon } from '@/components/icons';
+import { muscleLabel } from '@/lib/training-catalog';
+import { useWorkoutFocusPreferences } from '@/lib/workout-focus-preferences';
+import { workoutFocusWeek } from '@/lib/workout-focus-settings';
+import { useWorkoutCoachPreferences } from '@/lib/workout-coach-preferences';
+import { WORKOUT_ROUTINES } from '@/lib/workout-coach-settings';
 
 type HealthState = 'hidden' | 'off' | 'on';
 
@@ -67,7 +72,7 @@ function InsightsCard({ colors }: { colors: ThemeColors }) {
       onPress={() => router.push('/insights')}>
       <View style={styles.healthInfo}>
         <Text style={[styles.healthTitle, { color: colors.text }]}>Insights</Text>
-        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Your last 7 days at a glance.</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>Nutrition and workout trends from your last 7 days.</Text>
       </View>
       <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
     </Pressable>
@@ -227,7 +232,7 @@ function ProCard({ colors }: { colors: ThemeColors }) {
       ? 'Your subscription is active.'
       : inTrial
         ? `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left in your free trial.`
-        : 'Subscribe to unlock AI photo scan and Chat.';
+        : 'Subscribe to unlock AI photo scan, Chat and Ask, and Body Analysis.';
   return (
     <View style={[styles.healthCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.healthInfo}>
@@ -342,6 +347,46 @@ function MuscleScoreSettingsCard({ colors }: { colors: ThemeColors }) {
   );
 }
 
+function TrainingFocusCard({ colors }: { colors: ThemeColors }) {
+  const focus = useWorkoutFocusPreferences();
+  const week = workoutFocusWeek(focus.settings);
+  const muscle = focus.settings.priorityMuscle;
+  const detail = !focus.loaded
+    ? 'Loading…'
+    : muscle
+      ? `${muscleLabel(muscle)} · ${week && week <= 6 ? `week ${week} of 6` : 'ready to renew'}`
+      : 'Balanced training';
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Muscle focus, ${detail}`}
+      onPress={() => router.push('/training-focus')}
+      style={({ pressed }) => [styles.healthCard, { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement }]}>
+      <View style={styles.healthInfo}>
+        <Text style={[styles.healthTitle, { color: colors.text }]}>Muscle focus</Text>
+        <Text style={[styles.healthBody, { color: colors.textSecondary }]}>{detail}</Text>
+      </View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
+  );
+}
+
+function WorkoutSetupCard({ colors }: { colors: ThemeColors }) {
+  const coach = useWorkoutCoachPreferences();
+  const routine = WORKOUT_ROUTINES.find((item) => item.key === coach.settings.routine)?.label ?? 'Coach chooses';
+  const detail = !coach.loaded
+    ? 'Loading…'
+    : coach.settings.configured
+      ? `${routine} · ${coach.settings.trainingLocation} · ${coach.settings.sessionMinutes} min`
+      : 'Set location, experience, time, equipment, and routine';
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Workout setup, ${detail}`} onPress={() => router.push('/workout-setup')} style={({ pressed }) => [styles.healthCard, { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement }]}>
+      <View style={styles.healthInfo}><Text style={[styles.healthTitle, { color: colors.text }]}>Workout setup</Text><Text style={[styles.healthBody, { color: colors.textSecondary }]}>{detail}</Text></View>
+      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+    </Pressable>
+  );
+}
+
 export default function ProfileScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
@@ -382,6 +427,8 @@ export default function ProfileScreen() {
           <HistoryCard colors={colors} />
           <AchievementsCard colors={colors} />
           <Text style={[styles.settingsLabel, { color: colors.textSecondary }]}>Settings</Text>
+          <WorkoutSetupCard colors={colors} />
+          <TrainingFocusCard colors={colors} />
           <MuscleScoreSettingsCard colors={colors} />
           <RemindersCard colors={colors} />
           <HealthCard colors={colors} />
@@ -427,7 +474,6 @@ const styles = StyleSheet.create({
   healthInfo: { flex: 1 },
   healthTitle: { fontSize: 15, fontWeight: '700' },
   healthBody: { fontSize: 13, marginTop: 2 },
-  healthOn: { color: Brand.green, fontSize: 15, fontWeight: '700' },
   healthBtn: {
     backgroundColor: Brand.green,
     borderRadius: 12,

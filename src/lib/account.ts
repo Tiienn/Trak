@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { extractError } from './analyzeFood';
 import { bodyPhotoRepository } from './body-photo-store';
+import { exerciseResponseSettingsKey } from './exercise-response-settings';
+import { workoutFocusSettingsKey } from './workout-focus-settings';
 import { applyReminders, cancelBodyAnalysisRecheck } from './reminders';
 import { supabase } from './supabase';
 import { muscleScoreSettingsKey } from './muscle-score-settings';
@@ -38,7 +40,7 @@ export async function deleteAccount(): Promise<void> {
   await applyReminders([]).catch(() => {});
 
   const keys = [...CLEAR_KEYS, 'trak.dietStyle.v1'];
-  if (userId) keys.push(`trak.dietStyle.v1.${userId}`, muscleScoreSettingsKey(userId));
+  if (userId) keys.push(`trak.dietStyle.v1.${userId}`, `trak.game.v1.${userId}`, muscleScoreSettingsKey(userId), exerciseResponseSettingsKey(userId), workoutFocusSettingsKey(userId));
   try {
     await AsyncStorage.multiRemove(keys);
   } catch {

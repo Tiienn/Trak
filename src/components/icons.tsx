@@ -62,6 +62,17 @@ export function TargetIcon({ size = 22, color = '#ffffff' }: { size?: number; co
   );
 }
 
+/** A measured plate portion — used for the Portion game. */
+export function PortionIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={2} />
+      <Path d="M12 3.5V12l6.1 5.9" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M12 12 5.9 6.1" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Die with five pips — free play / randomness. */
 export function DiceIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
   return (
@@ -154,6 +165,17 @@ export function PlateIcon({ size = 22, color = '#ffffff' }: { size?: number; col
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={2} />
       <Circle cx={12} cy={12} r={4} stroke={color} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+/** Layered ingredients with an add mark — used for the Build game. */
+export function BuildMealIcon({ size = 22, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="m4.5 9 7.5 3.8L19.5 9 12 5.2 4.5 9Z" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+      <Path d="m5.5 13 6.5 3.3 6.5-3.3M5.5 16.8 12 20l6.5-3.2" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19 3v4M17 5h4" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   );
 }

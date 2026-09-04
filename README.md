@@ -49,6 +49,11 @@ finally the model estimate when no grounded match passes validation.
 Each result carries model, prompt, pipeline, and nutrition-source provenance.
 Meal photos and chat text are not written to AI telemetry.
 
+Core tracking stays free forever, including barcode scanning, manual meal entry,
+water, weight, supplements, workouts, progress, and games. Trak Pro unlocks AI
+photo scanning, Chat/Ask coaching, and Body Analysis after the seven-day account
+trial. Paid AI endpoints enforce the same access rules on the server.
+
 Barcode lookup uses Open Food Facts v3.6 `nutrition` data. It requires complete,
 nonnegative calories and macros from packaging/manufacturer sources, supports
 kJ-to-kcal conversion and distinct per-100 g/ml bases, and derives measured
@@ -78,10 +83,18 @@ ship it inside the app.
 Production Edge Function secrets:
 
 - `GEMINI_API_KEY` — required.
+- `REVENUECAT_SECRET_API_KEY` — required to enforce paid AI access on the server.
+- `TRAK_TESTER_USER_IDS` — optional comma-separated Supabase user IDs that receive tester access.
+- `TRAK_TESTER_ACCESS` — optional; set to `true` only on a dedicated testing backend to grant every authenticated user tester access.
 - `FDC_API_KEY` — recommended before public launch. The closed test falls back
   to USDA's rate-limited `DEMO_KEY`.
 - `EXA_API_KEY` — optional final nutrition fallback.
 - `AI_TELEMETRY_SALT` — used for stable pseudonymous reliability identifiers.
+
+For individual testers, prefer setting the trusted Supabase Auth app metadata
+field `trak_tester: true` or using `TRAK_TESTER_USER_IDS`. The public app flag
+`EXPO_PUBLIC_TESTER_ACCESS` only changes client presentation and never authorizes
+an Edge Function request.
 
 ## Nutrition evaluations
 
@@ -124,3 +137,6 @@ test outputs verify the gate itself and must not be presented as model results.
 Production iOS submission uses the ignored credential under `credentials/ios`;
 never commit signing keys or `.env` files. Generated store-listing graphics are
 written to the ignored `store-assets` directory.
+
+CI, opt-in Maestro navigation tests, and privacy-minimized Sentry setup are
+documented in [`docs/quality-and-observability.md`](docs/quality-and-observability.md).

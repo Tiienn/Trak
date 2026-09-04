@@ -15,7 +15,8 @@ import {
   TrendUpIcon,
   TrophyIcon,
 } from '@/components/icons';
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { EMPTY_STATS, loadGameStats, type GameStats } from '@/lib/game';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -36,7 +37,7 @@ function BadgeCard({ badge, colors }: { badge: Badge; colors: ThemeColors }) {
         styles.badge,
         {
           backgroundColor: badge.earned ? colors.greenTint : colors.backgroundElement,
-          borderColor: badge.earned ? Brand.green : 'transparent',
+          borderColor: badge.earned ? colors.accent : 'transparent',
         },
       ]}>
       <View
@@ -45,7 +46,7 @@ function BadgeCard({ badge, colors }: { badge: Badge; colors: ThemeColors }) {
           { backgroundColor: badge.earned ? colors.background : colors.backgroundSelected },
           !badge.earned && styles.locked,
         ]}>
-        <badge.Icon size={22} color={badge.earned ? Brand.green : colors.textSecondary} />
+        <badge.Icon size={22} color={badge.earned ? colors.accent : colors.textSecondary} />
       </View>
       <Text
         style={[
@@ -66,11 +67,12 @@ export default function AchievementsScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
   const { meals, weights, streak, waterToday, waterGoal, burnedToday } = useMeals();
+  const { user } = useAuth();
   const [game, setGame] = useState<GameStats>(EMPTY_STATS);
 
   useEffect(() => {
-    loadGameStats().then(setGame);
-  }, []);
+    loadGameStats(user?.id).then(setGame);
+  }, [user?.id]);
 
   const badges: Badge[] = [
     { Icon: PlateIcon, title: 'First bite', desc: 'Log your first meal', earned: meals.length >= 1 },
@@ -81,7 +83,7 @@ export default function AchievementsScreen() {
     { Icon: TrendUpIcon, title: 'Trend setter', desc: 'Log weight 5 times', earned: weights.length >= 5 },
     { Icon: DropletIcon, title: 'Hydrated', desc: 'Hit your water goal today', earned: waterToday >= waterGoal && waterGoal > 0 },
     { Icon: DumbbellIcon, title: 'Moved today', desc: 'Log a workout today', earned: burnedToday > 0 },
-    { Icon: GamepadIcon, title: 'Player', desc: 'Play 5 calorie challenges', earned: game.played >= 5 },
+    { Icon: GamepadIcon, title: 'Player', desc: 'Complete 5 game rounds', earned: game.played + game.portionRounds + game.hlRounds >= 5 },
     { Icon: TargetIcon, title: 'Sharpshooter', desc: '3-star a calorie challenge', earned: game.threeStar >= 1 },
   ];
 
@@ -100,7 +102,7 @@ export default function AchievementsScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Streak hero */}
           <View style={[styles.hero, { backgroundColor: colors.backgroundElement }]}>
-            <FlameIcon size={36} color={Brand.green} />
+            <FlameIcon size={36} color={colors.accent} />
             <Text style={[styles.heroValue, { color: colors.text }]}>
               {streak} day{streak === 1 ? '' : 's'}
             </Text>

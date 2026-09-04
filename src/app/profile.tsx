@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BalanceIcon, DumbbellIcon, TrendDownIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { deleteAccount } from '@/lib/account';
+import { adultEligibilityForAge, MAXIMUM_TRAK_AGE } from '@/lib/adult-eligibility';
 import { computeTargets, DIETS } from '@/lib/nutrition';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -154,7 +155,7 @@ export default function ProfileScreen() {
   }
 
   function parseStats(): { age: number; weightKg: number; heightCm: number } | null {
-    const ageN = parseInt(age, 10);
+    const ageN = Number(age);
     let weightKg: number;
     let hCm: number;
     if (unit === 'metric') {
@@ -164,7 +165,12 @@ export default function ProfileScreen() {
       weightKg = parseFloat(weight) * 0.453592;
       hCm = (parseInt(heightFt || '0', 10) * 12 + parseInt(heightIn || '0', 10)) * 2.54;
     }
-    if (!Number.isFinite(ageN) || ageN < 10 || ageN > 100) return null;
+    if (
+      !Number.isInteger(ageN)
+      || ageN < 1
+      || ageN > MAXIMUM_TRAK_AGE
+      || adultEligibilityForAge(ageN) !== 'adult'
+    ) return null;
     // Plausibility bounds — a typo like "700" (meaning 70.0) would otherwise
     // silently corrupt every calorie/macro target.
     if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) return null;
@@ -395,6 +401,11 @@ export default function ProfileScreen() {
                   </>
                 )}
               </View>
+              {age.length > 0 && adultEligibilityForAge(Number(age)) === 'underage' ? (
+                <Text style={styles.ageError}>
+                  Trak is currently available to adults aged 18 and over.
+                </Text>
+              ) : null}
               <Field label={unit === 'metric' ? 'Weight (kg)' : 'Weight (lb)'} colors={colors}>
                 <TextInput
                   style={[styles.input, { color: colors.text }]}
@@ -408,7 +419,8 @@ export default function ProfileScreen() {
               </Field>
             </Section>
 
-            <Section title="ACTIVITY LEVEL" colors={colors}>
+            <Section title="ACTIVITY FOR CALORIE TARGETS" colors={colors}>
+              <Text style={[styles.activityHint, { color: colors.textSecondary }]}>This adjusts your calorie estimate. Set your weekly training target separately in Workout Setup.</Text>
               {ACTIVITIES.map((a) => (
                 <Pressable
                   key={a.key}
@@ -555,6 +567,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 13, fontWeight: '600' },
   fieldBox: { borderRadius: 12, paddingHorizontal: Spacing.three },
   input: { fontSize: 18, fontWeight: '600', paddingVertical: Spacing.three },
+  ageError: { color: '#D85B5B', fontSize: 13, fontWeight: '700', lineHeight: 18 },
 
   activityRow: {
     borderRadius: 14,
@@ -562,6 +575,7 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     marginBottom: Spacing.two,
   },
+  activityHint: { fontSize: 12, lineHeight: 17, marginBottom: Spacing.one },
   activityDesc: { fontSize: 12, marginTop: 2 },
 
   biasCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.three },

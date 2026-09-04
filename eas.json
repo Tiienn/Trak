@@ -18,11 +18,29 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "testing",
-        "EXPO_PUBLIC_TESTER_ACCESS": "true"
+        "EXPO_PUBLIC_TESTER_ACCESS": "true",
+        "EXPO_PUBLIC_SENTRY_ENABLED": "false",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "android": {
         "credentialsSource": "remote",
         "buildType": "apk"
+      }
+    },
+    "e2e": {
+      "extends": "testing",
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "e2e",
+        "EXPO_PUBLIC_TESTER_ACCESS": "true",
+        "EXPO_PUBLIC_SENTRY_ENABLED": "false",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
       }
     },
     "production": {

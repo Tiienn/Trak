@@ -10,7 +10,7 @@ import {
 
 import { useAuth } from './auth';
 import { supabase } from './supabase';
-import type { LoadUnit, MuscleGroup, TrainingActivityType } from './types';
+import type { CardioIntensity, LoadUnit, MuscleGroup, TrainingActivityType } from './types';
 
 export type TrainingPlanItem = {
   id: string;
@@ -23,6 +23,8 @@ export type TrainingPlanItem = {
   loadUnit: LoadUnit;
   durationTargetMinutes: number | null;
   calorieTarget: number | null;
+  cardioIntensity: CardioIntensity | null;
+  weeklyTarget: number;
   position: number;
 };
 
@@ -58,6 +60,10 @@ function rowToItem(row: any): TrainingPlanItem {
     loadUnit: row.load_unit === 'lb' ? 'lb' : 'kg',
     durationTargetMinutes: row.duration_target_minutes == null ? null : Math.max(1, Number(row.duration_target_minutes) || 1),
     calorieTarget: row.calorie_target == null ? null : Math.max(0, Number(row.calorie_target) || 0),
+    cardioIntensity: row.activity_type === 'cardio'
+      ? row.cardio_intensity === 'light' || row.cardio_intensity === 'vigorous' ? row.cardio_intensity : 'moderate'
+      : null,
+    weeklyTarget: Math.max(1, Math.min(7, Math.round(Number(row.weekly_target) || 1))),
     position: Math.max(0, Number(row.position) || 0),
   };
 }
@@ -157,6 +163,8 @@ export function TrainingPlanProvider({ children }: { children: ReactNode }) {
           calorie_target: item.activityType === 'cardio'
             ? Math.max(0, Math.min(10000, Math.round(item.calorieTarget ?? 200)))
             : null,
+          cardio_intensity: item.activityType === 'cardio' ? item.cardioIntensity ?? 'moderate' : null,
+          weekly_target: Math.max(1, Math.min(7, Math.round(item.weeklyTarget))),
           position: items.length,
         })
         .select()
@@ -202,6 +210,8 @@ export function TrainingPlanProvider({ children }: { children: ReactNode }) {
     if (patch.calorieTarget !== undefined) payload.calorie_target = patch.calorieTarget == null
       ? null
       : Math.max(0, Math.min(10000, Math.round(patch.calorieTarget)));
+    if (patch.cardioIntensity !== undefined) payload.cardio_intensity = patch.cardioIntensity;
+    if (patch.weeklyTarget != null) payload.weekly_target = Math.max(1, Math.min(7, Math.round(patch.weeklyTarget)));
 
     const nextLoad = patch.loadValue === undefined ? currentItem.loadValue : cleanLoad(patch.loadValue);
     const nextUnit = patch.loadUnit ?? currentItem.loadUnit;
@@ -238,6 +248,7 @@ export function TrainingPlanProvider({ children }: { children: ReactNode }) {
               calorieTarget: payload.calorie_target === undefined
                 ? item.calorieTarget
                 : payload.calorie_target as number | null,
+              weeklyTarget: typeof payload.weekly_target === 'number' ? payload.weekly_target : item.weeklyTarget,
             }
           : item
       )

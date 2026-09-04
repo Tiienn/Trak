@@ -47,7 +47,7 @@ export function RingMark({ size = 28, color = Brand.green }: { size?: number; co
 /** Trak's editorial wordmark face, shared by every product header and lockup. */
 export function TrakWordmark({ color, size = 28, style }: WordmarkProps) {
   return (
-    <Text style={[styles.wordmark, { color, fontSize: size, lineHeight: size * 1.02 }, style]}>
+    <Text allowFontScaling={false} accessibilityRole="text" style={[styles.wordmark, { color, fontSize: size, lineHeight: size * 1.02 }, style]}>
       Trak
     </Text>
   );

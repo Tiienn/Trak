@@ -16,9 +16,14 @@ export const Colors = {
     // Cards float as soft white on the cream.
     backgroundElement: '#FFFFFF',
     backgroundSelected: '#ECE7DB',
-    textSecondary: '#8A8274',
+    // 4.5:1+ against both the cream canvas and white cards, so supporting
+    // copy remains readable at the small sizes used throughout the app.
+    textSecondary: '#756E62',
     /** Soft sage tint for tonal buttons / selected chips. */
     greenTint: '#E3EAD7',
+    /** Theme-aware green for foreground text, icons, and chart marks. */
+    accent: '#3D6B4F',
+    accentStrong: '#2C5039',
   },
   dark: {
     text: '#F3F1E9',
@@ -28,6 +33,10 @@ export const Colors = {
     backgroundSelected: '#2A2E22',
     textSecondary: '#A6A192',
     greenTint: '#25301D',
+    // Brand.green is intentionally retained for filled buttons. Foreground
+    // greens need this lighter pair to clear contrast on dark cards/canvas.
+    accent: '#79AA88',
+    accentStrong: '#A7D0B3',
   },
 } as const;
 
@@ -56,6 +65,8 @@ export type ThemeColors = {
   backgroundSelected: string;
   textSecondary: string;
   greenTint: string;
+  accent: string;
+  accentStrong: string;
 };
 
 /** Display face for hero numbers and screen titles — warm editorial serif. */

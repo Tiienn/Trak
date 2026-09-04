@@ -328,7 +328,7 @@ export default function BodyCaptureScreen() {
             <Pressable key={pose.key} onPress={() => retakePose(pose.key)} style={styles.previewWrap}>
               <Image source={{ uri: complete[pose.key].uri }} style={styles.previewImage} />
               <Text style={[styles.previewLabel, { color: colors.text }]}>{pose.label}</Text>
-              <Text style={[styles.previewRetake, { color: Brand.green }]}>Retake</Text>
+              <Text style={[styles.previewRetake, { color: colors.accent }]}>Retake</Text>
             </Pressable>
           ))}
         </View>
@@ -350,7 +350,7 @@ export default function BodyCaptureScreen() {
     <BodyScreen>
       <BodyHeader title={`${currentPose.label} photo`} subtitle={`${poseIndex + 1} of 3 · Keep the same clothing, lighting, and distance for every check-in.`} />
       <BodyCard style={styles.poseCard}>
-        <View style={[styles.poseFigure, { backgroundColor: colors.greenTint }]}><Text style={[styles.poseFigureText, { color: Brand.greenDark }]}>{currentPose.label.slice(0, 1)}</Text></View>
+        <View style={[styles.poseFigure, { backgroundColor: colors.greenTint }]}><Text style={[styles.poseFigureText, { color: colors.accentStrong }]}>{currentPose.label.slice(0, 1)}</Text></View>
         <BodySectionTitle>{currentPose.cue}</BodySectionTitle>
         <Text style={[styles.body, { color: colors.textSecondary }]}>Wear fitted clothing, include head to feet, use even light, and keep the camera around waist height. Do not submit nudity.</Text>
       </BodyCard>

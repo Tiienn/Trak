@@ -25,10 +25,24 @@ import {
   type TrainingPlanPatch,
 } from '@/lib/training-plan';
 import { useAppScheme } from '@/lib/theme';
-import type { LoadUnit, MuscleGroup, TrainingActivityType } from '@/lib/types';
+import type { CardioIntensity, LoadUnit, MuscleGroup, TrainingActivityType } from '@/lib/types';
 
 function numeric(value: string): number {
   return Math.max(0, Number(value.replace(',', '.')) || 0);
+}
+
+function durationParts(totalMinutes: number | null): { hours: string; minutes: string } {
+  const safeMinutes = Math.max(1, Math.min(1440, Math.round(totalMinutes ?? 30)));
+  return {
+    hours: String(Math.floor(safeMinutes / 60)),
+    minutes: String(safeMinutes % 60),
+  };
+}
+
+function durationFromParts(hours: string, minutes: string): number {
+  const hourValue = Math.min(24, Math.floor(numeric(hours)));
+  const minuteValue = Math.floor(numeric(minutes));
+  return Math.max(1, Math.min(1440, hourValue * 60 + minuteValue));
 }
 
 function LoadUnitToggle({ value, onChange, colors }: {
@@ -43,9 +57,106 @@ function LoadUnitToggle({ value, onChange, colors }: {
           key={unit}
           onPress={() => onChange(unit)}
           style={[styles.unitButton, value === unit && { backgroundColor: colors.greenTint }]}>
-          <Text style={[styles.unitText, { color: value === unit ? Brand.greenDark : colors.textSecondary }]}>{unit}</Text>
+          <Text style={[styles.unitText, { color: value === unit ? colors.accentStrong : colors.textSecondary }]}>{unit}</Text>
         </Pressable>
       ))}
+    </View>
+  );
+}
+
+function CardioIntensityToggle({ value, onChange, colors }: {
+  value: CardioIntensity;
+  onChange: (intensity: CardioIntensity) => void;
+  colors: ThemeColors;
+}) {
+  return (
+    <View style={[styles.typeToggle, { backgroundColor: colors.background }]}>
+      {(['light', 'moderate', 'vigorous'] as const).map((intensity) => (
+        <Pressable
+          accessibilityRole="radio"
+          accessibilityState={{ checked: value === intensity }}
+          key={intensity}
+          onPress={() => onChange(intensity)}
+          style={[styles.typeButton, value === intensity && { backgroundColor: colors.greenTint }]}>
+          <Text style={[styles.intensityText, { color: value === intensity ? colors.accentStrong : colors.textSecondary }]}>{intensity}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function WeeklyTargetField({ value, onChange, colors, backgroundColor }: {
+  value: number;
+  onChange: (value: number) => void;
+  colors: ThemeColors;
+  backgroundColor: string;
+}) {
+  return (
+    <View style={[styles.frequencyField, { backgroundColor }]}>
+      <View style={styles.frequencyCopy}>
+        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>SESSIONS PER WEEK</Text>
+        <Text style={[styles.frequencyHint, { color: colors.textSecondary }]}>Complete on separate days</Text>
+      </View>
+      <View style={[styles.frequencyStepper, { backgroundColor: colors.backgroundSelected }]}>
+        <Pressable accessibilityLabel="Decrease weekly sessions" disabled={value <= 1} hitSlop={8} onPress={() => onChange(Math.max(1, value - 1))}>
+          <Text style={[styles.largeStep, { color: colors.text }, value <= 1 && { opacity: 0.35 }]}>−</Text>
+        </Pressable>
+        <Text style={[styles.detailValue, { color: colors.text }]}>{value}</Text>
+        <Pressable accessibilityLabel="Increase weekly sessions" disabled={value >= 7} hitSlop={8} onPress={() => onChange(Math.min(7, value + 1))}>
+          <Text style={[styles.largeStep, { color: colors.text }, value >= 7 && { opacity: 0.35 }]}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function DurationTargetEditor({ value, name, colors, onSave }: {
+  value: number | null;
+  name: string;
+  colors: ThemeColors;
+  onSave: (minutes: number) => void;
+}) {
+  const initialDuration = durationParts(value);
+  const [hours, setHours] = useState(initialDuration.hours);
+  const [minutes, setMinutes] = useState(initialDuration.minutes);
+
+  function save() {
+    const totalMinutes = durationFromParts(hours, minutes);
+    const normalized = durationParts(totalMinutes);
+    setHours(normalized.hours);
+    setMinutes(normalized.minutes);
+    onSave(totalMinutes);
+  }
+
+  return (
+    <View style={[styles.compactField, { backgroundColor: colors.background }]}>
+      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TIME TARGET</Text>
+      <View style={styles.durationParts}>
+        <View style={styles.durationPart}>
+          <TextInput
+            accessibilityLabel={`Hours target for ${name}`}
+            value={hours}
+            keyboardType="number-pad"
+            maxLength={2}
+            onChangeText={(nextValue) => setHours(nextValue.replace(/[^0-9]/g, ''))}
+            onEndEditing={save}
+            style={[styles.durationInput, { color: colors.text }]}
+          />
+          <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>hr</Text>
+        </View>
+        <View style={styles.durationPart}>
+          <TextInput
+            accessibilityLabel={`Minutes target for ${name}`}
+            value={minutes}
+            keyboardType="number-pad"
+            maxLength={2}
+            onChangeText={(nextValue) => setMinutes(nextValue.replace(/[^0-9]/g, ''))}
+            onEndEditing={save}
+            style={[styles.durationInput, { color: colors.text }]}
+          />
+          <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -87,14 +198,14 @@ function PlanItemCard({ item, history, colors, onUpdate, onRemove }: {
       <View style={styles.planHeading}>
         <View style={[styles.exerciseIcon, { backgroundColor: colors.greenTint }]}>
           {item.activityType === 'cardio'
-            ? <FlameIcon size={19} color={Brand.green} />
-            : <DumbbellIcon size={19} color={muscle?.color ?? Brand.green} />}
+            ? <FlameIcon size={19} color={colors.accent} />
+            : <DumbbellIcon size={19} color={muscle?.color ?? colors.accent} />}
         </View>
         <View style={styles.exerciseInfo}>
           <Text style={[styles.exerciseName, { color: colors.text }]}>{item.name}</Text>
           <Text style={[styles.exerciseMeta, { color: colors.textSecondary }]}>
             {item.activityType === 'cardio'
-              ? `${item.durationTargetMinutes ?? 0} min · ${item.calorieTarget ?? 0} kcal target`
+              ? `${item.durationTargetMinutes ?? 0} min · ${item.cardioIntensity ?? 'moderate'} · ${item.calorieTarget ?? 0} kcal target`
               : `${muscleLabel(item.muscleGroup)} · ${item.sets} sets · ${item.reps} reps`}
           </Text>
         </View>
@@ -128,7 +239,7 @@ function PlanItemCard({ item, history, colors, onUpdate, onRemove }: {
           <View style={[styles.loadField, { backgroundColor: colors.background }]}>
             <View>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TRAINING LOAD</Text>
-              {progress ? <Text style={[styles.progressText, { color: Brand.greenDark }]}>{progress}</Text> : null}
+              {progress ? <Text style={[styles.progressText, { color: colors.accentStrong }]}>{progress}</Text> : null}
             </View>
             <View style={styles.loadControls}>
               <TextInput
@@ -147,37 +258,33 @@ function PlanItemCard({ item, history, colors, onUpdate, onRemove }: {
           </View>
         </>
       ) : (
-        <View style={styles.itemFields}>
-          <View style={[styles.compactField, { backgroundColor: colors.background }]}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TIME TARGET</Text>
-            <View style={styles.inputWithSuffix}>
-              <TextInput
-                key={`${item.id}-duration-${item.durationTargetMinutes}`}
-                defaultValue={String(item.durationTargetMinutes ?? 30)}
-                keyboardType="number-pad"
-                maxLength={4}
-                onEndEditing={(event) => update({ durationTargetMinutes: Math.max(1, numeric(event.nativeEvent.text)) })}
-                style={[styles.compactInput, { color: colors.text }]}
-              />
-              <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
+        <>
+          <View style={styles.itemFields}>
+            <DurationTargetEditor
+              value={item.durationTargetMinutes}
+              name={item.name}
+              colors={colors}
+              onSave={(durationTargetMinutes) => void update({ durationTargetMinutes })}
+            />
+            <View style={[styles.compactField, { backgroundColor: colors.background }]}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CALORIE TARGET</Text>
+              <View style={styles.inputWithSuffix}>
+                <TextInput
+                  key={`${item.id}-calories-${item.calorieTarget}`}
+                  defaultValue={String(item.calorieTarget ?? 200)}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  onEndEditing={(event) => update({ calorieTarget: numeric(event.nativeEvent.text) })}
+                  style={[styles.compactInput, { color: colors.text }]}
+                />
+                <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>kcal</Text>
+              </View>
             </View>
           </View>
-          <View style={[styles.compactField, { backgroundColor: colors.background }]}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CALORIE TARGET</Text>
-            <View style={styles.inputWithSuffix}>
-              <TextInput
-                key={`${item.id}-calories-${item.calorieTarget}`}
-                defaultValue={String(item.calorieTarget ?? 200)}
-                keyboardType="number-pad"
-                maxLength={5}
-                onEndEditing={(event) => update({ calorieTarget: numeric(event.nativeEvent.text) })}
-                style={[styles.compactInput, { color: colors.text }]}
-              />
-              <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>kcal</Text>
-            </View>
-          </View>
-        </View>
+          <CardioIntensityToggle value={item.cardioIntensity ?? 'moderate'} onChange={(cardioIntensity) => update({ cardioIntensity })} colors={colors} />
+        </>
       )}
+      <WeeklyTargetField value={item.weeklyTarget} onChange={(weeklyTarget) => { void update({ weeklyTarget }); }} colors={colors} backgroundColor={colors.background} />
     </View>
   );
 }
@@ -193,8 +300,11 @@ export default function TrainingPlanScreen() {
   const [reps, setReps] = useState('8–12');
   const [loadText, setLoadText] = useState('');
   const [loadUnit, setLoadUnit] = useState<LoadUnit>('kg');
+  const [cardioHours, setCardioHours] = useState('0');
   const [cardioMinutes, setCardioMinutes] = useState('30');
   const [cardioCalories, setCardioCalories] = useState('200');
+  const [cardioIntensity, setCardioIntensity] = useState<CardioIntensity>('moderate');
+  const [weeklyTarget, setWeeklyTarget] = useState(1);
   const [saving, setSaving] = useState(false);
 
   async function add() {
@@ -209,11 +319,14 @@ export default function TrainingPlanScreen() {
         reps: activityType === 'strength' ? reps : '—',
         loadValue: activityType === 'strength' && loadText.trim() ? numeric(loadText) : null,
         loadUnit,
-        durationTargetMinutes: activityType === 'cardio' ? Math.max(1, numeric(cardioMinutes)) : null,
+        durationTargetMinutes: activityType === 'cardio' ? durationFromParts(cardioHours, cardioMinutes) : null,
         calorieTarget: activityType === 'cardio' ? numeric(cardioCalories) : null,
+        cardioIntensity: activityType === 'cardio' ? cardioIntensity : null,
+        weeklyTarget,
       });
       setName('');
       setLoadText('');
+      setWeeklyTarget(1);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
       Alert.alert('Not saved', error?.message ?? 'Please try again.');
@@ -274,7 +387,7 @@ export default function TrainingPlanScreen() {
               <View style={[styles.typeToggle, { backgroundColor: colors.backgroundElement }]}>
                 {(['strength', 'cardio'] as const).map((type) => (
                   <Pressable key={type} onPress={() => setActivityType(type)} style={[styles.typeButton, activityType === type && { backgroundColor: colors.greenTint }]}>
-                    <Text style={[styles.typeText, { color: activityType === type ? Brand.greenDark : colors.textSecondary }]}>{type === 'strength' ? 'Strength' : 'Cardio'}</Text>
+                    <Text style={[styles.typeText, { color: activityType === type ? colors.accentStrong : colors.textSecondary }]}>{type === 'strength' ? 'Strength' : 'Cardio'}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -337,23 +450,48 @@ export default function TrainingPlanScreen() {
                   </View>
                 </>
               ) : (
-                <View style={styles.detailRow}>
-                  <View style={[styles.detailField, { backgroundColor: colors.backgroundElement }]}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TIME TARGET</Text>
-                    <View style={styles.inputWithSuffix}>
-                      <TextInput value={cardioMinutes} onChangeText={(value) => setCardioMinutes(value.replace(/[^0-9]/g, ''))} keyboardType="number-pad" maxLength={4} style={[styles.repsInput, { color: colors.text }]} />
-                      <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
+                <>
+                  <CardioIntensityToggle value={cardioIntensity} onChange={setCardioIntensity} colors={colors} />
+                  <View style={styles.detailRow}>
+                    <View style={[styles.detailField, { backgroundColor: colors.backgroundElement }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>TIME TARGET</Text>
+                      <View style={styles.durationParts}>
+                        <View style={styles.durationPart}>
+                          <TextInput
+                            accessibilityLabel="Cardio hours target"
+                            value={cardioHours}
+                            onChangeText={(value) => setCardioHours(value.replace(/[^0-9]/g, ''))}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            style={[styles.durationInput, { color: colors.text }]}
+                          />
+                          <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>hr</Text>
+                        </View>
+                        <View style={styles.durationPart}>
+                          <TextInput
+                            accessibilityLabel="Cardio minutes target"
+                            value={cardioMinutes}
+                            onChangeText={(value) => setCardioMinutes(value.replace(/[^0-9]/g, ''))}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            style={[styles.durationInput, { color: colors.text }]}
+                          />
+                          <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={[styles.detailField, { backgroundColor: colors.backgroundElement }]}>
+                      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CALORIE TARGET</Text>
+                      <View style={styles.inputWithSuffix}>
+                        <TextInput value={cardioCalories} onChangeText={(value) => setCardioCalories(value.replace(/[^0-9]/g, ''))} keyboardType="number-pad" maxLength={5} style={[styles.repsInput, { color: colors.text }]} />
+                        <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>kcal</Text>
+                      </View>
                     </View>
                   </View>
-                  <View style={[styles.detailField, { backgroundColor: colors.backgroundElement }]}>
-                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>CALORIE TARGET</Text>
-                    <View style={styles.inputWithSuffix}>
-                      <TextInput value={cardioCalories} onChangeText={(value) => setCardioCalories(value.replace(/[^0-9]/g, ''))} keyboardType="number-pad" maxLength={5} style={[styles.repsInput, { color: colors.text }]} />
-                      <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>kcal</Text>
-                    </View>
-                  </View>
-                </View>
+                </>
               )}
+
+              <WeeklyTargetField value={weeklyTarget} onChange={setWeeklyTarget} colors={colors} backgroundColor={colors.backgroundElement} />
 
               <Pressable disabled={saving || !name.trim()} onPress={add} style={[styles.addButton, (saving || !name.trim()) && { opacity: 0.45 }]}>
                 {saving ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.addButtonText}>ADD TO TRAINING</Text>}
@@ -370,7 +508,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: Spacing.four },
   flex: { flex: 1 },
-  header: { height: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { minHeight: 70, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerSpacer: { width: 48 },
   headerLabel: { fontSize: 17, fontWeight: '700' },
   closeButton: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
@@ -396,12 +534,15 @@ const styles = StyleSheet.create({
   progressText: { marginTop: 3, fontSize: 11, fontWeight: '700' },
   loadControls: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   loadInput: { minWidth: 54, padding: 0, fontSize: 19, fontWeight: '800', textAlign: 'right' },
+  frequencyField: { minHeight: 72, borderRadius: 18, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.three },
+  frequencyCopy: { flex: 1 }, frequencyHint: { marginTop: 3, fontSize: 11, lineHeight: 15 }, frequencyStepper: { minWidth: 116, minHeight: 44, borderRadius: 14, paddingHorizontal: Spacing.two, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   unitToggle: { flexDirection: 'row', borderRadius: 10, padding: 3 },
   unitButton: { minWidth: 34, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
   unitText: { fontSize: 12, fontWeight: '800' },
   typeToggle: { flexDirection: 'row', borderRadius: 16, padding: 4 },
   typeButton: { flex: 1, minHeight: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   typeText: { fontSize: 14, fontWeight: '800' },
+  intensityText: { fontSize: 12, fontWeight: '800', textTransform: 'capitalize' },
   input: { minHeight: 56, borderRadius: 18, paddingHorizontal: Spacing.three, fontSize: 16, fontWeight: '600' },
   muscleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   muscleChip: { width: '48.5%', minHeight: 48, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
@@ -415,6 +556,9 @@ const styles = StyleSheet.create({
   detailValue: { fontSize: 20, fontWeight: '900' },
   repsInput: { flex: 1, padding: 0, fontSize: 19, fontWeight: '800', textAlign: 'center' },
   inputWithSuffix: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.one },
+  durationParts: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.one },
+  durationPart: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  durationInput: { minWidth: 20, padding: 0, fontSize: 17, fontWeight: '800', textAlign: 'right' },
   inputSuffix: { fontSize: 11, fontWeight: '700' },
   addButton: { minHeight: 56, borderRadius: 28, backgroundColor: Brand.green, alignItems: 'center', justifyContent: 'center' },
   addButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },

@@ -1,0 +1,39 @@
+# Dependencies and generated build output
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+/ios
+/android
+.kotlin/
+
+# Local configuration and credentials
+.env
+.env*.local
+credentials/
+credentials.json
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Local-only artifacts
+*.apk
+*.aab
+*.tsbuildinfo
+.DS_Store
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.metro-health-check*
+supabase/.temp/
+/artifacts/
+/output/
+/store-assets/
+/.playwright-cli/
+/.claude/launch.json
+
+# Marketing content is not part of the mobile application bundle.
+/content/

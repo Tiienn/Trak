@@ -103,7 +103,7 @@ export default function RewardsScreen() {
               <Text style={styles.balanceValue}>{balance.toLocaleString()}</Text>
               <Text style={styles.balanceLabel}>Trak Points available</Text>
             </View>
-            <Text style={styles.balanceRate}>5 missions{`\n`}20 each</Text>
+            <Text style={styles.balanceRate}>Missions +{`\n`}daily games</Text>
           </View>
 
           <View style={styles.sectionHeader}>
@@ -119,7 +119,16 @@ export default function RewardsScreen() {
           <View style={[styles.historyCard, { backgroundColor: colors.backgroundElement }]}>
             {ledger.length === 0 ? <Text style={[styles.empty, { color: colors.textSecondary }]}>Complete a mission to earn your first 20 points.</Text> : ledger.slice(0, 12).map((entry, index) => {
               const reward = catalog.find((item) => item.key === entry.rewardKey);
-              const label = entry.source === 'mission' ? `${entry.missionKey ? entry.missionKey[0].toUpperCase() + entry.missionKey.slice(1) : 'Daily'} mission` : reward?.title ?? 'Reward';
+              const gameLabel = entry.gameKey === 'daily_build'
+                ? 'Daily Build challenge'
+                : entry.gameKey
+                  ? `${entry.gameKey[0].toUpperCase() + entry.gameKey.slice(1)} game`
+                  : 'Game reward';
+              const label = entry.source === 'mission'
+                ? `${entry.missionKey ? entry.missionKey[0].toUpperCase() + entry.missionKey.slice(1) : 'Daily'} mission`
+                : entry.source === 'game'
+                  ? gameLabel
+                  : reward?.title ?? 'Reward';
               return (
                 <View key={entry.id} style={[styles.historyRow, index > 0 && { borderTopColor: colors.backgroundSelected, borderTopWidth: StyleSheet.hairlineWidth }]}>
                   <View>

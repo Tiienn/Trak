@@ -65,6 +65,19 @@ export function replaceFoodItem(
   };
 }
 
+/** Remove one mistaken scan item and rebuild the meal nutrition immediately. */
+export function removeFoodItem(analysis: FoodAnalysis, index: number): FoodAnalysis {
+  if (index < 0 || index >= analysis.items.length || analysis.items.length <= 1) return analysis;
+  const removed = analysis.items[index];
+  const items = analysis.items.filter((_, itemIndex) => itemIndex !== index);
+  return {
+    ...analysis,
+    items,
+    total: sumItems(items),
+    notes: `Removed ${removed.name} from the scan. Nutrition now reflects the remaining foods.`,
+  };
+}
+
 /** Make the correction unambiguously a food-log request for Trak's nutrition pipeline. */
 export function foodCorrectionPrompt(name: string, quantity: string, fallbackGrams?: number): string {
   const serving = quantity.trim() || (fallbackGrams ? `${fallbackGrams} g` : '1 serving');

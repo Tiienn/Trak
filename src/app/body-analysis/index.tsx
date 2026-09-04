@@ -9,7 +9,7 @@ import {
   BodySectionTitle,
   BodyState,
 } from '@/components/body-analysis-ui';
-import { Brand, Colors, Spacing } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import {
   bodyAnalysisEligibility,
   daysUntilNextCheckIn,
@@ -148,15 +148,15 @@ export default function BodyAnalysisHubScreen() {
       />
       {bodyAnalysisDemoEnabled ? (
         <BodyCard style={{ backgroundColor: colors.greenTint }}>
-          <Text style={[styles.demoTitle, { color: Brand.greenDark }]}>LOCAL DEMO MODE</Text>
-          <Text style={[styles.summary, { color: colors.textSecondary }]}>Mock results and placeholder photos stay on this simulator. Nothing is sent to Gemini or the live Body Analysis backend.</Text>
+          <Text style={[styles.demoTitle, { color: colors.accentStrong }]}>PREVIEW MODE</Text>
+          <Text style={[styles.summary, { color: colors.textSecondary }]}>Sample results and placeholder photos stay on this device. This preview does not perform a real Body Analysis.</Text>
         </BodyCard>
       ) : null}
       {state ?? (
         <>
           {latestScan ? (
             <BodyCard>
-              <Text style={[styles.eyebrow, { color: Brand.green }]}>LATEST CHECK-IN</Text>
+              <Text style={[styles.eyebrow, { color: colors.accent }]}>LATEST CHECK-IN</Text>
               <BodySectionTitle>{dateLabel(latestScan.createdAt)}</BodySectionTitle>
               <Text style={[styles.summary, { color: colors.textSecondary }]}>{latestScan.result.summary}</Text>
               <View style={styles.focusList}>

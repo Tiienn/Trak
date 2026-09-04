@@ -21,14 +21,14 @@ import { useMeals } from './store';
 /**
  * Trak Pro via RevenueCat.
  *
- * Only the AI features (photo scan, Chat/Ask) are paid — they're the ones that
+ * Only the AI features (photo scan, Chat/Ask, Body Analysis) are paid — they're the ones that
  * cost real money per use. Everything else (barcode, quick-add, water, weight,
- * exercise, history, insights, games) is free forever.
+ * manual meal entry, exercise, history, insights, games) is free forever.
  *
- * Access to the AI features comes from any of three places: the `pro`
- * entitlement, an unexpired 7-day trial that starts at account creation, or a
- * tester build (dev, or EXPO_PUBLIC_TESTER_ACCESS=true) so store review and
- * closed-test cohorts can exercise every feature.
+ * Client access to AI features comes from the `pro` entitlement, an unexpired
+ * 7-day trial that starts at account creation, or a tester build. Edge Functions
+ * independently verify the subscription/trial or trusted server-side tester
+ * status before spending any AI credit.
  */
 
 const apiKey =

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { groupsForExercise, muscleScores, muscleScoreWindow, trainingDayKeys, workoutMinutesByDay } from '../src/lib/training-progress.ts';
+import { groupsForExercise, muscleScoreGuidance, muscleScores, muscleScoreWindow, plannedTrainingCompletionDays, trainingDayKeys, weeklyActivitySummary, workoutMinutesByDay } from '../src/lib/training-progress.ts';
 import { DEFAULT_MUSCLE_SCORE_SETTINGS, normalizeMuscleScoreSettings, readMuscleScoreSettings, writeMuscleScoreSettings } from '../src/lib/muscle-score-settings.ts';
 
 const mondayScores = (rows, day) => muscleScores(rows, day, 12, { resetWeekdays: [1], manualResets: [] });
@@ -17,6 +17,8 @@ const exercise = (id, date, name, durationMinutes, muscleSets = emptySets) => ({
   createdAt: 1,
   workoutSplits: [],
   muscleSets,
+  cardioIntensity: null,
+  trainingPlanItemId: null,
 });
 
 test('maps focused and full-body workouts to transparent muscle groups', () => {
@@ -27,7 +29,7 @@ test('maps focused and full-body workouts to transparent muscle groups', () => {
   assert.deepEqual(groupsForExercise('Cardio'), []);
 });
 
-test('muscle scores award two points for chest, legs, and back and cap at 100', () => {
+test('muscle scores award one point per completed set for every scored muscle and cap at 100', () => {
   const rows = [
     exercise('a', '2026-08-27', 'Chest', 30, { ...emptySets, chest: 3, arms: 2 }),
     exercise('b', '2026-08-24', 'Bench press', 45, { ...emptySets, chest: 3, arms: 3 }),
@@ -36,14 +38,37 @@ test('muscle scores award two points for chest, legs, and back and cap at 100', 
   const chest = muscleScores(rows, '2026-08-27').find((item) => item.key === 'chest');
   const arms = muscleScores(rows, '2026-08-27').find((item) => item.key === 'arms');
   assert.equal(chest?.sets, 6);
-  assert.equal(chest?.points, 12);
-  assert.equal(chest?.pointsPerSet, 2);
-  assert.equal(chest?.score, 100);
+  assert.equal(chest?.points, 6);
+  assert.equal(chest?.pointsPerSet, 1);
+  assert.equal(chest?.score, 50);
   assert.equal(arms?.points, 5);
   assert.equal(arms?.pointsPerSet, 1);
+  assert.equal(
+    muscleScores([
+      exercise('cap', '2026-08-27', 'Chest', 30, { ...emptySets, chest: 15 }),
+    ], '2026-08-27').find((item) => item.key === 'chest')?.score,
+    100
+  );
   assert.deepEqual(trainingDayKeys('2026-08-27'), [
     '2026-08-21', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27',
   ]);
+});
+
+test('muscle score guidance distinguishes useful volume from recovery checks', () => {
+  assert.equal(muscleScoreGuidance(0), 'No working sets yet');
+  assert.equal(muscleScoreGuidance(1), 'Some stimulus');
+  assert.equal(muscleScoreGuidance(6), 'Building toward target');
+  assert.equal(muscleScoreGuidance(12), 'Target met');
+  assert.equal(muscleScoreGuidance(16), 'Check recovery');
+  assert.equal(muscleScoreGuidance(20), 'High volume');
+});
+
+test('the catch-all other category remains loggable but is not a scored target', () => {
+  const scores = muscleScores([
+    exercise('other', '2026-08-27', 'Other strength', 30, { ...emptySets, other: 12 }),
+  ], '2026-08-27');
+  assert.equal(scores.length, 7);
+  assert.equal(scores.some((item) => item.key === 'other'), false);
 });
 
 test('workout time totals minutes by day', () => {
@@ -52,6 +77,57 @@ test('workout time totals minutes by day', () => {
     exercise('b', '2026-08-27', 'Arms', 15),
   ];
   assert.equal(workoutMinutesByDay(rows, '2026-08-27').at(-1)?.minutes, 35);
+});
+
+test('planned training progress counts distinct days and preserves legacy name matches', () => {
+  const rows = [
+    { ...exercise('linked-a', '2026-09-03', 'Incline press', 20), trainingPlanItemId: 'plan-a' },
+    { ...exercise('linked-b', '2026-09-03', 'Renamed incline press', 20), trainingPlanItemId: 'plan-a' },
+    { ...exercise('linked-other', '2026-09-04', 'Incline press', 20), trainingPlanItemId: 'plan-b' },
+    exercise('legacy', '2026-09-02', '  INCLINE PRESS ', 20),
+    exercise('expired', '2026-08-28', 'Incline press', 20),
+  ];
+  assert.deepEqual(plannedTrainingCompletionDays(rows, '2026-09-04', 'plan-a', 'Incline press'), [
+    '2026-09-02',
+    '2026-09-03',
+  ]);
+});
+
+test('weekly activity separates strength sessions and cardio minutes over the last seven days', () => {
+  const rows = [
+    { ...exercise('strength-a', '2026-08-27', 'Full body', 35, { ...emptySets, chest: 3 }), workoutSplits: ['full_body'] },
+    { ...exercise('strength-b', '2026-08-27', 'Chest', 10, { ...emptySets, chest: 2 }), workoutSplits: ['chest'] },
+    { ...exercise('cardio', '2026-08-26', 'Brisk walking', 30), workoutSplits: ['cardio'], cardioIntensity: 'moderate' },
+    { ...exercise('mixed', '2026-08-25', 'Strength and cardio', 40, { ...emptySets, legs: 3 }), workoutSplits: ['legs', 'cardio'], cardioIntensity: 'vigorous' },
+    { ...exercise('old', '2026-08-20', 'Running', 90), workoutSplits: ['cardio'] },
+  ];
+  assert.deepEqual(weeklyActivitySummary(rows, '2026-08-27'), {
+    strengthSessions: 2,
+    cardioSessions: 2,
+    vigorousCardioSessions: 1,
+    strengthMinutes: 85,
+    cardioMinutes: 70,
+    lightCardioMinutes: 0,
+    moderateCardioMinutes: 30,
+    vigorousCardioMinutes: 40,
+    cardioEquivalentMinutes: 110,
+    totalMinutes: 115,
+  });
+});
+
+test('weekly cardio equivalents exclude light movement and treat legacy cardio as moderate', () => {
+  const rows = [
+    { ...exercise('light', '2026-08-27', 'Easy walk', 20), workoutSplits: ['cardio'], cardioIntensity: 'light' },
+    { ...exercise('legacy', '2026-08-26', 'Cycling', 25), workoutSplits: ['cardio'] },
+    { ...exercise('vigorous', '2026-08-25', 'Intervals', 15), workoutSplits: ['cardio'], cardioIntensity: 'vigorous' },
+  ];
+  const activity = weeklyActivitySummary(rows, '2026-08-27');
+  assert.equal(activity.cardioMinutes, 60);
+  assert.equal(activity.lightCardioMinutes, 20);
+  assert.equal(activity.moderateCardioMinutes, 25);
+  assert.equal(activity.vigorousCardioMinutes, 15);
+  assert.equal(activity.cardioEquivalentMinutes, 55);
+  assert.equal(activity.vigorousCardioSessions, 1);
 });
 
 test('Monday resets are opt-in; the default keeps Sunday sets and workout history', () => {
@@ -74,9 +150,9 @@ test('an optional Monday schedule includes only Monday through the selected day'
     exercise('tuesday', '2026-09-01', 'Chest', 30, { ...emptySets, chest: 1 }),
     exercise('sunday', '2026-09-06', 'Chest', 30, { ...emptySets, chest: 3 }),
   ];
-  assert.equal(mondayScores(rows, '2026-08-31')[0].points, 4);
-  assert.equal(mondayScores(rows, '2026-09-01')[0].points, 6);
-  assert.equal(mondayScores(rows, '2026-09-06')[0].points, 12);
+  assert.equal(mondayScores(rows, '2026-08-31')[0].points, 2);
+  assert.equal(mondayScores(rows, '2026-09-01')[0].points, 3);
+  assert.equal(mondayScores(rows, '2026-09-06')[0].points, 6);
   assert.equal(mondayScores(rows, '2026-09-07')[0].points, 0);
 });
 
@@ -90,7 +166,7 @@ test('weekly reset handles year boundaries and local daylight-saving weeks', () 
   assert.equal(mondayScores(rows, '2026-01-05').find((item) => item.key === 'arms')?.points, 0);
   for (const [sunday, monday] of [['2026-03-08', '2026-03-09'], ['2026-11-01', '2026-11-02']]) {
     const dstRows = [exercise('sunday', sunday, 'Back', 30, { ...emptySets, back: 3 })];
-    assert.equal(muscleScores(dstRows, sunday).find((item) => item.key === 'back')?.points, 6);
+    assert.equal(muscleScores(dstRows, sunday).find((item) => item.key === 'back')?.points, 3);
     assert.equal(mondayScores(dstRows, monday).find((item) => item.key === 'back')?.points, 0);
   }
 });
@@ -118,9 +194,9 @@ test('manual reset excludes earlier sets but counts new sets on the same day; un
     { ...exercise('after', '2026-08-31', 'Chest', 10, { ...emptySets, chest: 1 }), createdAt: at + 1000 },
   ];
   const original = structuredClone(rows);
-  assert.equal(muscleScores(rows, '2026-08-31', 12, settings)[0].points, 2);
-  assert.equal(muscleScores(rows, '2026-08-30', 12, settings)[0].points, 4);
-  assert.equal(muscleScores(rows, '2026-08-31', 12, { ...settings, manualResets: [] })[0].points, 12);
+  assert.equal(muscleScores(rows, '2026-08-31', 12, settings)[0].points, 1);
+  assert.equal(muscleScores(rows, '2026-08-30', 12, settings)[0].points, 2);
+  assert.equal(muscleScores(rows, '2026-08-31', 12, { ...settings, manualResets: [] })[0].points, 6);
   assert.equal(workoutMinutesByDay(rows, '2026-08-31').at(-1)?.minutes, 30);
   assert.deepEqual(rows, original);
 });

@@ -24,7 +24,7 @@ export function ProfileAvatarButton({ colors }: { colors: ThemeColors }) {
           opacity: pressed ? 0.72 : 1,
         },
       ]}>
-      <UserIcon size={22} color={Brand.green} />
+      <UserIcon size={22} color={colors.accent} />
       {hasBadge ? <View style={[styles.badge, { backgroundColor: Brand.green, borderColor: colors.background }]} /> : null}
     </Pressable>
   );

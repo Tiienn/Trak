@@ -1,16 +1,16 @@
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FlameIcon, PlateIcon, ShareIcon } from '@/components/icons';
+import { BuildMealIcon, FlameIcon, PlateIcon, ShareIcon } from '@/components/icons';
 import { Brand, Colors, Spacing } from '@/constants/theme';
 import {
-  categoriesForFoods,
+  ALL_INGREDIENTS,
+  CATEGORIES,
   dailyChallenge,
   EMPTY_STATS,
-  foodsForDeck,
   INGREDIENT_BY_ID,
   loadGameStats,
   plateTotals,
@@ -21,7 +21,9 @@ import {
   type GameStats,
   type RoundResult,
 } from '@/lib/game';
+import { useAuth } from '@/lib/auth';
 import { useAppScheme } from '@/lib/theme';
+import { useTrakPoints } from '@/lib/trak-points';
 
 type Phase = 'build' | 'result';
 
@@ -37,14 +39,15 @@ function Stars({ count }: { count: 0 | 1 | 2 | 3 }) {
 export default function GameScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { awardGame } = useTrakPoints();
 
   // `?mode=free` starts a random round instead of today's daily challenge.
-  const { mode, deck, foods } = useLocalSearchParams<{ mode?: string; deck?: string; foods?: string }>();
-  const foodPool = useMemo(
-    () => foodsForDeck(deck, foods ? foods.split(',').filter(Boolean) : undefined),
-    [deck, foods]
-  );
-  const availableCategories = useMemo(() => categoriesForFoods(foodPool), [foodPool]);
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  // Build is intentionally broader than the quiz decks: users can combine the
+  // complete catalog and use search instead of being trapped in one deck.
+  const availableCategories = CATEGORIES;
   const [isDaily, setIsDaily] = useState(mode !== 'free');
   const [challenge, setChallenge] = useState<Challenge>(() =>
     mode === 'free' ? randomChallenge() : dailyChallenge()
@@ -54,15 +57,23 @@ export default function GameScreen() {
   const [phase, setPhase] = useState<Phase>('build');
   const [result, setResult] = useState<RoundResult | null>(null);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
+  const [search, setSearch] = useState('');
+  const [pointsEarned, setPointsEarned] = useState(0);
 
   useEffect(() => {
-    loadGameStats().then(setStats);
-  }, []);
+    loadGameStats(user?.id).then(setStats);
+  }, [user?.id]);
 
   const totals = useMemo(() => plateTotals(plate), [plate]);
   const plateIds = Object.keys(plate).filter((id) => plate[id] > 0);
   const activeCategory =
     availableCategories.find((item) => item.key === category) ?? availableCategories[0];
+  const visibleIngredients = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query
+      ? ALL_INGREDIENTS.filter((item) => `${item.name} ${item.portion}`.toLowerCase().includes(query))
+      : activeCategory.items;
+  }, [activeCategory.items, search]);
   const dailyDoneToday = stats.lastDailyDay !== null && stats.lastDailyDay === challengeDay();
 
   function challengeDay(): string {
@@ -91,7 +102,12 @@ export default function GameScreen() {
     Haptics.notificationAsync(
       r.stars >= 2 ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning
     ).catch(() => {});
-    setStats(await recordRound(r, isDaily, stats, plateIds));
+    const [nextStats, awarded] = await Promise.all([
+      recordRound(r, isDaily, stats, plateIds, user?.id),
+      awardGame(isDaily ? 'daily_build' : 'build'),
+    ]);
+    setStats(nextStats);
+    setPointsEarned(awarded);
   }
 
   function playAgain() {
@@ -99,6 +115,7 @@ export default function GameScreen() {
     setIsDaily(false);
     setPlate({});
     setResult(null);
+    setPointsEarned(0);
     setPhase('build');
   }
 
@@ -120,12 +137,14 @@ export default function GameScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView
+        style={[styles.safe, { paddingTop: Math.max(insets.top + Spacing.two, Spacing.four) }]}
+        edges={['bottom']}>
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {isDaily ? 'Daily challenge' : 'Challenge'}
           </Text>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close game" onPress={() => router.back()} hitSlop={12}>
             <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
           </Pressable>
         </View>
@@ -143,8 +162,8 @@ export default function GameScreen() {
               </Text>
               {isDaily && stats.dailyStreak > 0 ? (
                 <View style={styles.briefStreakRow}>
-                  <FlameIcon size={14} color={Brand.greenDark} />
-                  <Text style={[styles.briefStreak, { color: Brand.greenDark }]}>
+                  <FlameIcon size={14} color={colors.accentStrong} />
+                  <Text style={[styles.briefStreak, { color: colors.accentStrong }]}>
                     {stats.dailyStreak}-day game streak
                     {dailyDoneToday ? ' · today already counted' : ''}
                   </Text>
@@ -178,6 +197,8 @@ export default function GameScreen() {
                           {ing.portion}
                         </Text>
                         <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove one serving of ${ing.name}`}
                           hitSlop={8}
                           onPress={() => remove(id)}
                           style={[styles.removeBtn, { backgroundColor: colors.background }]}>
@@ -197,13 +218,15 @@ export default function GameScreen() {
                 {availableCategories.map((c) => (
                   <Pressable
                     key={c.key}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: category === c.key }}
                     onPress={() => setCategory(c.key)}
                     style={[
                       styles.catChip,
                       {
                         backgroundColor:
                           category === c.key ? colors.greenTint : colors.backgroundElement,
-                        borderColor: category === c.key ? Brand.green : 'transparent',
+                        borderColor: category === c.key ? colors.accent : 'transparent',
                       },
                     ]}>
                     <Text style={[styles.catChipText, { color: colors.text }]}>
@@ -213,19 +236,33 @@ export default function GameScreen() {
                 ))}
               </ScrollView>
 
+              <TextInput
+                accessibilityLabel="Search Build ingredients"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={`Search ${ALL_INGREDIENTS.length} foods`}
+                placeholderTextColor={colors.textSecondary}
+                value={search}
+                onChangeText={setSearch}
+                style={[styles.searchInput, { color: colors.text, backgroundColor: colors.backgroundElement }]}
+              />
+
               {/* Ingredient grid */}
               <View style={styles.grid}>
-                {activeCategory.items.map((ing) => {
+                {visibleIngredients.map((ing) => {
                   const qty = plate[ing.id] ?? 0;
                   return (
                     <Pressable
                       key={ing.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${ing.portion} of ${ing.name}`}
+                      accessibilityState={{ selected: qty > 0 }}
                       onPress={() => add(ing.id)}
                       style={[
                         styles.ingBtn,
                         {
                           backgroundColor: qty > 0 ? colors.greenTint : colors.backgroundElement,
-                          borderColor: qty > 0 ? Brand.green : 'transparent',
+                          borderColor: qty > 0 ? colors.accent : 'transparent',
                         },
                       ]}>
                       <Text style={styles.ingEmoji}>{ing.emoji}</Text>
@@ -240,13 +277,16 @@ export default function GameScreen() {
                   );
                 })}
               </View>
+              {visibleIngredients.length === 0 ? (
+                <Text style={[styles.noResults, { color: colors.textSecondary }]}>No ingredients match that search.</Text>
+              ) : null}
             </ScrollView>
 
             <Pressable
               style={[styles.serveBtn, { opacity: plateIds.length > 0 ? 1 : 0.4 }]}
               disabled={plateIds.length === 0}
               onPress={serve}>
-              <PlateIcon size={20} color="#ffffff" />
+              <BuildMealIcon size={20} color="#ffffff" />
               <Text style={styles.serveText}>Serve it</Text>
             </Pressable>
           </>
@@ -266,7 +306,7 @@ export default function GameScreen() {
                 <Text
                   style={[
                     styles.revealProtein,
-                    { color: result.proteinMet ? Brand.greenDark : Brand.over },
+                    { color: result.proteinMet ? colors.accentStrong : Brand.over },
                   ]}>
                   {totals.protein_g} g protein {result.proteinMet ? '✓' : `— needed ${challenge.minProtein} g`}
                 </Text>
@@ -303,6 +343,9 @@ export default function GameScreen() {
                 Played {stats.played} · {stats.threeStar} perfect · best miss{' '}
                 {stats.bestDiffPct ?? '—'}%{stats.dailyStreak > 0 ? ` · ${stats.dailyStreak}-day streak` : ''}
               </Text>
+              {pointsEarned > 0 ? (
+                <Text style={[styles.pointsEarned, { color: colors.accentStrong }]}>+{pointsEarned} Trak Points</Text>
+              ) : null}
 
               <Pressable
                 style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
@@ -336,7 +379,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Spacing.two,
     marginBottom: Spacing.two,
   },
   headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
@@ -367,9 +409,10 @@ const styles = StyleSheet.create({
   removeBtn: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   removeText: { fontSize: 16, fontWeight: '800' },
 
-  catRow: { gap: Spacing.two, paddingVertical: 2 },
+  catRow: { gap: Spacing.two, paddingVertical: 2, paddingRight: Spacing.four },
   catChip: { borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 8 },
   catChipText: { fontSize: 13, fontWeight: '700' },
+  searchInput: { minHeight: 46, borderRadius: 15, paddingHorizontal: Spacing.three, fontSize: 15, fontWeight: '600' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   ingBtn: {
@@ -384,6 +427,7 @@ const styles = StyleSheet.create({
   ingEmoji: { fontSize: 26 },
   ingName: { fontSize: 12, fontWeight: '700' },
   ingPortion: { fontSize: 10 },
+  noResults: { textAlign: 'center', fontSize: 13, lineHeight: 19, paddingVertical: Spacing.four },
 
   serveBtn: {
     backgroundColor: Brand.green,
@@ -413,6 +457,7 @@ const styles = StyleSheet.create({
   breakCals: { fontSize: 14, fontWeight: '800' },
 
   statsLine: { fontSize: 12, fontWeight: '600' },
+  pointsEarned: { fontSize: 14, fontWeight: '900' },
 
   shareBtn: {
     alignSelf: 'stretch',

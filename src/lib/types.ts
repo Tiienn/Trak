@@ -22,7 +22,7 @@ export type FoodTotals = {
   fat_g: number;
 };
 
-export type MealInputSource = 'text' | 'photo' | 'barcode' | 'quick_log';
+export type MealInputSource = 'text' | 'photo' | 'barcode' | 'quick_log' | 'manual';
 
 export type FoodAnalysis = {
   /** false when the photo has no recognizable food. */
@@ -107,11 +107,15 @@ export type WorkoutSplit =
   | 'cardio';
 export type MuscleSetCounts = Record<MuscleGroup, number>;
 export type TrainingActivityType = 'strength' | 'cardio';
+export type CardioIntensity = 'light' | 'moderate' | 'vigorous';
 export type LoadUnit = 'kg' | 'lb';
 
 export type ExerciseDetails = {
   workoutSplits: WorkoutSplit[];
   muscleSets: MuscleSetCounts;
+  cardioIntensity?: CardioIntensity | null;
+  /** Custom plan item completed by this workout, when applicable. */
+  trainingPlanItemId?: string | null;
 };
 
 /** A logged workout; a conservative portion of its burn is credited to the daily budget. */
@@ -126,6 +130,10 @@ export type ExerciseEntry = {
   durationMinutes: number;
   /** Multiple training splits may describe the same completed workout. */
   workoutSplits: WorkoutSplit[];
+  /** Null for strength-only work; legacy cardio is interpreted as moderate. */
+  cardioIntensity: CardioIntensity | null;
+  /** Custom plan item completed by this workout, when applicable. */
+  trainingPlanItemId: string | null;
   /** One completed set equals one weekly Progress point for that muscle. */
   muscleSets: MuscleSetCounts;
 };

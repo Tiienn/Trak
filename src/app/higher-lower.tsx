@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FlagIcon, ShareIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import {
   EMPTY_STATS,
   foodsForDeck,
@@ -25,6 +26,7 @@ import {
   type MetricKey,
 } from '@/lib/game';
 import { useAppScheme } from '@/lib/theme';
+import { useTrakPoints } from '@/lib/trak-points';
 
 type Phase = 'guess' | 'reveal' | 'over';
 
@@ -46,7 +48,7 @@ function FoodCard({
         {
           backgroundColor: colors.backgroundElement,
           borderColor:
-            highlight === 'right' ? Brand.green : highlight === 'wrong' ? '#EF4444' : 'transparent',
+            highlight === 'right' ? colors.accent : highlight === 'wrong' ? '#EF4444' : 'transparent',
         },
       ]}>
       <View style={[styles.emojiTile, { backgroundColor: colors.background }]}>
@@ -72,6 +74,8 @@ const SWIPE_THRESHOLD = 90;
 export default function HigherLowerScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const { user } = useAuth();
+  const { awardGame } = useTrakPoints();
 
   const { deck, foods } = useLocalSearchParams<{ deck?: string; foods?: string }>();
   const foodPool = useMemo(
@@ -87,6 +91,7 @@ export default function HigherLowerScreen() {
   const [correctFoodIds, setCorrectFoodIds] = useState<string[]>([]);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
+  const [pointsEarned, setPointsEarned] = useState(0);
   const metricInfo = METRICS.find((m) => m.key === metric)!;
   const fmt = (n: number) => `${n} ${metricInfo.unit}`;
 
@@ -94,8 +99,8 @@ export default function HigherLowerScreen() {
   const canSwipe = useSharedValue(1);
 
   useEffect(() => {
-    loadGameStats().then(setStats);
-  }, []);
+    loadGameStats(user?.id).then(setStats);
+  }, [user?.id]);
 
   useEffect(() => {
     canSwipe.set(phase === 'guess' ? 1 : 0);
@@ -133,7 +138,13 @@ export default function HigherLowerScreen() {
       // Record IMMEDIATELY — recording inside the reveal timer meant leaving
       // the screen (or switching metric) during the 1.1s reveal silently
       // discarded the run, including personal bests.
-      recordHigherLower(run, stats, correctFoodIds).then(setStats).catch(() => {});
+      Promise.all([
+        recordHigherLower(run, stats, correctFoodIds, user?.id),
+        awardGame('compare'),
+      ]).then(([nextStats, awarded]) => {
+        setStats(nextStats);
+        setPointsEarned(awarded);
+      }).catch(() => {});
     }
   }
 
@@ -147,6 +158,7 @@ export default function HigherLowerScreen() {
     setMystery(randomFood(a, m, foodPool));
     setRun(0);
     setCorrectFoodIds([]);
+    setPointsEarned(0);
     translateX.set(0);
     setPhase('guess');
   }
@@ -205,7 +217,7 @@ export default function HigherLowerScreen() {
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           <View style={styles.headerRow}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Higher or Lower</Text>
-            <Pressable onPress={() => router.back()} hitSlop={12}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close game" onPress={() => router.back()} hitSlop={12}>
               <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
             </Pressable>
           </View>
@@ -216,7 +228,7 @@ export default function HigherLowerScreen() {
           {phase === 'over' ? (
             <View style={styles.overWrap}>
               <View style={[styles.overBadge, { backgroundColor: colors.backgroundElement }]}>
-                <FlagIcon size={30} color={Brand.green} />
+                <FlagIcon size={30} color={colors.accent} />
               </View>
               <Text style={[styles.overTitle, { color: colors.text }]}>
                 Run over — you got {run}!
@@ -226,6 +238,9 @@ export default function HigherLowerScreen() {
                   ? 'New personal best!'
                   : `Personal best: ${stats.hlBest}`}
               </Text>
+              {pointsEarned > 0 ? (
+                <Text style={[styles.pointsEarned, { color: colors.accentStrong }]}>+{pointsEarned} Trak Points</Text>
+              ) : null}
               <View style={styles.overButtons}>
                 <Pressable
                   style={[styles.shareBtn, { backgroundColor: colors.backgroundElement }]}
@@ -248,6 +263,8 @@ export default function HigherLowerScreen() {
                     return (
                       <Pressable
                         key={m.key}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: active }}
                         onPress={() => pickMetric(m.key)}
                         style={[
                           styles.metricTab,
@@ -272,7 +289,7 @@ export default function HigherLowerScreen() {
                 </Text>
                 {phase === 'reveal' ? (
                   <Text
-                    style={[styles.verdict, { color: lastCorrect ? Brand.greenDark : '#EF4444' }]}>
+                    style={[styles.verdict, { color: lastCorrect ? colors.accentStrong : '#EF4444' }]}>
                     {lastCorrect ? 'Correct!' : 'Wrong!'}
                   </Text>
                 ) : (
@@ -292,7 +309,7 @@ export default function HigherLowerScreen() {
                     <Text style={[styles.hintText, { color: '#EF4444' }]}>▼ FEWER</Text>
                   </Animated.View>
                   <Animated.View style={[styles.swipeHint, styles.hintRight, moreHint]}>
-                    <Text style={[styles.hintText, { color: Brand.greenDark }]}>MORE ▲</Text>
+                    <Text style={[styles.hintText, { color: colors.accentStrong }]}>MORE ▲</Text>
                   </Animated.View>
 
                   <GestureDetector gesture={pan}>
@@ -305,6 +322,26 @@ export default function HigherLowerScreen() {
                       />
                     </Animated.View>
                   </GestureDetector>
+                </View>
+                <View style={styles.answerButtons}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Fewer ${metricInfo.label.toLowerCase()}`}
+                    accessibilityState={{ disabled: phase !== 'guess' }}
+                    disabled={phase !== 'guess'}
+                    onPress={() => answer(false)}
+                    style={[styles.answerButton, { backgroundColor: colors.backgroundElement }]}>
+                    <Text style={[styles.answerText, { color: colors.text }]}>Fewer</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`More ${metricInfo.label.toLowerCase()}`}
+                    accessibilityState={{ disabled: phase !== 'guess' }}
+                    disabled={phase !== 'guess'}
+                    onPress={() => answer(true)}
+                    style={[styles.answerButton, { backgroundColor: colors.greenTint }]}>
+                    <Text style={[styles.answerText, { color: colors.text }]}>More</Text>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -365,6 +402,9 @@ const styles = StyleSheet.create({
   vs: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   verdict: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
   swipeGuide: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  answerButtons: { flexDirection: 'row', gap: Spacing.two },
+  answerButton: { flex: 1, minHeight: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  answerText: { fontSize: 15, fontWeight: '900' },
 
   swipeHint: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center', zIndex: 0 },
   hintLeft: { left: Spacing.two },
@@ -374,7 +414,7 @@ const styles = StyleSheet.create({
   overWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
   overBadge: {
     width: 72,
-    height: 72,
+    minHeight: 72,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
@@ -382,6 +422,7 @@ const styles = StyleSheet.create({
   },
   overTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   overSub: { fontSize: 14, fontWeight: '600' },
+  pointsEarned: { fontSize: 14, fontWeight: '900', marginTop: Spacing.one },
   overButtons: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.four, alignSelf: 'stretch' },
   shareBtn: {
     flex: 1,

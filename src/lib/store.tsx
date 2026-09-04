@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
+import { adultEligibilityForAge } from './adult-eligibility';
 import { useAuth } from './auth';
 import { calorieBudgetForDay, creditedExerciseCalories } from './exercise';
 import { prepareMealNutrition } from './food-servings';
@@ -148,6 +149,16 @@ function rowToExercise(r: any): ExerciseEntry {
     'full_body',
     'cardio',
   ]);
+  const workoutSplits = Array.isArray(r.workout_splits)
+    ? r.workout_splits.filter((value: unknown) => typeof value === 'string' && validSplits.has(value))
+    : [];
+  const inferredCardio = workoutSplits.includes('cardio')
+    || /\b(cardio|walk|walking|run|running|cycle|cycling|elliptical|swim|swimming)\b/i.test(r.name ?? '');
+  const cardioIntensity = r.cardio_intensity === 'light' || r.cardio_intensity === 'vigorous'
+    ? r.cardio_intensity
+    : inferredCardio
+      ? 'moderate'
+      : null;
   return {
     id: r.id,
     date: r.day,
@@ -155,9 +166,9 @@ function rowToExercise(r: any): ExerciseEntry {
     name: r.name,
     caloriesBurned: r.calories_burned ?? 0,
     durationMinutes: Math.max(1, Number(r.duration_minutes) || 30),
-    workoutSplits: Array.isArray(r.workout_splits)
-      ? r.workout_splits.filter((value: unknown) => typeof value === 'string' && validSplits.has(value))
-      : [],
+    workoutSplits,
+    cardioIntensity,
+    trainingPlanItemId: typeof r.training_plan_item_id === 'string' ? r.training_plan_item_id : null,
     muscleSets: {
       chest: Math.max(0, Number(r.chest_sets) || 0),
       legs: Math.max(0, Number(r.leg_sets) || 0),
@@ -390,9 +401,35 @@ export function MealsProvider({ children }: { children: ReactNode }) {
       setLoaded(false);
       setLoadError(false);
       try {
-        const [profileRes, mealRes, weightRes, waterRes, exerciseRes, savedRes] =
-          await Promise.all([
-            supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        // Eligibility comes first. Do not fetch or hydrate health history for a
+        // persisted account that is not confirmed as an adult.
+        const profileRes = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!active) return;
+        if (profileRes.error) {
+          setLoadError(true);
+          setLoaded(true);
+          return;
+        }
+        const nextProfile = profileRes.data
+          ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id)
+          : null;
+        setProfile(nextProfile);
+        if (!nextProfile || adultEligibilityForAge(nextProfile.age) !== 'adult') {
+          setMeals([]);
+          setSavedMeals([]);
+          setWeights([]);
+          setWaterToday(0);
+          setWaterHistory([]);
+          setExercises([]);
+          setLoaded(true);
+          return;
+        }
+
+        const [mealRes, weightRes, waterRes, exerciseRes, savedRes] = await Promise.all([
             supabase
               .from('meals')
               .select('*')
@@ -428,14 +465,13 @@ export function MealsProvider({ children }: { children: ReactNode }) {
         setWaterToday(waterRows.find((row) => row.date === dayKey())?.glasses ?? 0);
         setExercises(exerciseRes.error ? [] : (exerciseRes.data ?? []).map(rowToExercise));
         setSavedMeals(savedRes.error ? [] : (savedRes.data ?? []).map(rowToSavedMeal));
-        if (profileRes.error || mealRes.error) {
+        if (mealRes.error) {
           // A failed load must NOT look like "new user" — that would bounce
           // the user into onboarding and overwrite their real profile.
           setLoadError(true);
           setLoaded(true);
           return;
         }
-        setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id) : null);
         setMeals((mealRes.data ?? []).map(rowToMeal));
         setLoaded(true);
       } catch {
@@ -456,8 +492,28 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (!user) return;
     try {
-      const [profileRes, mealRes, savedRes, weightRes, waterRes, exerciseRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+      const profileRes = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (profileRes.error) return;
+      const nextProfile = profileRes.data
+        ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id)
+        : null;
+      setProfile(nextProfile);
+      if (!nextProfile || adultEligibilityForAge(nextProfile.age) !== 'adult') {
+        setMeals([]);
+        setSavedMeals([]);
+        setWeights([]);
+        setWaterToday(0);
+        setWaterHistory([]);
+        setExercises([]);
+        setLoadError(false);
+        return;
+      }
+
+      const [mealRes, savedRes, weightRes, waterRes, exerciseRes] = await Promise.all([
         supabase
           .from('meals')
           .select('*')
@@ -480,8 +536,7 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
       ]);
-      if (profileRes.error || mealRes.error) return; // keep showing current data
-      setProfile(profileRes.data ? await mergeLocalDiet(rowToProfile(profileRes.data), user.id) : null);
+      if (mealRes.error) return; // keep showing current data
       setMeals((mealRes.data ?? []).map(rowToMeal));
       if (!savedRes.error) setSavedMeals((savedRes.data ?? []).map(rowToSavedMeal));
       if (!weightRes.error) setWeights((weightRes.data ?? []).map(rowToWeight));
@@ -680,6 +735,9 @@ export function MealsProvider({ children }: { children: ReactNode }) {
   const saveProfile = useCallback(
     async (next: UserProfile) => {
       if (!user) return;
+      if (adultEligibilityForAge(next.age) !== 'adult') {
+        throw new Error('Trak is currently available to adults aged 18 and over.');
+      }
       const previous = profile;
       // Merge over the existing profile so device-local extras that aren't in
       // this form (waterGoal, calorieBias) survive an optimistic body-stat save.
@@ -804,6 +862,10 @@ export function MealsProvider({ children }: { children: ReactNode }) {
           calories_burned: Math.max(0, Math.round(caloriesBurned)),
           duration_minutes: safeDuration,
           workout_splits: details?.workoutSplits ?? [],
+          cardio_intensity: details?.workoutSplits.includes('cardio')
+            ? details.cardioIntensity ?? 'moderate'
+            : null,
+          training_plan_item_id: details?.trainingPlanItemId ?? null,
           chest_sets: Math.max(0, Math.round(details?.muscleSets.chest ?? 0)),
           leg_sets: Math.max(0, Math.round(details?.muscleSets.legs ?? 0)),
           back_sets: Math.max(0, Math.round(details?.muscleSets.back ?? 0)),

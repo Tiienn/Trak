@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PlateIcon } from '@/components/icons';
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 import type { FoodItem, FoodTotals } from '@/lib/types';
@@ -48,10 +48,10 @@ function Row({
           </Text>
         </View>
         {added ? (
-          <Text style={[styles.added, { color: Brand.green }]}>Added ✓</Text>
+          <Text style={[styles.added, { color: colors.accent }]}>Added ✓</Text>
         ) : (
           <View style={[styles.addPill, { backgroundColor: colors.greenTint }]}>
-            <Text style={[styles.addPillText, { color: Brand.greenDark }]}>＋ Add</Text>
+            <Text style={[styles.addPillText, { color: colors.accentStrong }]}>＋ Add</Text>
           </View>
         )}
       </Pressable>
@@ -115,6 +115,21 @@ export default function QuickAddScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Create a meal manually"
+            onPress={() => router.push('/manual-meal')}
+            style={({ pressed }) => [
+              styles.manualCard,
+              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
+            ]}>
+            <View style={styles.manualInfo}>
+              <Text style={[styles.manualTitle, { color: colors.text }]}>Create meal manually</Text>
+              <Text style={[styles.manualBody, { color: colors.textSecondary }]}>Enter the serving, calories, and macros yourself.</Text>
+            </View>
+            <Text style={[styles.manualArrow, { color: colors.textSecondary }]}>›</Text>
+          </Pressable>
+
           {isEmpty ? (
             <View style={[styles.empty, { backgroundColor: colors.backgroundElement }]}>
               <PlateIcon size={30} color={colors.textSecondary} />
@@ -188,6 +203,17 @@ const styles = StyleSheet.create({
   closeText: { fontSize: 20, fontWeight: '600' },
 
   scroll: { paddingBottom: Spacing.four, gap: Spacing.two },
+  manualCard: {
+    borderRadius: 16,
+    padding: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  manualInfo: { flex: 1, gap: 3 },
+  manualTitle: { fontSize: 16, fontWeight: '800' },
+  manualBody: { fontSize: 13, lineHeight: 18 },
+  manualArrow: { fontSize: 24, lineHeight: 24, fontWeight: '500' },
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: Spacing.three },
   list: { gap: Spacing.two, marginTop: Spacing.two },
 

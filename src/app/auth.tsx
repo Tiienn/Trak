@@ -195,6 +195,8 @@ export default function AuthScreen() {
               <View style={styles.form}>
                 <View style={[styles.field, { backgroundColor: colors.backgroundElement }]}>
                   <TextInput
+                    accessibilityLabel="Email"
+                    testID="auth-email"
                     style={[styles.input, { color: colors.text }]}
                     placeholder="Email"
                     placeholderTextColor={colors.textSecondary}
@@ -208,6 +210,8 @@ export default function AuthScreen() {
                 </View>
                 <View style={[styles.field, { backgroundColor: colors.backgroundElement }]}>
                   <TextInput
+                    accessibilityLabel="Password"
+                    testID="auth-password"
                     style={[styles.input, { color: colors.text }]}
                     placeholder="Password (min 6 characters)"
                     placeholderTextColor={colors.textSecondary}
@@ -224,10 +228,11 @@ export default function AuthScreen() {
               </View>
 
               {!!error && <Text style={styles.error}>{error}</Text>}
-              {!!info && <Text style={styles.info}>{info}</Text>}
+              {!!info && <Text style={[styles.info, { color: colors.accent }]}>{info}</Text>}
 
               <Pressable
                 accessibilityRole="button"
+                testID="auth-submit"
                 style={({ pressed }) => [
                   styles.primaryButton,
                   { opacity: canSubmit ? (pressed ? 0.82 : 1) : 0.4 },
@@ -253,7 +258,7 @@ export default function AuthScreen() {
                 }}>
                 <Text style={[styles.switchText, { color: colors.textSecondary }]}>
                   {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-                  <Text style={styles.switchLink}>{mode === 'signin' ? 'Sign up' : 'Sign in'}</Text>
+                  <Text style={[styles.switchLink, { color: colors.accent }]}>{mode === 'signin' ? 'Sign up' : 'Sign in'}</Text>
                 </Text>
               </Pressable>
             </View>
@@ -306,7 +311,7 @@ const styles = StyleSheet.create({
   field: { borderRadius: 14, paddingHorizontal: Spacing.three },
   input: { fontSize: 16, paddingVertical: Spacing.three },
   error: { color: '#D14B45', fontSize: 14, marginTop: Spacing.three, textAlign: 'center' },
-  info: { color: Brand.green, fontSize: 14, marginTop: Spacing.three, textAlign: 'center' },
+  info: { fontSize: 14, marginTop: Spacing.three, textAlign: 'center' },
   primaryButton: {
     backgroundColor: Brand.green,
     borderRadius: 16,
@@ -318,5 +323,5 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#ffffff', fontFamily: 'LeagueSpartan_700Bold', fontSize: 17 },
   switchButton: { alignItems: 'center', paddingVertical: Spacing.three },
   switchText: { fontSize: 15 },
-  switchLink: { color: Brand.green, fontWeight: '700' },
+  switchLink: { fontWeight: '700' },
 });

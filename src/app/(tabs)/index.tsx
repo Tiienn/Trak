@@ -1,10 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Redirect, router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,12 +18,15 @@ import Svg, { Circle } from 'react-native-svg';
 import {
   BarcodeIcon,
   CameraIcon,
+  ChevronRightIcon,
   DropletIcon,
+  DumbbellIcon,
   FlameIcon,
   PlateIcon,
   ScaleIcon,
   SparklesIcon,
 } from '@/components/icons';
+import { DateStrip, type DateStripItem } from '@/components/date-strip';
 import { DailyMissionsCard } from '@/components/daily-missions-card';
 import { useSupplements } from '@/lib/supplements';
 import { RingMark, TrakWordmark } from '@/components/logo';
@@ -54,14 +56,7 @@ function localDateFromKey(value: string): Date {
 
 /* ------------------------------ Date ribbon ----------------------------- */
 
-type WeekDate = {
-  date: Date;
-  key: string;
-  weekday: string;
-  day: number;
-  isToday: boolean;
-  isFuture: boolean;
-};
+type WeekDate = DateStripItem & { isToday: boolean };
 
 const HOME_TIMELINE_DAYS = 365;
 
@@ -91,91 +86,21 @@ function WeekDateStrip({
   selectedDate: string;
   onSelectDate: (date: string) => void;
 }) {
-  const { width } = useWindowDimensions();
   const dates = useMemo(() => homeTimelineDates(), []);
-  const itemWidth = (width - Spacing.four * 2) / 7;
-  const initialIndex = dates.length - 7;
-  const listRef = useRef<FlatList<WeekDate>>(null);
-
-  function openDay(item: WeekDate) {
-    if (item.isFuture) return;
-    void Haptics.selectionAsync();
-    onSelectDate(item.key);
-  }
-
   return (
-    <View style={styles.dateStrip} accessibilityRole="tablist">
-      <FlatList
-        ref={listRef}
-        horizontal
-        data={dates}
-        keyExtractor={(item) => item.key}
-        initialScrollIndex={initialIndex}
-        getItemLayout={(_, index) => ({ length: itemWidth, offset: itemWidth * index, index })}
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={itemWidth}
-        decelerationRate="fast"
-        disableIntervalMomentum
-        onScrollToIndexFailed={({ index }) => {
-          listRef.current?.scrollToOffset({ offset: itemWidth * index, animated: false });
-        }}
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="tab"
-            accessibilityLabel={item.date.toLocaleDateString([], {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
-            accessibilityHint={item.isFuture ? 'Future date' : 'Shows this day on Home'}
-            accessibilityState={{ selected: item.key === selectedDate, disabled: item.isFuture }}
-            disabled={item.isFuture}
-            onPress={() => openDay(item)}
-            style={({ pressed }) => [
-              styles.dateItem,
-              { width: itemWidth },
-              item.key === selectedDate && {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.backgroundSelected,
-              },
-              pressed && !item.isFuture && { opacity: 0.65 },
-            ]}>
-            <Text
-              style={[
-                styles.dateWeekday,
-                { color: item.isFuture ? colors.textSecondary : colors.text },
-                item.key === selectedDate && styles.dateWeekdayToday,
-              ]}>
-              {item.weekday}
-            </Text>
-            <View
-              style={[
-                styles.dateCircle,
-                { borderColor: item.isFuture ? colors.backgroundSelected : colors.textSecondary },
-                item.key === selectedDate && { borderColor: Brand.green, borderStyle: 'solid' },
-              ]}>
-              <Text
-                style={[
-                  styles.dateNumber,
-                  { color: item.isFuture ? colors.textSecondary : colors.text },
-                  item.key === selectedDate && { color: Brand.greenDark },
-                ]}>
-                {item.day}
-              </Text>
-            </View>
-          </Pressable>
-        )}
-      />
-    </View>
+    <DateStrip
+      accessibilityLabel="Home dates"
+      colors={colors}
+      dates={dates}
+      selectedDate={selectedDate}
+      onSelectDate={onSelectDate}
+    />
   );
 }
 
 /* ------------------------------ Macro rings ------------------------------ */
 
-const MINI_SIZE = 62;
 const MINI_STROKE = 7;
-const MINI_R = (MINI_SIZE - MINI_STROKE) / 2;
-const MINI_C = 2 * Math.PI * MINI_R;
 
 function MiniRing({
   value,
@@ -194,30 +119,41 @@ function MiniRing({
   colors: ThemeColors;
   onPress?: () => void;
 }) {
+  const { fontScale } = useWindowDimensions();
+  const miniSize = 62 + Math.min(28, Math.round(Math.max(0, fontScale - 1) * 24));
+  const miniRadius = (miniSize - MINI_STROKE) / 2;
+  const miniCircumference = 2 * Math.PI * miniRadius;
   const clamped = Math.min(1, Math.max(0, pct));
   return (
-    <Pressable style={styles.miniWrap} disabled={!onPress} onPress={onPress} hitSlop={4}>
+    <Pressable
+      accessibilityRole={onPress ? 'button' : 'progressbar'}
+      accessibilityLabel={`${label}, ${value}, ${sub}`}
+      accessibilityValue={onPress ? undefined : { min: 0, max: 100, now: Math.round(clamped * 100) }}
+      style={[styles.miniWrap, fontScale >= 1.35 && styles.miniWrapLargeText]}
+      disabled={!onPress}
+      onPress={onPress}
+      hitSlop={4}>
       <View style={styles.miniRing}>
-        <Svg width={MINI_SIZE} height={MINI_SIZE}>
+        <Svg width={miniSize} height={miniSize}>
           <Circle
-            cx={MINI_SIZE / 2}
-            cy={MINI_SIZE / 2}
-            r={MINI_R}
+            cx={miniSize / 2}
+            cy={miniSize / 2}
+            r={miniRadius}
             stroke={colors.backgroundSelected}
             strokeWidth={MINI_STROKE}
             fill="none"
           />
           <Circle
-            cx={MINI_SIZE / 2}
-            cy={MINI_SIZE / 2}
-            r={MINI_R}
+            cx={miniSize / 2}
+            cy={miniSize / 2}
+            r={miniRadius}
             stroke={color}
             strokeWidth={MINI_STROKE}
             strokeLinecap="round"
             fill="none"
-            strokeDasharray={`${MINI_C} ${MINI_C}`}
-            strokeDashoffset={MINI_C * (1 - clamped)}
-            transform={`rotate(-90 ${MINI_SIZE / 2} ${MINI_SIZE / 2})`}
+            strokeDasharray={`${miniCircumference} ${miniCircumference}`}
+            strokeDashoffset={miniCircumference * (1 - clamped)}
+            transform={`rotate(-90 ${miniSize / 2} ${miniSize / 2})`}
           />
         </Svg>
         <View style={styles.miniCenter}>
@@ -293,6 +229,9 @@ function CoachCard({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${tip.title}. ${tip.body}`}
+      accessibilityHint="Opens Trak coaching"
       style={({ pressed }) => [
         styles.tipCard,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
@@ -304,7 +243,7 @@ function CoachCard({
         })
       }>
       <View style={[styles.tipIcon, { backgroundColor: colors.greenTint }]}>
-        <SparklesIcon size={18} color={Brand.greenDark} />
+        <SparklesIcon size={18} color={colors.accentStrong} />
       </View>
       <View style={styles.tipInfo}>
         <Text style={[styles.tipTitle, { color: colors.text }]}>{tip.title}</Text>
@@ -364,19 +303,22 @@ function WaterCard({
     <View style={[styles.waterCard, { backgroundColor: colors.backgroundElement }]}>
       <View style={styles.waterHeader}>
         <View style={styles.waterTitleRow}>
-          <DropletIcon size={18} color={Brand.green} filled />
+          <DropletIcon size={18} color={colors.accent} filled />
           <Text style={[styles.waterTitle, { color: colors.text }]}>Water</Text>
         </View>
         <View style={[styles.unitToggle, { backgroundColor: colors.background }]}>
           {(['glasses', 'litres'] as const).map((u) => (
             <Pressable
               key={u}
+              accessibilityRole="radio"
+              accessibilityLabel={u === 'glasses' ? 'Show water in glasses' : 'Show water in litres'}
+              accessibilityState={{ checked: unit === u }}
               onPress={() => pickUnit(u)}
               style={[styles.unitBtn, unit === u && { backgroundColor: colors.greenTint }]}>
               <Text
                 style={[
                   styles.unitBtnText,
-                  { color: unit === u ? Brand.greenDark : colors.textSecondary },
+                  { color: unit === u ? colors.accentStrong : colors.textSecondary },
                 ]}>
                 {u === 'glasses' ? 'Glasses' : 'Litres'}
               </Text>
@@ -390,6 +332,9 @@ function WaterCard({
           <View style={styles.goalStepper}>
             <Text style={[styles.goalPrefix, { color: colors.textSecondary }]}>Goal</Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Decrease water goal"
+              accessibilityState={{ disabled: waterGoal <= 1 }}
               hitSlop={8}
               onPress={() =>
                 setWaterGoal(Math.max(1, waterGoal - 1)).catch((e) =>
@@ -401,6 +346,8 @@ function WaterCard({
             </Pressable>
             <Text style={[styles.goalValue, { color: colors.text }]}>{goalLabel}</Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Increase water goal"
               hitSlop={8}
               onPress={() =>
                 setWaterGoal(waterGoal + 1).catch((e) =>
@@ -410,12 +357,18 @@ function WaterCard({
               style={[styles.stepBtn, { backgroundColor: colors.background }]}>
               <Text style={[styles.stepText, { color: colors.text }]}>+</Text>
             </Pressable>
-            <Pressable hitSlop={8} onPress={() => setEditingGoal(false)}>
-              <Text style={[styles.goalDone, { color: Brand.greenDark }]}>Done</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Finish editing water goal" hitSlop={8} onPress={() => setEditingGoal(false)}>
+              <Text style={[styles.goalDone, { color: colors.accentStrong }]}>Done</Text>
             </Pressable>
           </View>
         ) : (
-          <Pressable disabled={!viewingToday} onPress={() => setEditingGoal(true)} hitSlop={8}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Water, ${countLabel}. Edit goal`}
+            accessibilityState={{ disabled: !viewingToday }}
+            disabled={!viewingToday}
+            onPress={() => setEditingGoal(true)}
+            hitSlop={8}>
             <Text style={[styles.waterCount, { color: colors.textSecondary }]}>
               {countLabel}{viewingToday ? ' ✎' : ''}
             </Text>
@@ -429,11 +382,14 @@ function WaterCard({
           return (
             <Pressable
               key={i}
+              accessibilityRole="checkbox"
+              accessibilityLabel={`Water glass ${i + 1} of ${waterGoal}`}
+              accessibilityState={{ checked: filled, disabled: !viewingToday }}
               hitSlop={4}
               disabled={!viewingToday}
               onPress={() => setWater(i + 1 === displayedWater ? i : i + 1)}
               style={styles.glassTap}>
-              <DropletIcon size={26} color={filled ? Brand.green : colors.backgroundSelected} filled />
+              <DropletIcon size={26} color={filled ? colors.accent : colors.backgroundSelected} filled />
             </Pressable>
           );
         })}
@@ -448,6 +404,7 @@ function WaterCard({
 function CheckCircle({ checked, colors }: { checked: boolean; colors: ThemeColors }) {
   return (
     <View
+      accessible={false}
       style={[
         styles.checkCircle,
         checked
@@ -496,18 +453,27 @@ function SupplementsCard({ colors, selectedDate }: { colors: ThemeColors; select
 
   return (
     <View style={[styles.suppCard, { backgroundColor: colors.backgroundElement }]}>
-      <Pressable style={styles.suppHeader} onPress={() => router.push('/supplements')} hitSlop={6}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Manage supplements"
+        style={styles.suppHeader}
+        onPress={() => router.push('/supplements')}
+        hitSlop={6}>
         <Text style={[styles.suppTitle, { color: colors.text }]}>Supplements</Text>
         <View style={styles.suppHeaderRight}>
           {viewingToday && streak > 0 ? (
-            <Text style={[styles.suppStreak, { color: Brand.greenDark }]}>{streak}-day streak</Text>
+            <Text style={[styles.suppStreak, { color: colors.accentStrong }]}>{streak}-day streak</Text>
           ) : null}
           <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
         </View>
       </Pressable>
 
       {visibleSupplements.length === 0 ? (
-        <Pressable onPress={() => router.push('/supplements')} hitSlop={6}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={viewingToday ? 'Add vitamins and supplements' : 'View supplements'}
+          onPress={() => router.push('/supplements')}
+          hitSlop={6}>
           <Text style={[styles.suppAddLine, { color: colors.textSecondary }]}>
             {viewingToday ? 'Add your vitamins and supplements ›' : 'No supplements planned on this day'}
           </Text>
@@ -518,6 +484,9 @@ function SupplementsCard({ colors, selectedDate }: { colors: ThemeColors; select
             {visibleSupplements.slice(0, 6).map((s) => (
               <Pressable
                 key={s.id}
+                accessibilityRole="checkbox"
+                accessibilityLabel={s.name}
+                accessibilityState={{ checked: !!checkedForDay[s.id], disabled: !viewingToday }}
                 style={styles.suppRow}
                 disabled={!viewingToday}
                 onPress={() => tap(s.id)}
@@ -543,6 +512,8 @@ function SupplementsCard({ colors, selectedDate }: { colors: ThemeColors; select
 function MealRow({ meal, colors }: { meal: LoggedMeal; colors: ThemeColors }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${meal.title}, ${meal.total.calories} calories, ${meal.total.protein_g} grams protein, ${meal.total.carbs_g} grams carbohydrates, ${meal.total.fat_g} grams fat`}
       style={({ pressed }) => [
         styles.mealRow,
         { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
@@ -572,6 +543,8 @@ const GOAL_LABEL: Record<string, string> = {
 export default function HomeScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const { fontScale } = useWindowDimensions();
+  const largeText = fontScale >= 1.35;
   const { user, authLoading } = useAuth();
   const {
     meals,
@@ -643,6 +616,8 @@ export default function HomeScreen() {
             Check your internet connection and try again.
           </Text>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading your data"
             style={({ pressed }) => [
               styles.retryBtn,
               { backgroundColor: pressed ? Brand.greenDark : Brand.green },
@@ -665,9 +640,13 @@ export default function HomeScreen() {
   });
   const caloriesLeft = Math.max(0, selectedDay.calorieBudget - selectedDay.totals.calories);
   const caloriesOver = selectedDay.totals.calories > selectedDay.calorieBudget;
+  const selectedWorkoutMinutes = selectedDay.exercises.reduce(
+    (sum, exercise) => sum + Math.max(0, exercise.durationMinutes || 0),
+    0
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View testID="screen-home" style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -682,16 +661,16 @@ export default function HomeScreen() {
               <TrakWordmark color={colors.text} size={28} />
             </View>
             <View style={styles.headerActions}>
-              {viewingToday && selectedDay.loggingStreak > 0 ? (
+              {!largeText && viewingToday && selectedDay.loggingStreak > 0 ? (
                 <View style={[styles.streakPill, { backgroundColor: colors.backgroundElement }]}>
-                  <FlameIcon size={15} color={Brand.green} />
+                  <FlameIcon size={15} color={colors.accent} />
                   <Text style={[styles.streakText, { color: colors.text }]}>
                     {selectedDay.loggingStreak} day{selectedDay.loggingStreak > 1 ? 's' : ''}
                   </Text>
                 </View>
-              ) : (
+              ) : !largeText ? (
                 <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>{selectedDateLabel}</Text>
-              )}
+              ) : null}
               <ProfileAvatarButton colors={colors} />
             </View>
           </View>
@@ -707,33 +686,22 @@ export default function HomeScreen() {
           {/* Goal + macro rings */}
           <View style={[styles.macroCard, { backgroundColor: colors.backgroundElement }]}>
             <View style={styles.goalRow}>
-              <Pressable style={styles.goalInfo} onPress={() => router.push('/profile')} hitSlop={6}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Goal, ${GOAL_LABEL[profile?.goal ?? 'maintain']}`} style={styles.goalInfo} onPress={() => router.push('/profile')} hitSlop={6}>
                 <ScaleIcon size={16} color={colors.text} />
                 <Text style={[styles.goalText, { color: colors.text }]}>
                   {GOAL_LABEL[profile?.goal ?? 'maintain']}
                 </Text>
                 <Text style={[styles.goalChevron, { color: colors.textSecondary }]}>›</Text>
               </Pressable>
-              {hasQuickAdd ? (
-                <Pressable
-                  onPress={() => router.push('/quick-add')}
-                  style={({ pressed }) => [
-                    styles.plusBtn,
-                    { backgroundColor: colors.background, opacity: pressed ? 0.7 : 1 },
-                  ]}
-                  hitSlop={6}>
-                  <Text style={[styles.plusText, { color: colors.text }]}>＋</Text>
-                </Pressable>
-              ) : null}
             </View>
 
-            <View style={styles.miniRow}>
+            <View style={[styles.miniRow, largeText && styles.miniRowLargeText]}>
               <MiniRing
                 value={`${Math.round(selectedDay.totals.calories)}`}
                 sub={`of ${Math.round(selectedDay.calorieBudget).toLocaleString()}`}
                 label="Calories"
                 pct={selectedDay.calorieBudget > 0 ? selectedDay.totals.calories / selectedDay.calorieBudget : 0}
-                color={caloriesOver ? Brand.over : Brand.green}
+                color={caloriesOver ? Brand.over : colors.accent}
                 colors={colors}
                 onPress={viewingToday ? () => router.push('/macro/calories') : undefined}
               />
@@ -784,12 +752,14 @@ export default function HomeScreen() {
             </Text>
             {hasQuickAdd ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Quick add a meal"
                 onPress={() => router.push('/quick-add')}
                 style={({ pressed }) => [
                   styles.quickAddPill,
                   { backgroundColor: colors.greenTint, opacity: pressed ? 0.7 : 1 },
                 ]}>
-                <Text style={[styles.quickAddText, { color: Brand.greenDark }]}>＋ Quick add</Text>
+                <Text style={[styles.quickAddText, { color: colors.accentStrong }]}>＋ Quick add</Text>
               </Pressable>
             ) : null}
           </View>
@@ -810,55 +780,70 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Weight — quick glance + tap to log/track */}
-          <Pressable
-            disabled={!viewingToday}
-            style={({ pressed }) => [
-              styles.weightCard,
-              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-            ]}
-            onPress={() => router.push('/weight')}>
-            <View style={styles.weightInfo}>
-              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Weight</Text>
-              {selectedWeight != null ? (
-                <Text style={[styles.weightValue, { color: colors.text }]}>
-                  {Math.round(selectedWeight * 10) / 10} kg
-                </Text>
-              ) : (
-                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
-                  {viewingToday ? 'Log it' : 'No weight logged'}
-                </Text>
-              )}
-            </View>
-            {weightChange != null && weightChange !== 0 ? (
-              <Text style={[styles.weightChange, { color: Brand.greenDark }]}>
-                {weightChange > 0 ? '▲' : '▼'} {Math.abs(Math.round(weightChange * 10) / 10)} kg
+          {/* Body + activity — paired daily actions in one compact card. */}
+          <View style={[styles.bodyActivityCard, largeText && styles.bodyActivityCardLargeText, { backgroundColor: colors.backgroundElement }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={selectedWeight == null ? 'Weight, log weight' : `Weight, ${Math.round(selectedWeight * 10) / 10} kilograms`}
+              disabled={!viewingToday}
+              onPress={() => router.push('/weight')}
+              style={({ pressed }) => [
+                styles.bodyActivityItem,
+                pressed && { backgroundColor: colors.backgroundSelected },
+              ]}>
+              <View style={styles.bodyActivityHeader}>
+                <View style={[styles.bodyActivityIcon, { backgroundColor: colors.greenTint }]}>
+                  <ScaleIcon size={18} color={colors.accentStrong} />
+                </View>
+                <Text style={[styles.bodyActivityLabel, { color: colors.textSecondary }]}>Weight</Text>
+                {viewingToday ? <ChevronRightIcon size={15} color={colors.textSecondary} /> : null}
+              </View>
+              <Text style={[styles.bodyActivityValue, { color: colors.text }]}>
+                {selectedWeight != null ? `${Math.round(selectedWeight * 10) / 10} kg` : viewingToday ? 'Log weight' : '—'}
               </Text>
-            ) : viewingToday ? (
-              <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-            ) : null}
-          </Pressable>
+              <Text style={[styles.bodyActivityMeta, { color: weightChange ? colors.accentStrong : colors.textSecondary }]}>
+                {weightChange != null && weightChange !== 0
+                  ? `${weightChange > 0 ? '▲' : '▼'} ${Math.abs(Math.round(weightChange * 10) / 10)} kg`
+                  : selectedWeight != null
+                    ? 'Latest weigh-in'
+                    : viewingToday
+                      ? 'Add today’s weigh-in'
+                      : 'No weight logged'}
+              </Text>
+            </Pressable>
 
-          {/* Exercise — quick glance + tap to log */}
-          <Pressable
-            disabled={!viewingToday}
-            style={({ pressed }) => [
-              styles.weightCard,
-              { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
-            ]}
-            onPress={() => router.push('/exercise')}>
-            <View style={styles.weightInfo}>
-              <Text style={[styles.weightLabel, { color: colors.textSecondary }]}>Exercise</Text>
-              {selectedDay.caloriesBurned > 0 ? (
-                <Text style={[styles.weightValue, { color: colors.text }]}>+{selectedDay.caloriesBurned} kcal</Text>
-              ) : (
-                <Text style={[styles.weightPlaceholder, { color: colors.textSecondary }]}>
-                  {viewingToday ? 'Log a workout' : 'No workout logged'}
-                </Text>
-              )}
-            </View>
-            {viewingToday ? <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text> : null}
-          </Pressable>
+            <View style={[styles.bodyActivityDivider, largeText && styles.bodyActivityDividerLargeText, { backgroundColor: colors.backgroundSelected }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={selectedDay.caloriesBurned > 0 ? `Exercise, ${selectedDay.caloriesBurned} calories burned` : 'Exercise, log a workout'}
+              disabled={!viewingToday}
+              onPress={() => router.push('/exercise')}
+              style={({ pressed }) => [
+                styles.bodyActivityItem,
+                pressed && { backgroundColor: colors.backgroundSelected },
+              ]}>
+              <View style={styles.bodyActivityHeader}>
+                <View style={[styles.bodyActivityIcon, { backgroundColor: colors.greenTint }]}>
+                  <DumbbellIcon size={18} color={colors.accentStrong} />
+                </View>
+                <Text style={[styles.bodyActivityLabel, { color: colors.textSecondary }]}>Exercise</Text>
+                {viewingToday ? <ChevronRightIcon size={15} color={colors.textSecondary} /> : null}
+              </View>
+              <Text style={[styles.bodyActivityValue, { color: colors.text }]}>
+                {selectedDay.caloriesBurned > 0 ? `${selectedDay.caloriesBurned} kcal` : viewingToday ? 'Log workout' : '—'}
+              </Text>
+              <Text style={[styles.bodyActivityMeta, { color: colors.textSecondary }]}>
+                {selectedWorkoutMinutes > 0
+                  ? `${selectedWorkoutMinutes} min today`
+                  : selectedDay.caloriesBurned > 0
+                    ? 'Burned today'
+                  : viewingToday
+                    ? 'Add today’s activity'
+                    : 'No workout logged'}
+              </Text>
+            </Pressable>
+          </View>
 
           {/* Water */}
           <WaterCard
@@ -873,10 +858,13 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/* Scan actions — a solid footer in normal flow, so it can never cover the list. */}
-        <View style={[styles.bottomBar, { backgroundColor: colors.background }]}>
+        <View style={[styles.bottomBar, fontScale >= 1.8 && styles.bottomBarLargeText, { backgroundColor: colors.background }]}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scan a meal"
             style={({ pressed }) => [
               styles.scanButton,
+              fontScale >= 1.8 && styles.bottomActionLargeText,
               { backgroundColor: pressed ? Brand.greenDark : Brand.green },
             ]}
             onPress={() => {
@@ -884,19 +872,22 @@ export default function HomeScreen() {
               router.push('/scan');
             }}>
             <CameraIcon size={22} color="#ffffff" />
-            <Text style={styles.scanButtonText}>Scan a meal</Text>
+            <Text maxFontSizeMultiplier={2} style={styles.scanButtonText}>Scan a meal</Text>
           </Pressable>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scan a barcode"
             style={({ pressed }) => [
               styles.barcodeButton,
+              fontScale >= 1.8 && styles.bottomActionLargeText,
               { backgroundColor: colors.greenTint, opacity: pressed ? 0.7 : 1 },
             ]}
             onPress={() => {
               setSelectedDate(today);
               router.push('/barcode');
             }}>
-            <BarcodeIcon size={22} color={Brand.greenDark} />
-            <Text style={[styles.barcodeButtonText, { color: Brand.greenDark }]}>Barcode</Text>
+            <BarcodeIcon size={22} color={colors.accentStrong} />
+            <Text maxFontSizeMultiplier={2} style={[styles.barcodeButtonText, { color: colors.accentStrong }]}>Barcode</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -916,7 +907,7 @@ const styles = StyleSheet.create({
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  todayLabel: { fontSize: 15, fontWeight: '600' },
+  todayLabel: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   streakPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -928,31 +919,6 @@ const styles = StyleSheet.create({
   streakText: { fontSize: 14, fontWeight: '700' },
 
   /* Date ribbon */
-  dateStrip: {
-    height: 82,
-  },
-  dateItem: {
-    height: 82,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderRadius: 22,
-    paddingVertical: 9,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dateWeekday: { fontSize: 11, fontWeight: '700' },
-  dateWeekdayToday: { fontWeight: '900' },
-  dateCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dateNumber: { fontSize: 14, fontWeight: '800' },
-
   /* Coaching nudge */
   tipCard: {
     flexDirection: 'row',
@@ -978,16 +944,10 @@ const styles = StyleSheet.create({
   goalInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalText: { fontSize: 15, fontWeight: '700' },
   goalChevron: { fontSize: 16, fontWeight: '600' },
-  plusBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  plusText: { fontSize: 18, fontWeight: '700' },
   miniRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  miniRowLargeText: { flexWrap: 'wrap', rowGap: Spacing.three },
   miniWrap: { alignItems: 'center', gap: 2, flex: 1 },
+  miniWrapLargeText: { flexBasis: '45%' },
   miniRing: { alignItems: 'center', justifyContent: 'center' },
   miniCenter: {
     position: 'absolute',
@@ -998,20 +958,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  miniValue: { fontSize: 13, fontWeight: '800' },
-  miniSub: { fontSize: 10, marginTop: 4 },
-  miniLabel: { fontSize: 12, fontWeight: '700', marginTop: 1 },
+  miniValue: { fontSize: 13, lineHeight: 18, fontWeight: '800' },
+  miniSub: { fontSize: 10, lineHeight: 14, marginTop: 4 },
+  miniLabel: { fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 1 },
   overNote: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   leftNote: { fontSize: 13, textAlign: 'center' },
 
-  weightCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 20,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.four,
-  },
+  bodyActivityCard: { minHeight: 132, borderRadius: 20, padding: Spacing.two, flexDirection: 'row', alignItems: 'stretch' },
+  bodyActivityCardLargeText: { flexDirection: 'column' },
+  bodyActivityItem: { flex: 1, borderRadius: 14, padding: Spacing.two, justifyContent: 'space-between', gap: 6 },
+  bodyActivityHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  bodyActivityIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  bodyActivityLabel: { flex: 1, fontSize: 13, fontWeight: '700' },
+  bodyActivityValue: { fontSize: 20, lineHeight: 24, fontWeight: '800' },
+  bodyActivityMeta: { fontSize: 11, lineHeight: 15, fontWeight: '700' },
+  bodyActivityDivider: { width: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
+  bodyActivityDividerLargeText: { width: '100%', height: StyleSheet.hairlineWidth, marginVertical: Spacing.one },
   bodyAnalysisCard: {
     minHeight: 82,
     borderRadius: 16,
@@ -1022,13 +984,6 @@ const styles = StyleSheet.create({
   },
   bodyAnalysisText: { flex: 1, gap: Spacing.one },
   bodyAnalysisTitle: { fontSize: 15, lineHeight: 20, fontWeight: '700' },
-  weightInfo: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
-  weightLabel: { fontSize: 14, fontWeight: '600' },
-  weightValue: { fontSize: 20, fontWeight: '800' },
-  // Empty-state prompt, not a reading — matches the card's other secondary text (suppName).
-  weightPlaceholder: { fontSize: 15, fontWeight: '600' },
-  weightChange: { fontSize: 14, fontWeight: '700' },
-
   waterCard: { borderRadius: 20, padding: Spacing.four, gap: Spacing.three },
   waterHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1106,24 +1061,28 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.two,
     gap: Spacing.two,
   },
+  bottomBarLargeText: { flexDirection: 'column' },
+  bottomActionLargeText: { flex: 0, width: '100%' },
   scanButton: {
     flex: 1.8,
     borderRadius: 999,
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
   },
-  scanButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  scanButtonText: { color: '#ffffff', fontSize: 17, lineHeight: 23, fontWeight: '700' },
   barcodeButton: {
     flex: 1,
     borderRadius: 999,
-    height: 56,
+    minHeight: 56,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  barcodeButtonText: { fontSize: 15, fontWeight: '700' },
+  barcodeButtonText: { fontSize: 15, lineHeight: 21, fontWeight: '700' },
 });

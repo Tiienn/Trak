@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CheckIcon, FlagIcon, TargetIcon } from '@/components/icons';
+import { CheckIcon, FlagIcon, PortionIcon } from '@/components/icons';
 import { Brand, Colors, Spacing, Type } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import {
   EMPTY_STATS,
   foodsForDeck,
@@ -17,6 +18,7 @@ import {
   type Ingredient,
 } from '@/lib/game';
 import { useAppScheme } from '@/lib/theme';
+import { useTrakPoints } from '@/lib/trak-points';
 
 const ROUND_COUNT = 5;
 
@@ -46,6 +48,8 @@ function answerOptions(food: Ingredient): number[] {
 export default function PortionGuessScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const { user } = useAuth();
+  const { awardGame } = useTrakPoints();
   const { deck, foods } = useLocalSearchParams<{ deck?: string; foods?: string }>();
   const foodPool = useMemo(
     () => foodsForDeck(deck, foods ? foods.split(',').filter(Boolean) : undefined),
@@ -58,11 +62,12 @@ export default function PortionGuessScreen() {
   const [chosen, setChosen] = useState<number | null>(null);
   const [phase, setPhase] = useState<'guess' | 'reveal' | 'over'>('guess');
   const [stats, setStats] = useState<GameStats>(EMPTY_STATS);
+  const [pointsEarned, setPointsEarned] = useState(0);
   const options = useMemo(() => answerOptions(food), [food]);
 
   useEffect(() => {
-    loadGameStats().then(setStats);
-  }, []);
+    loadGameStats(user?.id).then(setStats);
+  }, [user?.id]);
 
   async function choose(value: number) {
     if (phase !== 'guess') return;
@@ -75,7 +80,12 @@ export default function PortionGuessScreen() {
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
-    setStats(await recordPortionGuess(correct, food.id, stats));
+    const [nextStats, awarded] = await Promise.all([
+      recordPortionGuess(correct, food.id, stats, user?.id),
+      round === 0 ? awardGame('portion') : Promise.resolve(0),
+    ]);
+    setStats(nextStats);
+    if (awarded > 0) setPointsEarned(awarded);
   }
 
   function next() {
@@ -86,6 +96,7 @@ export default function PortionGuessScreen() {
     setRound((current) => current + 1);
     setFood(randomFood(food, 'calories', foodPool));
     setChosen(null);
+    setPointsEarned(0);
     setPhase('guess');
   }
 
@@ -102,7 +113,7 @@ export default function PortionGuessScreen() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <View>
-            <Text style={[styles.eyebrow, { color: Brand.greenDark }]}>PORTION GUESS</Text>
+            <Text style={[styles.eyebrow, { color: colors.accentStrong }]}>PORTION GUESS</Text>
             <Text style={[styles.headerTitle, { color: colors.text }]}>{deckLabel}</Text>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close game" onPress={() => router.back()} hitSlop={12}>
@@ -113,11 +124,14 @@ export default function PortionGuessScreen() {
         {phase === 'over' ? (
           <View style={styles.over}>
             <View style={[styles.overIcon, { backgroundColor: colors.greenTint }]}>
-              <FlagIcon size={32} color={Brand.green} />
+              <FlagIcon size={32} color={colors.accent} />
             </View>
             <Text style={[styles.overTitle, { color: colors.text }]}>Round complete</Text>
-            <Text style={[styles.overScore, { color: Brand.greenDark }]}>{score}/{ROUND_COUNT}</Text>
+            <Text style={[styles.overScore, { color: colors.accentStrong }]}>{score}/{ROUND_COUNT}</Text>
             <Text style={[styles.overBody, { color: colors.textSecondary }]}>Each correct answer builds mastery for that food.</Text>
+            {pointsEarned > 0 ? (
+              <Text style={[styles.pointsEarned, { color: colors.accentStrong }]}>+{pointsEarned} Trak Points</Text>
+            ) : null}
             <View style={styles.overActions}>
               <Pressable
                 accessibilityRole="button"
@@ -146,7 +160,7 @@ export default function PortionGuessScreen() {
 
             <View style={[styles.questionCard, { backgroundColor: colors.backgroundElement }]}>
               <View style={[styles.iconTile, { backgroundColor: colors.greenTint }]}>
-                <TargetIcon size={28} color={Brand.green} />
+                <PortionIcon size={28} color={colors.accent} />
               </View>
               <Text style={[styles.roundLabel, { color: colors.textSecondary }]}>Question {round + 1} of {ROUND_COUNT}</Text>
               <Text style={[styles.question, { color: colors.text }]}>How many calories?</Text>
@@ -185,7 +199,7 @@ export default function PortionGuessScreen() {
                     ]}>
                     <Text style={[styles.optionValue, { color: colors.text }]}>{value}</Text>
                     <Text style={[styles.optionUnit, { color: colors.textSecondary }]}>kcal</Text>
-                    {revealCorrect ? <CheckIcon size={17} color={Brand.green} /> : null}
+                    {revealCorrect ? <CheckIcon size={17} color={colors.accent} /> : null}
                   </Pressable>
                 );
               })}
@@ -244,6 +258,7 @@ const styles = StyleSheet.create({
   overTitle: { fontFamily: Type.display, fontSize: 30, marginTop: Spacing.three },
   overScore: { fontSize: 52, fontWeight: '900', marginTop: Spacing.one },
   overBody: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginTop: Spacing.two },
+  pointsEarned: { fontSize: 14, fontWeight: '900', marginTop: Spacing.two },
   overActions: { flexDirection: 'row', gap: Spacing.two, alignSelf: 'stretch', marginTop: Spacing.four },
   secondaryButton: { flex: 1, alignItems: 'center', paddingVertical: Spacing.three, borderRadius: 16 },
   secondaryText: { fontSize: 15, fontWeight: '800' },

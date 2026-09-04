@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Brand, Colors, Spacing, type ThemeColors } from '@/constants/theme';
+import { Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import {
   applyReminders,
   ensurePermission,
@@ -197,14 +197,14 @@ export default function RemindersScreen() {
                           {r.label || 'Reminder'}
                         </Text>
                         <Text
-                          style={[styles.time, { color: r.enabled ? Brand.greenDark : colors.textSecondary }]}>
+                          style={[styles.time, { color: r.enabled ? colors.accentStrong : colors.textSecondary }]}>
                           {formatTime(r.hour, r.minute)} {editing ? '▲' : '✎'}
                         </Text>
                       </Pressable>
                       <Switch
                         value={r.enabled}
                         onValueChange={(v) => toggle(r.id, v)}
-                        trackColor={{ false: colors.backgroundSelected, true: Brand.green }}
+                        trackColor={{ false: colors.backgroundSelected, true: colors.accent }}
                         thumbColor="#ffffff"
                       />
                     </View>
@@ -257,7 +257,7 @@ export default function RemindersScreen() {
           <Pressable
             style={[styles.addBtn, { borderColor: colors.backgroundSelected }]}
             onPress={addReminder}>
-            <Text style={[styles.addText, { color: Brand.greenDark }]}>＋ Add reminder</Text>
+            <Text style={[styles.addText, { color: colors.accentStrong }]}>＋ Add reminder</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
