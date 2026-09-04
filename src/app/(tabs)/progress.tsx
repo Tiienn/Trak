@@ -8,7 +8,7 @@ import { CalendarIcon, CheckIcon, ChevronRightIcon, DumbbellIcon, SparklesIcon }
 import { DateStrip, type DateStripItem } from '@/components/date-strip';
 import { RingMark, TrakWordmark } from '@/components/logo';
 import { ProfileAvatarButton } from '@/components/profile-avatar-button';
-import { MuscleBalance, ProgressOverview, WeeklyCardio } from '@/components/progress-overview';
+import { ProgressOverview } from '@/components/progress-overview';
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
 import type { BodyAnalysisPreferences, BodyScan } from '@/lib/body-analysis';
 import { useBodyAnalysis } from '@/lib/body-analysis-store';
@@ -404,14 +404,12 @@ function PlannedTrainingChallenges({ colors, selectedDate }: { colors: ThemeColo
 function Challenges({ colors, latestScan, selectedDate }: { colors: ThemeColors; latestScan: BodyScan | null; selectedDate: string }) {
   const { exercises, profile } = useMeals();
   const coach = useWorkoutCoachPreferences();
-  const fatLoss = useFatLossPreferences();
   const workoutFocus = useWorkoutFocusPreferences();
   const { settings: muscleSettings } = useMuscleScorePreferences();
   const week = new Set(trainingDayKeys(selectedDate));
   const workoutDays = new Set(exercises.filter((exercise) => week.has(exercise.date)).map((exercise) => exercise.date)).size;
   const workoutTarget = coach.settings.configured ? coach.settings.daysPerWeek : latestScan?.result.training.daysPerWeek ?? 3;
   const goal = profile?.goal ?? 'maintain';
-  const activity = useMemo(() => weeklyActivitySummary(exercises, selectedDate), [exercises, selectedDate]);
   const scores = useMemo(() => muscleScores(exercises, selectedDate, WEEKLY_SET_TARGET, muscleSettings), [exercises, muscleSettings, selectedDate]);
   const focusWeek = workoutFocusWeek(workoutFocus.settings, localDateFromKey(selectedDate));
   const focusMuscle = workoutFocus.settings.priorityMuscle;
@@ -427,7 +425,6 @@ function Challenges({ colors, latestScan, selectedDate }: { colors: ThemeColors;
   return (
     <View style={styles.viewContent}>
       <View style={[styles.weekCard, { backgroundColor: colors.greenTint }]}><View style={[styles.weekIcon, { backgroundColor: colors.backgroundElement }]}><CalendarIcon size={24} color={colors.accent} /></View><View style={styles.weekCopy}><Text style={[styles.weekTitle, { color: colors.text }]}>This week</Text><Text style={[styles.weekBody, { color: colors.textSecondary }]}>{weekMessage}</Text></View></View>
-      {goal === 'lose' ? <WeeklyCardio activity={activity} settings={fatLoss.settings} showStrengthSupport colors={colors} /> : null}
       {goal !== 'lose' && focusScore ? <ChallengeCard title={`${focusScore.label} target`} body={`Build ${focusScore.label.toLowerCase()} with completed working sets.`} value={focusScore.sets} target={WEEKLY_SET_TARGET} unit={WEEKLY_SET_TARGET - focusScore.sets === 1 ? 'set' : 'sets'} colors={colors} /> : null}
       {goal !== 'lose' && !focusScore ? (
         <Pressable accessibilityRole="button" onPress={() => router.push('/training-focus')} style={[styles.plannedEmpty, { backgroundColor: colors.backgroundElement }]}>
@@ -439,7 +436,6 @@ function Challenges({ colors, latestScan, selectedDate }: { colors: ThemeColors;
       <PlannedTrainingChallenges colors={colors} selectedDate={selectedDate} />
       {goal === 'lose' && focusScore ? <ChallengeCard title={`${focusScore.label} target`} body={`Keep your ${focusScore.label.toLowerCase()} focus alongside cardio.`} value={focusScore.sets} target={WEEKLY_SET_TARGET} unit={WEEKLY_SET_TARGET - focusScore.sets === 1 ? 'set' : 'sets'} colors={colors} /> : null}
       <ChallengeCard title="Training consistency" body="Your Workout Setup target, counted across the last 7 days." value={workoutDays} target={workoutTarget} unit={workoutTarget - workoutDays === 1 ? 'day' : 'days'} colors={colors} />
-      {goal === 'gain' ? <MuscleBalance scores={scores} selectedDate={selectedDate} colors={colors} /> : null}
     </View>
   );
 }

@@ -1,5 +1,16 @@
 # Design QA — Trak
 
+## Audit item 8 — Games, Quick Add, Ask, and Progress polish — Sep 4, 2026
+
+- Fixed Quick Add's direct-open safe-area overlap and replaced the ambiguous “tap × to see more” pattern with explicit six-item history expansion.
+- Quick Add now preserves two lines for long meal names and exposes labelled add, close, dismiss, and pagination actions.
+- Ask retains its approved compact horizontal prompt rail; expand/collapse and question browsing now use consistent icons, and the broader library remains one tap away.
+- Games now names the selected mode and deck in its primary CTA, while the daily card uses the clearer “Daily challenge” label.
+- Progress Challenges is action-only: the full Weekly muscle score and Weekly cardio summaries remain in Overview and are no longer repeated in Challenges.
+- iPhone simulator interaction checks passed for Quick Add expansion, Ask question browsing, Games mode switching, and Progress tab selection.
+- TypeScript, Expo lint, 123 Node tests, 23 Deno tests, and 15 evaluation tests pass.
+- Evidence and full scoped report: `output/audits/item-8-polish-2026-09-04/`.
+
 ## Progress muscle focus + Body Analysis preview copy — Sep 3, 2026
 
 ### Visual source and normalized comparison

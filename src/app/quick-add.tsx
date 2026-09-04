@@ -1,10 +1,11 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
+import { Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PlateIcon } from '@/components/icons';
+import { ChevronDownIcon, ChevronRightIcon, CloseIcon, PlateIcon } from '@/components/icons';
 import { Colors, Spacing, type ThemeColors } from '@/constants/theme';
 import { useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
@@ -23,41 +24,51 @@ function Row({
   colors,
   onAdd,
   onRemove,
+  removeLabel,
 }: {
   item: QuickItem;
   added: boolean;
   colors: ThemeColors;
   onAdd: () => void;
   onRemove?: () => void;
+  removeLabel?: string;
 }) {
   return (
     <View style={styles.row}>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Add ${item.title}`}
         style={({ pressed }) => [
           styles.rowMain,
           { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
         ]}
         onPress={onAdd}>
         <View style={styles.rowInfo}>
-          <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+          <Text maxFontSizeMultiplier={2} style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={[styles.rowMeta, { color: colors.textSecondary }]}>
+          <Text maxFontSizeMultiplier={1.75} style={[styles.rowMeta, { color: colors.textSecondary }]} numberOfLines={1}>
             {item.total.calories} kcal · {item.total.protein_g}p · {item.total.carbs_g}c ·{' '}
             {item.total.fat_g}f
           </Text>
         </View>
         {added ? (
-          <Text style={[styles.added, { color: colors.accent }]}>Added ✓</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.added, { color: colors.accent }]}>Added</Text>
         ) : (
           <View style={[styles.addPill, { backgroundColor: colors.greenTint }]}>
-            <Text style={[styles.addPillText, { color: colors.accentStrong }]}>＋ Add</Text>
+            <Plus size={14} strokeWidth={2.5} color={colors.accentStrong} />
+            <Text maxFontSizeMultiplier={1.5} style={[styles.addPillText, { color: colors.accentStrong }]}>Add</Text>
           </View>
         )}
       </Pressable>
       {onRemove ? (
-        <Pressable hitSlop={8} onPress={onRemove} style={styles.removeBtn}>
-          <Text style={[styles.removeText, { color: colors.textSecondary }]}>✕</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={removeLabel ?? `Hide ${item.title}`}
+          hitSlop={8}
+          onPress={onRemove}
+          style={({ pressed }) => [styles.removeBtn, { backgroundColor: colors.backgroundElement }, pressed && styles.pressed]}>
+          <CloseIcon size={15} color={colors.textSecondary} />
         </Pressable>
       ) : null}
     </View>
@@ -70,6 +81,7 @@ const RECENT_WINDOW = 6;
 export default function QuickAddScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const insets = useSafeAreaInsets();
   const { savedMeals, recentMeals, quickLog, removeSavedMeal } = useMeals();
   // Keyed by normalized TITLE, not id: logging a recent meal inserts a new row
   // whose id replaces the old one in the dedup list, orphaning id-keyed flags
@@ -78,8 +90,10 @@ export default function QuickAddScreen() {
   const [added, setAdded] = useState<Record<string, boolean>>({});
   // Recent suggestions the user waved off this session — the next ones backfill.
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
-  const visibleRecent = recentMeals.filter((m) => !dismissed[keyOf(m)]).slice(0, RECENT_WINDOW);
-  const hiddenCount = recentMeals.filter((m) => !dismissed[keyOf(m)]).length - visibleRecent.length;
+  const [recentLimit, setRecentLimit] = useState(RECENT_WINDOW);
+  const availableRecent = recentMeals.filter((m) => !dismissed[keyOf(m)]);
+  const visibleRecent = availableRecent.slice(0, recentLimit);
+  const hiddenCount = Math.max(0, availableRecent.length - visibleRecent.length);
 
   async function add(item: QuickItem) {
     try {
@@ -106,11 +120,22 @@ export default function QuickAddScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <View
+        style={[
+          styles.safe,
+          {
+            paddingTop: insets.top + Spacing.two,
+            paddingBottom: Math.max(insets.bottom, Spacing.two),
+          },
+        ]}>
         <View style={styles.headerRow}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Quick add</Text>
-          <Pressable onPress={() => router.back()} hitSlop={12}>
-            <Text style={[styles.closeText, { color: colors.textSecondary }]}>✕</Text>
+          <Text maxFontSizeMultiplier={2} style={[styles.headerTitle, { color: colors.text }]}>Quick add</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close Quick add"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.closeButton, { backgroundColor: colors.backgroundElement }, pressed && styles.pressed]}>
+            <CloseIcon size={22} color={colors.text} />
           </Pressable>
         </View>
 
@@ -124,10 +149,10 @@ export default function QuickAddScreen() {
               { backgroundColor: pressed ? colors.backgroundSelected : colors.backgroundElement },
             ]}>
             <View style={styles.manualInfo}>
-              <Text style={[styles.manualTitle, { color: colors.text }]}>Create meal manually</Text>
-              <Text style={[styles.manualBody, { color: colors.textSecondary }]}>Enter the serving, calories, and macros yourself.</Text>
+              <Text maxFontSizeMultiplier={2} style={[styles.manualTitle, { color: colors.text }]}>Create meal manually</Text>
+              <Text maxFontSizeMultiplier={2} style={[styles.manualBody, { color: colors.textSecondary }]}>Enter the serving, calories, and macros yourself.</Text>
             </View>
-            <Text style={[styles.manualArrow, { color: colors.textSecondary }]}>›</Text>
+            <ChevronRightIcon size={20} color={colors.textSecondary} />
           </Pressable>
 
           {isEmpty ? (
@@ -152,6 +177,7 @@ export default function QuickAddScreen() {
                     colors={colors}
                     onAdd={() => add(s)}
                     onRemove={() => remove(s.id)}
+                    removeLabel={`Remove ${s.title} from saved meals`}
                   />
                 ))}
               </View>
@@ -173,18 +199,26 @@ export default function QuickAddScreen() {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                       setDismissed((prev) => ({ ...prev, [keyOf(m)]: true }));
                     }}
+                    removeLabel={`Hide ${m.title} from recent meals`}
                   />
                 ))}
               </View>
               {hiddenCount > 0 ? (
-                <Text style={[styles.moreHint, { color: colors.textSecondary }]}>
-                  {hiddenCount} more in your history — tap ✕ to see them
-                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${Math.min(hiddenCount, RECENT_WINDOW)} more recent meals`}
+                  onPress={() => setRecentLimit((current) => current + RECENT_WINDOW)}
+                  style={({ pressed }) => [styles.showMore, { backgroundColor: colors.backgroundElement }, pressed && styles.pressed]}>
+                  <Text maxFontSizeMultiplier={1.75} style={[styles.showMoreText, { color: colors.text }]}>
+                    Show {Math.min(hiddenCount, RECENT_WINDOW)} more
+                  </Text>
+                  <ChevronDownIcon size={18} color={colors.textSecondary} />
+                </Pressable>
               ) : null}
             </>
           ) : null}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -196,11 +230,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Spacing.two,
     marginBottom: Spacing.three,
+    minHeight: 48,
   },
   headerTitle: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
-  closeText: { fontSize: 20, fontWeight: '600' },
+  closeButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 
   scroll: { paddingBottom: Spacing.four, gap: Spacing.two },
   manualCard: {
@@ -213,7 +247,6 @@ const styles = StyleSheet.create({
   manualInfo: { flex: 1, gap: 3 },
   manualTitle: { fontSize: 16, fontWeight: '800' },
   manualBody: { fontSize: 13, lineHeight: 18 },
-  manualArrow: { fontSize: 24, lineHeight: 24, fontWeight: '500' },
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: Spacing.three },
   list: { gap: Spacing.two, marginTop: Spacing.two },
 
@@ -227,16 +260,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     gap: Spacing.two,
   },
-  rowInfo: { flex: 1 },
+  rowInfo: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: 15, fontWeight: '700' },
   rowMeta: { fontSize: 12, marginTop: 2 },
-  addPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  addPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 4 },
   addPillText: { fontSize: 13, fontWeight: '700' },
   added: { fontSize: 14, fontWeight: '800' },
-  removeBtn: { width: 28, alignItems: 'center' },
-  removeText: { fontSize: 16, fontWeight: '600' },
+  removeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
   empty: { borderRadius: 20, padding: Spacing.five, alignItems: 'center', gap: Spacing.two },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  moreHint: { fontSize: 12, textAlign: 'center', marginTop: Spacing.two },
+  showMore: { minHeight: 46, borderRadius: 16, paddingHorizontal: Spacing.three, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.two, marginTop: Spacing.two },
+  showMoreText: { fontSize: 13.5, fontWeight: '800' },
+  pressed: { opacity: 0.68 },
 });

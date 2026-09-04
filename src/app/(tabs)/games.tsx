@@ -11,6 +11,7 @@ import {
   CameraIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   PortionIcon,
   SparklesIcon,
   TargetIcon,
@@ -34,6 +35,12 @@ import { dayKey, useMeals } from '@/lib/store';
 import { useAppScheme } from '@/lib/theme';
 
 type GameMode = 'compare' | 'portion' | 'build';
+
+const GAME_MODE_LABEL: Record<GameMode, string> = {
+  compare: 'Compare',
+  portion: 'Portion',
+  build: 'Build',
+};
 
 const GROUPS: { key: DeckGroup; label: string }[] = [
   { key: 'food', label: 'Food type' },
@@ -80,7 +87,7 @@ function ModeButton({
   colors: (typeof Colors)[keyof typeof Colors];
   onPress: () => void;
 }) {
-  const label = mode === 'compare' ? 'Compare' : mode === 'portion' ? 'Portion' : 'Build';
+  const label = GAME_MODE_LABEL[mode];
   const Icon = mode === 'compare' ? BalanceIcon : mode === 'portion' ? PortionIcon : BuildMealIcon;
   return (
     <Pressable
@@ -207,8 +214,8 @@ export default function GamesScreen() {
               )}
             </View>
             <View style={styles.dailyCopy}>
-              <Text maxFontSizeMultiplier={2} style={[styles.dailyTitle, { color: colors.text }]}>Today&apos;s Build challenge</Text>
-              <Text maxFontSizeMultiplier={2} style={[styles.dailyBody, { color: colors.textSecondary }]}>One target · 10 Trak Points</Text>
+              <Text maxFontSizeMultiplier={2} style={[styles.dailyTitle, { color: colors.text }]}>Daily challenge</Text>
+              <Text maxFontSizeMultiplier={2} style={[styles.dailyBody, { color: colors.textSecondary }]}>Build one meal · 10 Trak Points</Text>
             </View>
             <Text maxFontSizeMultiplier={1.5} style={[styles.dailyAction, { color: colors.text }]}>
               {stats.lastDailyDay === dayKey() ? 'Play again' : 'Play'}
@@ -320,13 +327,15 @@ export default function GamesScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Play ${selectedDeck.label} in ${mode === 'compare' ? 'Compare' : mode === 'portion' ? 'Portion' : 'Build'} mode`}
+            accessibilityLabel={`Play ${selectedDeck.label} in ${GAME_MODE_LABEL[mode]} mode`}
+            accessibilityHint="Starts the selected game"
             onPress={playSelectedDeck}
             style={({ pressed }) => [styles.playButton, { opacity: pressed ? 0.86 : 1 }]}>
-            <Text maxFontSizeMultiplier={2} style={styles.playText}>Play selected deck</Text>
-            <View style={styles.playArrow}>
-              <ChevronDownIcon size={21} color="#ffffff" />
+            <View style={styles.playCopy}>
+              <Text maxFontSizeMultiplier={1.75} style={styles.playText}>Play {GAME_MODE_LABEL[mode]}</Text>
+              <Text maxFontSizeMultiplier={1.5} numberOfLines={1} style={styles.playDeck}>{selectedDeck.label}</Text>
             </View>
+            <View style={styles.playArrow}><ChevronRightIcon size={21} color="#ffffff" /></View>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -408,7 +417,7 @@ const styles = StyleSheet.create({
   modeButton: { flex: 1, minHeight: 40, borderRadius: 12, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
   modeLabel: { fontSize: 13, fontWeight: '800' },
   playButton: {
-    minHeight: 54,
+    minHeight: 60,
     borderRadius: 17,
     backgroundColor: Brand.green,
     flexDirection: 'row',
@@ -416,7 +425,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
   },
+  playCopy: { alignItems: 'center', paddingHorizontal: 36 },
   playText: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
-  playArrow: { position: 'absolute', right: Spacing.three, transform: [{ rotate: '-90deg' }] },
+  playDeck: { color: 'rgba(255,255,255,0.76)', fontSize: 11.5, fontWeight: '700', marginTop: 2 },
+  playArrow: { position: 'absolute', right: Spacing.three },
   deckChevron: { transform: [{ rotate: '-90deg' }] },
 });

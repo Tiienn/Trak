@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Minus, Plus } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Brand, Colors, Spacing, Type, type ThemeColors } from '@/constants/theme';
+import { ChevronRightIcon } from '@/components/icons';
 import { RingMark, TrakWordmark } from '@/components/logo';
 import { ProfileAvatarButton } from '@/components/profile-avatar-button';
 import { askTrak, type ChatTurn } from '@/lib/chat';
@@ -168,6 +170,8 @@ type Mode = 'chat' | 'ask';
 export default function ChatScreen() {
   const scheme = useAppScheme();
   const colors = Colors[scheme];
+  const { fontScale } = useWindowDimensions();
+  const largeText = fontScale >= 1.8;
   const {
     targets,
     todayTotals,
@@ -430,9 +434,9 @@ export default function ChatScreen() {
                       <Text style={[styles.suggestionHeading, { color: colors.text }]}>{group.heading}</Text>
                     </View>
                     <View style={[styles.expandButton, { backgroundColor: colors.backgroundElement }]}>
-                      <Text style={[styles.expandButtonText, { color: colors.text }]}>
-                        {chatSuggestionsOpen ? '−' : '+'}
-                      </Text>
+                      {chatSuggestionsOpen
+                        ? <Minus size={18} strokeWidth={2.4} color={colors.text} />
+                        : <Plus size={18} strokeWidth={2.4} color={colors.text} />}
                     </View>
                   </Pressable>
                   {chatSuggestionsOpen ? (
@@ -481,9 +485,9 @@ export default function ChatScreen() {
                   <Text style={[styles.suggestionHeading, { color: colors.text }]}>Suggested for you</Text>
                 </View>
                 <View style={[styles.expandButton, { backgroundColor: colors.backgroundElement }]}>
-                  <Text style={[styles.expandButtonText, { color: colors.text }]}>
-                    {askSuggestionsOpen ? '−' : '+'}
-                  </Text>
+                  {askSuggestionsOpen
+                    ? <Minus size={18} strokeWidth={2.4} color={colors.text} />
+                    : <Plus size={18} strokeWidth={2.4} color={colors.text} />}
                 </View>
               </Pressable>
               {askSuggestionsOpen ? (
@@ -491,15 +495,15 @@ export default function ChatScreen() {
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.askPromptRail}
                     accessibilityLabel="Suggested questions"
-                  >
+                    contentContainerStyle={styles.askPromptRail}>
                     {ASK_FEATURED.map((item) => (
                       <Pressable
                         key={item.label}
                         accessibilityRole="button"
                         style={({ pressed }) => [
                           styles.askPrompt,
+                          largeText && styles.askPromptLargeText,
                           {
                             backgroundColor: colors.backgroundElement,
                             borderColor: colors.backgroundSelected,
@@ -508,7 +512,7 @@ export default function ChatScreen() {
                         ]}
                         onPress={() => chooseSuggestion(item.prompt)}
                       >
-                        <Text style={[styles.askPromptText, { color: colors.text }]} numberOfLines={2}>
+                        <Text maxFontSizeMultiplier={2} style={[styles.askPromptText, { color: colors.text }]} numberOfLines={largeText ? undefined : 2}>
                           {item.label}
                         </Text>
                       </Pressable>
@@ -517,10 +521,12 @@ export default function ChatScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Browse more questions"
+                    accessibilityHint="Opens the full question library"
                     style={({ pressed }) => [styles.browseQuestions, pressed && styles.pressed]}
                     onPress={() => setQuestionBrowserOpen(true)}
                   >
-                    <Text style={[styles.browseQuestionsText, { color: colors.accent }]}>Browse more questions</Text>
+                    <Text maxFontSizeMultiplier={2} style={[styles.browseQuestionsText, { color: colors.accent }]}>Browse more questions</Text>
+                    <ChevronRightIcon size={16} color={colors.accent} />
                   </Pressable>
                 </>
               ) : null}
@@ -788,6 +794,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  askPromptLargeText: { width: 224, minHeight: 66 },
   askPromptText: {
     fontSize: 13,
     lineHeight: 17,
@@ -797,9 +804,12 @@ const styles = StyleSheet.create({
   browseQuestions: {
     alignSelf: 'flex-start',
     minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
-  browseQuestionsText: { fontSize: 13.5, fontWeight: '800' },
+  browseQuestionsText: { fontSize: 13, lineHeight: 17, fontWeight: '800', flexShrink: 1, textAlign: 'center' },
   askEmptySpace: { flex: 1 },
   pinned: {
     paddingTop: Spacing.two,
@@ -823,7 +833,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  expandButtonText: { fontSize: 20, lineHeight: 22, fontWeight: '500' },
   suggestionRail: { gap: Spacing.two, paddingRight: Spacing.four },
   suggestion: {
     borderRadius: 16,
