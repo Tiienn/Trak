@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Expo TypeScript declarations
+        run: npx expo customize tsconfig.json
+
       - name: Lint
         run: npm run lint
 

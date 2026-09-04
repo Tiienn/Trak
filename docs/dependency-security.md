@@ -8,7 +8,7 @@ Trak stays on Expo SDK 57's supported dependency set. Run `npx expo install --ch
 ## Resolved in this review
 
 - Aligned all Expo packages and React Native with the versions selected by
-  `expo@57.0.19`.
+  `expo@57.0.20`.
 - Updated compatible transitive fixes for `brace-expansion`, `browserslist`,
   `@xmldom/xmldom`, and `js-yaml`.
 - Backported the upstream single-pass decoder from `decode-uri-component@0.5.0`
