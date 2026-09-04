@@ -58,7 +58,7 @@ export function initializeCrashReporting() {
       delete event.message;
       delete event.logentry;
       event.exception?.values?.forEach((exception) => {
-        delete exception.value;
+        exception.value = 'Application error';
       });
       return event;
     },
