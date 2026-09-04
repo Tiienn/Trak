@@ -72,8 +72,8 @@ jobs:
       - name: Start emulator and install Trak
         run: |
           sudo chmod 666 /dev/kvm
-          nohup emulator -avd trak_e2e -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/trak-emulator.log 2>&1 &
-          adb wait-for-device
+          nohup "$ANDROID_HOME/emulator/emulator" -avd trak_e2e -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >/tmp/trak-emulator.log 2>&1 &
+          timeout 120s adb wait-for-device
           for attempt in {1..120}; do
             if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; then
               echo "Emulator ready after $attempt checks"
