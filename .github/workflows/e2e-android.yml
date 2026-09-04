@@ -54,7 +54,7 @@ jobs:
 
       - name: Build self-contained release APK
         working-directory: android
-        run: ./gradlew app:assembleRelease --no-daemon
+        run: ./gradlew app:assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
 
       - name: Install Maestro CLI
         env:
@@ -95,7 +95,7 @@ jobs:
 
       - name: Collect Android logs
         if: always()
-        run: adb logcat -d > /tmp/trak-logcat.txt || true
+        run: timeout 15s adb logcat -d > /tmp/trak-logcat.txt || true
 
       - name: Upload Maestro diagnostics
         if: always()
