@@ -9,6 +9,7 @@ tags:
 - tapOn:
     id: auth-email
 - inputText: ${MAESTRO_TEST_EMAIL}
+- hideKeyboard
 - tapOn:
     id: auth-password
 - inputText: ${MAESTRO_TEST_PASSWORD}
