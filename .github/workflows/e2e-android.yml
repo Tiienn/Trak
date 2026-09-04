@@ -25,6 +25,7 @@ jobs:
       EXPO_PUBLIC_TESTER_ACCESS: 'true'
       EXPO_PUBLIC_SENTRY_ENABLED: 'false'
       SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+      ANDROID_AVD_HOME: /tmp/trak-avd
       MAESTRO_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
       MAESTRO_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
     steps:
@@ -67,7 +68,9 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64"
-          echo no | avdmanager create avd --force --name trak_e2e --package "system-images;android-34;google_apis;x86_64"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --force --name trak_e2e --package "system-images;android-34;google_apis;x86_64" --path "$ANDROID_AVD_HOME/trak_e2e.avd"
+          test "$("$ANDROID_HOME/emulator/emulator" -list-avds)" = "trak_e2e"
 
       - name: Start emulator and install Trak
         run: |
