@@ -50,6 +50,50 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare the E2E account
+        run: |
+          node <<'NODE'
+          const { createClient } = require('@supabase/supabase-js');
+
+          async function prepareAccount() {
+            const supabase = createClient(
+              process.env.EXPO_PUBLIC_SUPABASE_URL,
+              process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+              { auth: { autoRefreshToken: false, persistSession: false } }
+            );
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+              email: process.env.MAESTRO_TEST_EMAIL,
+              password: process.env.MAESTRO_TEST_PASSWORD,
+            });
+            if (authError || !data.user) {
+              throw new Error(`Could not authenticate the E2E account: ${authError?.message ?? 'missing user'}`);
+            }
+
+            const { error: profileError } = await supabase.from('profiles').upsert(
+              {
+                user_id: data.user.id,
+                sex: 'male',
+                age: 30,
+                height_cm: 175,
+                weight_kg: 75,
+                goal: 'maintain',
+                activity: 'moderate',
+                diet: 'balanced',
+              },
+              { onConflict: 'user_id' }
+            );
+            if (profileError) {
+              throw new Error(`Could not prepare the E2E profile: ${profileError.message}`);
+            }
+            await supabase.auth.signOut();
+          }
+
+          prepareAccount().catch((error) => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
+
       - name: Generate the E2E Android project
         run: npx expo prebuild --platform android --clean --no-install
 
